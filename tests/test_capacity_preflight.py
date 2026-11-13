@@ -38,6 +38,15 @@ class CapacityPreflightTest(unittest.TestCase):
         self.assertNotIn('31.\n34', wrapped)
         self.assertNotIn('6.\n12', wrapped)
 
+    def test_wrap_keeps_number_and_chinese_unit_together(self):
+        source = ('甲方团队（123456）成立于2020年，设12大区域服务组；'
+                  '项目服务覆盖规划、研发、交付与运营。')
+        wrapped = _safe_wrap(source, 36, 3, len(source) + 2, prefer_three=True)
+        self.assertEqual(wrapped.replace('\n', ''), source)
+        self.assertIn('）\n成立', wrapped)
+        self.assertNotIn('12\n大', wrapped)
+        self.assertNotIn('2020\n年', wrapped)
+
     def test_known_p142_center_title_wrap_preserves_text_and_fills(self):
         entry = self.entries['content-blue-142']
         content = {'type': 'cards', 'center': {'title': '服务能力'},

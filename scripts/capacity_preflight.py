@@ -40,9 +40,9 @@ def _safe_wrap(value: str, width: int, max_lines: int, max_chars: int,
         return None
 
     def penalty(at: int) -> int:
-        if value[at - 1] in '，；。！？、,:;.!?':
+        if value[at - 1] in '，；。！？、：）,:;.!?)':
             return 0
-        return 10
+        return 25
 
     line_counts = [2]
     if (prefer_three and max_lines >= 3 and len(value) + 2 <= max_chars
@@ -56,7 +56,8 @@ def _safe_wrap(value: str, width: int, max_lines: int, max_chars: int,
             cuts = ((first, second) for first in range(1, len(value) - 1)
                     for second in range(first + 1, len(value)))
         for positions in cuts:
-            if any(value[at - 1].isascii() and value[at].isascii()
+            if any((value[at - 1].isascii() and value[at].isascii())
+                   or (value[at - 1].isdigit() and not value[at].isascii())
                    for at in positions):
                 continue
             edges = (0, *positions, len(value))
