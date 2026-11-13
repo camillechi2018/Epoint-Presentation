@@ -8,9 +8,10 @@ from pptx import Presentation
 
 ROOT = Path(r'C:\Users\xiaoc\.codex\skills\github-knowledge-next')
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-from content_adapters import adapt_for_layout
+from content_adapters import adapt_for_layout, adapt_structural_fields
 from fill_layout import fill
 from plan_deck import binding_gap, matches_structural_contract
+from capacity_preflight import preflight
 
 
 class OptionalTemplateFieldsTest(unittest.TestCase):
@@ -88,6 +89,22 @@ class OptionalTemplateFieldsTest(unittest.TestCase):
             source.write_text(json.dumps(payload, ensure_ascii=False), encoding='utf-8')
             with self.assertRaisesRegex(ValueError, '超出容量'):
                 fill(ROOT, self.entry['id'], source, output, allow_draft=True)
+
+    def test_diagnostics_report_capacity_even_when_core_field_is_missing(self):
+        content = self.content()
+        content.pop('center')
+        content['items'][0]['body'] = '这段正文超过了原生槽位的文字容量，必须换版或忠实分页。'
+        partial, adapter, gaps = adapt_structural_fields(
+            self.entry, content, '业务概览', diagnostics=True)
+        self.assertIsNone(adapter)
+        self.assertEqual(gaps, ['center.title'])
+        self.assertIn('aspects[0].body', partial['texts'])
+        capacity = preflight(ROOT, self.entry, partial, '业务概览', 'blue')
+        self.assertTrue(any(x['field'] == 'aspects[0].body'
+                            for x in capacity['hard_issues']))
+        normal, adapter = adapt_structural_fields(self.entry, content, '业务概览')
+        self.assertIsNone(adapter)
+        self.assertNotIn('texts', normal)
 
 
 if __name__ == '__main__':

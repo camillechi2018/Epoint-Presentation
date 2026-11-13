@@ -14,8 +14,9 @@ from pathlib import Path
 
 from fill_layout import fill
 from plan_deck import resolve
-from content_adapters import (adapt_for_layout, classify_trial_failure,
-                              structural_mapping_issue, field_source_evidence)
+from content_adapters import (adapt_for_layout, adapt_structural_fields,
+                              classify_trial_failure, structural_mapping_issue,
+                              field_source_evidence)
 from capacity_preflight import preflight
 
 
@@ -81,11 +82,20 @@ def audit(library: Path, request_path: Path, work: Path, trial: bool) -> dict:
                 if not adapter and entry.get('matching_activation') in ('structure_ready', 'pilot_verified'):
                     issue = structural_mapping_issue(entry, content, source.get('title'))
                     if issue:
+                        partial_capacity = None
+                        if entry.get('matching_activation') == 'structure_ready':
+                            partial, _, _ = adapt_structural_fields(
+                                entry, content, source.get('title'), diagnostics=True)
+                            if isinstance(partial.get('texts'), dict) and partial['texts']:
+                                partial_capacity = preflight(
+                                    library, entry, partial, source.get('title'), request['theme'])
                         counters[issue['reason_code']] += 1
                         row['trials'].append({
                             'layout_id': layout_id, 'status': 'rejected',
                             'reason_code': issue['reason_code'],
                             'unmapped_semantic_paths': issue['paths'],
+                            'partial_capacity_hard_issues': (
+                                partial_capacity['hard_issues'] if partial_capacity else []),
                             'content_adapter': None})
                         continue
                 capacity_check = preflight(library, entry, content, source.get('title'), request['theme'])

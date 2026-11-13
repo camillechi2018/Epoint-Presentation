@@ -136,7 +136,10 @@ def adapt_structural_fields(entry, content, page_title=None, diagnostics=False):
                      and indices != set(range(len(items)))):
         return packed(dict(content), None, missing or ['item_count'])
     if missing:
-        return packed(dict(content), None, missing)
+        # Diagnostics may inspect capacity for the facts that did map, even
+        # when another required field blocks the final fill.
+        partial = dict(content, texts=texts) if diagnostics and texts else dict(content)
+        return packed(partial, None, missing)
     # A successful field fill must also carry every supplied item fact. A
     # layout that only exposes titles cannot silently consume body paragraphs.
     mapped_values = set(texts.values())
