@@ -29,6 +29,15 @@ class CapacityPreflightTest(unittest.TestCase):
         self.assertTrue(wrapped.split('\n')[1].endswith('；'))
         self.assertIsNone(_safe_wrap(source, 45, 3, len(source), prefer_three=True))
 
+    def test_wrap_does_not_split_decimal_number(self):
+        source = ('本月投入31.34万元，环比增长6.12%；'
+                  '第一组核对合同，第二组核对项目成本。')
+        wrapped = _safe_wrap(source, 27, 3, len(source) + 2, prefer_three=True)
+        self.assertIsNotNone(wrapped)
+        self.assertEqual(wrapped.replace('\n', ''), source)
+        self.assertNotIn('31.\n34', wrapped)
+        self.assertNotIn('6.\n12', wrapped)
+
     def test_known_p142_center_title_wrap_preserves_text_and_fills(self):
         entry = self.entries['content-blue-142']
         content = {'type': 'cards', 'center': {'title': '服务能力'},
