@@ -34,16 +34,40 @@ def _bindings(path: str):
     return json.loads(file.read_text(encoding='utf-8-sig'))['fields'], hashlib.sha256(file.read_bytes()).hexdigest()
 
 
-def _two_line_wrap(value: str, width: int, max_lines: int, max_chars: int) -> str | None:
+def _safe_wrap(value: str, width: int, max_lines: int, max_chars: int,
+               prefer_three: bool = False) -> str | None:
     if '\n' in value or max_lines < 2 or len(value) + 1 > max_chars:
         return None
-    choices = []
-    for at in range(1, len(value)):
-        left, right = value[:at], value[at:]
-        lw, rw = visual_width_units(left), visual_width_units(right)
-        if lw <= width and rw <= width:
-            choices.append((abs(lw-rw), at, left + '\n' + right))
-    return min(choices)[2] if choices else None
+
+    def penalty(at: int) -> int:
+        if value[at - 1] in '，；。！？、,:;.!?':
+            return 0
+        if value[at - 1].isascii() and value[at].isascii():
+            return 30
+        return 10
+
+    line_counts = [2]
+    if (prefer_three and max_lines >= 3 and len(value) + 2 <= max_chars
+            and visual_width_units(value) >= width * 1.15):
+        line_counts = [3, 2]
+    for count in line_counts:
+        choices = []
+        if count == 2:
+            cuts = ((at,) for at in range(1, len(value)))
+        else:
+            cuts = ((first, second) for first in range(1, len(value) - 1)
+                    for second in range(first + 1, len(value)))
+        for positions in cuts:
+            edges = (0, *positions, len(value))
+            lines = [value[edges[i]:edges[i + 1]] for i in range(count)]
+            widths = [visual_width_units(line) for line in lines]
+            if max(widths) > width:
+                continue
+            score = max(widths) - min(widths) + sum(penalty(at) for at in positions)
+            choices.append((score, positions, '\n'.join(lines)))
+        if choices:
+            return min(choices)[2]
+    return None
 
 
 def preflight(library: Path, entry: dict, content: dict, page_title: str | None,
@@ -80,8 +104,9 @@ def preflight(library: Path, entry: dict, content: dict, page_title: str | None,
         if isinstance(line_limit, int) and len(lines) > line_limit:
             reasons.append('max_lines')
         if isinstance(width_limit, (int, float)) and max(widths, default=0) > width_limit:
-            suggestion = _two_line_wrap(value, int(width_limit), line_limit or 1,
-                                        char_limit or 9999)
+            suggestion = _safe_wrap(value, int(width_limit), line_limit or 1,
+                                    char_limit or 9999,
+                                    prefer_three=field.get('semantic_role') == 'body')
             if suggestion and not reasons:
                 wrap_suggestions[key] = suggestion
             else:

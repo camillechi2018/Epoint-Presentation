@@ -6,7 +6,7 @@ from pathlib import Path
 
 LIBRARY = Path(r'C:\Users\xiaoc\.codex\skills\github-knowledge-next')
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-from capacity_preflight import preflight
+from capacity_preflight import preflight, _safe_wrap
 from content_adapters import adapt_for_layout
 from fill_layout import fill
 from plan_deck import resolve
@@ -17,6 +17,17 @@ class CapacityPreflightTest(unittest.TestCase):
     def setUpClass(cls):
         catalog = json.loads((LIBRARY / 'catalog.json').read_text(encoding='utf-8'))
         cls.entries = {entry['id']: entry for entry in catalog['layouts']}
+
+    def test_three_line_wrap_keeps_clauses_and_original_text(self):
+        source = ('第一阶段完成资料核对，共整理十二份文件；'
+                  '第二阶段开展现场验收，共覆盖三个部门；'
+                  '第三阶段核实问题清单，并记录后续安排。')
+        wrapped = _safe_wrap(source, 45, 3, len(source) + 2, prefer_three=True)
+        self.assertEqual(wrapped.replace('\n', ''), source)
+        self.assertEqual(wrapped.count('\n'), 2)
+        self.assertTrue(wrapped.split('\n')[0].endswith('；'))
+        self.assertTrue(wrapped.split('\n')[1].endswith('；'))
+        self.assertIsNone(_safe_wrap(source, 45, 3, len(source), prefer_three=True))
 
     def test_known_p142_center_title_wrap_preserves_text_and_fills(self):
         entry = self.entries['content-blue-142']
