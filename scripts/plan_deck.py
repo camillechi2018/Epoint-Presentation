@@ -86,7 +86,8 @@ def binding_gap(entry, page, root, theme):
     binding_rel = entry.get('red_bindings') if theme == 'red' and entry.get('red_bindings') else entry['bindings']
     fields = json.loads((root / binding_rel).read_text(encoding='utf-8-sig'))['fields']
     provided = set(texts)
-    return sum(field['field'] not in provided and field.get('semantic_path') not in provided
+    return sum(field.get('required', True) is not False
+               and field['field'] not in provided and field.get('semantic_path') not in provided
                for field in fields if field.get('semantic_role') not in
                ('brand_locked', 'decoration_locked', 'computed_item_count') and field['field'] != 'brand')
 

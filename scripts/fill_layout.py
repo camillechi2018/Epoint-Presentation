@@ -757,7 +757,18 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
     removed_fields=set()
     if rules.get('cardinality_mode')=='directory_reflow' and item_count is not None:
         removed_fields={field for item in rules['directory_item_fields'][item_count:] for field in item.values()}
-    required_fields={x['field'] for x in bindings if x.get('semantic_role') not in ('brand_locked','decoration_locked','source_decorative_locked','computed_item_count') and x['shape_id'] not in removed_ids and x['field'] not in removed_fields}-{'brand'}
+    optional_fields=[b for b in bindings if b.get('required') is False]
+    if any(b.get('missing_action')!='clear_text' or b.get('semantic_role') in
+           ('brand_locked','decoration_locked','source_decorative_locked','computed_item_count')
+           for b in optional_fields):
+        raise ValueError('可选字段仅支持已登记的独立文字清空动作')
+    if any(sum(other['shape_id']==b['shape_id'] for other in bindings)!=1 for b in optional_fields):
+        raise ValueError('可选字段与其他字段共用形状，不能整框清空')
+    for b in optional_fields:
+        if b['field'] in texts and (texts[b['field']] is None or
+                                   isinstance(texts[b['field']],str) and not texts[b['field']].strip()):
+            texts.pop(b['field'])
+    required_fields={x['field'] for x in bindings if x.get('required',True) is not False and x.get('semantic_role') not in ('brand_locked','decoration_locked','source_decorative_locked','computed_item_count') and x['shape_id'] not in removed_ids and x['field'] not in removed_fields}-{'brand'}
     if set(texts)-known:raise ValueError('未知字段 '+str(set(texts)-known))
     if any(b['field'] in texts for b in bindings if b.get('semantic_role') in ('decoration_locked','source_decorative_locked','computed_item_count') and not (b.get('semantic_role')=='computed_item_number' and rules.get('cardinality_mode')=='tech_process_columns')):
         raise ValueError('原生装饰字段不可替换')
@@ -1252,7 +1263,7 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
         logo_audit=audit_logo(out,require_every_slide=True,theme='red')
         if not logo_audit['passed']:
             raise ValueError('红色风格 Logo 必须是黑白灰单色：'+str(logo_audit['issues']))
-    report=dict(layout_id=layout,source_stamp=source_stamp,asset_version=m['version'],asset_status=m['status'],internal_draft=internal,output=str(out),structure_filled=True,layout_constraints=layout_changes,normal_body_weight=normal_body_weight_result,page_background=page_background_result,cardinality=cardinality_result,schedule=schedule_result,logo=logo_result,fonts=font_result,font_profile=resolve_font_profile(),font_normalization=font_normalization,colors={'materialized_references':sum(color_result['materialized_by_part'].values()),'remaining_chart_style_placeholders':sum(color_result['remaining_chart_style_placeholders'].values()),'rendering_depends_on_master_theme_slots':color_result['rendering_depends_on_master_theme_slots'],'chart_visual_review_required':color_result['chart_visual_review_required']},visual_qa='not_run',powerpoint_open='not_run',collision_qa='not_run')
+    report=dict(layout_id=layout,source_stamp=source_stamp,asset_version=m['version'],asset_status=m['status'],internal_draft=internal,output=str(out),structure_filled=True,omitted_optional_fields=[b['semantic_path'] for b in optional_fields if b['field'] not in texts],layout_constraints=layout_changes,normal_body_weight=normal_body_weight_result,page_background=page_background_result,cardinality=cardinality_result,schedule=schedule_result,logo=logo_result,fonts=font_result,font_profile=resolve_font_profile(),font_normalization=font_normalization,colors={'materialized_references':sum(color_result['materialized_by_part'].values()),'remaining_chart_style_placeholders':sum(color_result['remaining_chart_style_placeholders'].values()),'rendering_depends_on_master_theme_slots':color_result['rendering_depends_on_master_theme_slots'],'chart_visual_review_required':color_result['chart_visual_review_required']},visual_qa='not_run',powerpoint_open='not_run',collision_qa='not_run')
     out.with_suffix('.qa.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8');return report
 def main():
     p=argparse.ArgumentParser();p.add_argument('--library',type=Path);p.add_argument('--layout',required=True);p.add_argument('--content',type=Path,required=True);p.add_argument('--out',type=Path,required=True);p.add_argument('--allow-draft',action='store_true');p.add_argument('--internal-draft',action='store_true');p.add_argument('--logo-config',type=Path);p.add_argument('--no-logo',action='store_true');a=p.parse_args()

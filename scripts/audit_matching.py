@@ -26,6 +26,7 @@ def unmapped_binding_paths(library: Path, layout_id: str, content: dict, theme: 
     fields = json.loads((library / binding).read_text(encoding='utf-8-sig'))['fields']
     texts = content.get('texts') if isinstance(content.get('texts'), dict) else {}
     return sorted({field.get('semantic_path') or field['field'] for field in fields
+                   if field.get('required', True) is not False
                    if field.get('semantic_role') not in
                    ('brand_locked', 'decoration_locked', 'computed_item_count')
                    and field['field'] != 'brand'

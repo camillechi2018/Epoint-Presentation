@@ -36,7 +36,9 @@ def adapt_structural_fields(entry, content, page_title=None, diagnostics=False):
                'single_focus': {'single-focus'}}
     if content.get('structure_type') != structure and structure not in allowed.get(content.get('type'), set()):
         return packed(dict(content), None)
-    paths = contract.get('required_binding_paths', [])
+    required_paths = contract.get('required_binding_paths', [])
+    optional_paths = contract.get('optional_binding_paths', [])
+    paths = list(required_paths) + [path for path in optional_paths if path not in required_paths]
     items = content.get('items', [])
     array_pattern = re.compile(r'([a-z_]+)\[(\d+)\]\.(.+)')
     numbered_pattern = re.compile(r'([a-z_]+)_(\d+)\.(.+)')
@@ -126,7 +128,8 @@ def adapt_structural_fields(entry, content, page_title=None, diagnostics=False):
                         if value is None and path.endswith('.body'):
                             value = items[index].get('description') or items[index].get('text')
         if not present(value):
-            missing.append(path)
+            if path in required_paths:
+                missing.append(path)
         else:
             texts[path] = value
     if not paths or (indices and isinstance(items, list) and items
