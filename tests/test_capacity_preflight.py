@@ -67,6 +67,22 @@ class CapacityPreflightTest(unittest.TestCase):
             fill(LIBRARY, entry['id'], source, output, allow_draft=True)
             self.assertGreater(output.stat().st_size, 1000)
 
+    def test_body_wrap_without_clause_boundary_requests_review(self):
+        entry = self.entries['content-blue-106']
+        content = {'type': 'cards', 'items': [
+            {'title': '报名', 'body': '提前确认可参与的日期和时段。'},
+            {'title': '分工', 'body': '按现场人数分配引导与记录。'},
+            {'title': '培训', 'body': '活动前说明路线及求助方式。'},
+            {'title': '服务', 'body': '现场记录需求并及时移交。'},
+            {'title': '回访', 'body': '整理反馈，明确下次调整事项。'}]}
+        check = preflight(LIBRARY, entry, content, '社区志愿', 'blue')
+        self.assertEqual(check['status'], 'wrap_possible')
+        risks = {item['field'] for item in check['advisory']
+                 if item['rule'] == 'mid_phrase_wrap_review'}
+        self.assertIn('items[0].body', risks)
+        self.assertIn('items[2].body', risks)
+        self.assertNotIn('items[4].body', risks)
+
     def test_real_customer_copy_ranks_roomier_card_before_tight_card(self):
         content = {'type': 'cards', 'items': [
             {'title': '产品体验', 'body': '通过持续维护、优化搜索引擎词库，让用户搜的更快、更准'},

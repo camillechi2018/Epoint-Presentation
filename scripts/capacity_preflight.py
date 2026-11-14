@@ -111,6 +111,12 @@ def preflight(library: Path, entry: dict, content: dict, page_title: str | None,
                                     prefer_three=field.get('semantic_role') == 'body')
             if suggestion and not reasons:
                 wrap_suggestions[key] = suggestion
+                if field.get('semantic_role') == 'body':
+                    source_lines = suggestion.split('\n')
+                    if any(line and line[-1] not in '，；。！？、：）,:;.!?)'
+                           for line in source_lines[:-1]):
+                        advisory.append({'field': semantic or field['field'],
+                                         'rule': 'mid_phrase_wrap_review'})
             else:
                 reasons.append('max_width_units')
         for reason in reasons:
