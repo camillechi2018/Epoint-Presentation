@@ -535,7 +535,7 @@ def _adapt_for_layout_impl(layout_id: str, content: dict, page_title: str | None
             if layout_id == 'content-tech-042':
                 texts['center.conclusion'] = content['conclusion']
             if layout_id == 'content-tech-045':
-                texts['summary'] = title
+                texts['summary'] = content.get('summary') or title
             for i, item in enumerate(items, 1):
                 if layout_id == 'content-tech-081':
                     texts.update({f'stage_{i}.title': item['title'], f'stage_{i}.body': item['body']})

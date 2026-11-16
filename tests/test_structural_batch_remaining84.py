@@ -71,6 +71,13 @@ class StructuralBatchTests(unittest.TestCase):
         cls.catalog = {x['id']: x for x in catalog['layouts']}
         cls.taxonomy = load_taxonomy(LIBRARY, catalog)
 
+    def test_tech_process_uses_supplied_summary(self):
+        content = sample('content-tech-045')
+        content['summary'] = '按收集、核对、修订、归档依次处理'
+        adapted, adapter = adapt_for_layout('content-tech-045', content, '资料复核流程')
+        self.assertIsNotNone(adapter)
+        self.assertEqual(adapted['texts']['summary'], content['summary'])
+
     def test_activated_generic_requests_have_no_binding_gaps(self):
         for layout_id in ('content-blue-060', 'content-blue-267', 'content-tech-026',
                           'content-tech-029', 'content-tech-040', 'content-tech-048',
