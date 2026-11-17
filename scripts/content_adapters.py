@@ -439,7 +439,7 @@ def _adapt_for_layout_impl(layout_id: str, content: dict, page_title: str | None
         'content-tech-026': ('comparison', 4, ('title', 'body'), ('summary',)),
         'content-tech-029': ('comparison', 2, ('title', 'body'), ('summary', 'conclusion')),
         'content-tech-040': ('comparison', 2, ('title', 'body', 'tags'), ('summary',)),
-        'content-tech-048': ('cards', 4, ('title', 'body'), ('summary', 'conclusion')),
+        'content-tech-048': ('cards', 4, ('title', 'body'), ('conclusion',)),
         'content-tech-033': ('cards', 5, ('title', 'body'), ('summary', 'conclusion')),
         'content-tech-054': ('process', 4, ('title', 'body'), ('summary',)),
         'content-tech-063': ('milestone_timeline', 5, ('label', 'body'), ('summary',)),
@@ -544,7 +544,9 @@ def _adapt_for_layout_impl(layout_id: str, content: dict, page_title: str | None
                     if layout_id == 'content-tech-045':
                         texts[f'item_{i}.step'] = f'{i:02d}'
         else:  # P048's title and body binding indices have different source order.
-            texts.update({'summary': content['summary'], 'top_conclusion': content['conclusion']})
+            if isinstance(content.get('summary'), str) and content['summary'].strip():
+                texts['summary'] = content['summary']
+            texts['top_conclusion'] = content['conclusion']
             for i, (title_index, body_index) in enumerate(zip((3, 4, 2, 1), (2, 1, 3, 4))):
                 item = items[i]
                 texts.update({f'item_{title_index}.title': item['title'],

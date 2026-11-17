@@ -104,7 +104,7 @@ class StructuralBatchTests(unittest.TestCase):
 
     def test_missing_meaningful_field_does_not_get_invented(self):
         for layout_id, missing in (('content-blue-060', 'goal'), ('content-tech-029', 'conclusion'),
-                                   ('content-tech-040', 'tags'), ('content-tech-048', 'summary')):
+                                   ('content-tech-040', 'tags')):
             with self.subTest(layout_id=layout_id):
                 content = sample(layout_id)
                 if missing == 'tags':
@@ -112,6 +112,12 @@ class StructuralBatchTests(unittest.TestCase):
                 else:
                     content.pop(missing)
                 self.assertIsNone(adapt_for_layout(layout_id, content, '业务安排')[1])
+
+        content = sample('content-tech-048')
+        content.pop('summary')
+        adapted, adapter = adapt_for_layout('content-tech-048', content, '业务安排')
+        self.assertEqual(adapter, 'cards_4_to_content-tech-048')
+        self.assertNotIn('summary', adapted['texts'])
 
     def test_four_card_title_and_body_keep_visual_order(self):
         content = sample('content-tech-048')
