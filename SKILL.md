@@ -2,22 +2,24 @@
 name: epoint-presentation
 description: 制作新点品牌可编辑 PPTX；Skill 自带 Logo、锁定色系、字体、三风格资料包和已校验结构页最小包。优先读取 Git 知识库，断网时使用本地已校验模板；正文可灵活编排。
 metadata:
-  version: "1.0.33-dev"
+  version: "1.0.33"
 ---
 
 # 新点企业演示文稿：新模板方案
 
 **Office 与交付硬门槛。** Windows 正式执行核实实际微软 PowerPoint 并进行限时保存／重开／导出冒烟检查；WPS 兼容注册不算正式后端，失败不得自动降级实验入口。COM 组装及最终重开导出受超时监督。交付只要求 Microsoft PowerPoint 打开及逐页导出验证，不设置 WPS 验证标识或目标软件选择。执行生成后 `status=candidate_created`、`deliverable=false`，只有 PowerPoint 实际打开、完整导出且证据绑定当前文件哈希时，才进入 `pending_visual_review`，仍须实际视觉复核。退出码 3 表示候选待验收，不是生成失败，不要盲目重试或宣布交付完成。详细状态、超时配置及诊断见 [Office 后端与交付状态](references/office-delivery-safety.md)。
 
-分发完整性故障不得降格成交付：出现清单哈希错误时，保留具体错误文件、期望哈希、实际哈希及来源提交，先检查安装包与缓存；不得跳过校验、现场重算清单或将完整稿静默改为品牌重绘。发布前在暂存拟发布文件后运行 `scripts/prepare_distribution.py --root <技能根目录> --manifest-root <最小包目录> --write`，统一文本字节后重建清单，并对 Git 归档和 LF/CRLF 检出分别验收。不带 `--write` 仅校验；运行期始终比较原始字节。
+分发完整性故障不得降格成交付：出现清单哈希错误时，保留具体错误文件、期望哈希、实际哈希及来源提交，先检查安装包与缓存；不得跳过校验、现场重算清单或将完整稿静默改为品牌重绘。发布规范化和清单生成由私有维护仓库执行，并对 Git 归档和 LF/CRLF 检出分别验收；运行期始终比较原始字节，用户安装包不包含清单重写入口。
 
 ## 跨平台统一入口
+
+**默认按系统组装。** Windows 使用 PowerPoint 后端，macOS/Linux 使用 Python 原生后端，无需实验参数或 Windows Office。`--assembly-backend auto|native|powerpoint` 可明确选择；旧 `--native-experimental` 兼容映射为 `native`。自检与实际入口共用选择规则；生成、预览、PowerPoint 验证与视觉复核分别记录。详见[跨平台组装与验证](references/cross-platform-assembly.md)。
 
 **材料读取后先整理内容再选稿。** 按[材料结构化](references/content-structuring.md)辨认并列条目、指标、表格、步骤及其真实关系，不把所有页面统一写成字符串 bullets。普通并列列表由当前 Agent 从原文提炼 `content.item_titles`，保留 `content.items` 原文，经 `scripts/run.py --structure-content --request <草稿.json> --out <整理后请求.json> --report <整理报告.json>` 形成 title/body 卡片。处理报告中的 `needs_agent_structure` 待办后再选稿；确需纯文字列表时填写 `keep_bullets_reason`。已结构化输入沿用。此步骤由当前平台 Agent 完成语义判断，脚本保持原正文与来源；不靠猜数字、删事实或改变信息关系提高覆盖。候选与容量反馈用于确认分页，准备完成不等于填充或视觉验收完成。正式入口也执行兼容规范化并报告未整理页，旧请求仍可运行。
 
 升级安装时先检查本地改动。远端 Git 历史若发生强制更新，保留旧副本并移到 Agent 的 `skills/` 目录外，再重新克隆；不要让 `.bak-*` 备份留在技能扫描目录中，以免调用解析到旧版。开发自检用标准库 `unittest`，运行环境不包含 `pytest`；Windows 的 Git Bash 调用 Windows Python 时，用该 Python 的 `tempfile` 或 Windows 绝对路径，不把 Bash `/tmp` 直接传给它。
 
-跨系统安装与故障诊断见[运行环境说明](references/cross-platform-runtime.md)。安装前可用 `scripts/run_presentation.py --doctor --out <诊断.json>` 检查基础环境；安装依赖后统一用 `scripts/run.py --doctor --out <诊断.json>` 转调已锁定的解释器，避免把 Agent 自带 Python 缺包误判为安装失败。安装器先复验并复用已登记的有效环境。`--goal assemble` 检查正式后端，macOS 实验组装可另用 `--goal native-assemble` 做导入检查；两者都不代替真实成稿与视觉验收。macOS/Linux 可显式传入 `--native-experimental` 运行 S5 原生组装整稿候选；该入口须使用真实、已校验的结构页和同一知识库快照，继续执行组装前后来源、包、字体、颜色、媒体与 Logo 检查。它仍属实验入口，不把 LibreOffice 导出或 `status=ready` 当作目标应用视觉签收；未传此参数时缺 PowerPoint 后端仍阻断完整出稿。S4/S5 请求可通过 `font_profile` 锁定 Windows、macOS 或 Linux 字体；省略时按运行系统选择。完整出稿前检查字体资源，同一任务的填充、归一、审计和报告共用该配置。Linux LibreOffice 预览与 Mac PowerPoint 实机结果分别登记，不以一方结果代替另一方。
+跨系统安装与故障诊断见[运行环境说明](references/cross-platform-runtime.md)。安装前可用 `scripts/run_presentation.py --doctor --out <诊断.json>` 检查基础环境；安装依赖后统一用 `scripts/run.py --doctor --out <诊断.json>` 转调已锁定的解释器，避免把 Agent 自带 Python 缺包误判为安装失败。安装器先复验并复用已登记的有效环境。`--goal assemble` 检查当前系统选择的后端，`--goal native-assemble` 保留为原生导入自检别名；两者都不代替真实成稿与视觉验收。macOS/Linux 默认原生组装整稿候选，使用真实、已校验的结构页和同一知识库快照，继续执行组装前后来源、包、字体、颜色、媒体与 Logo 检查。原生生成不要求 Office；LibreOffice 导出或 `status=ready` 均不等于 PowerPoint 视觉签收。S4/S5 请求可通过 `font_profile` 锁定 Windows、macOS 或 Linux 字体；省略时按运行系统选择。完整出稿前检查字体资源，同一任务的填充、归一、审计和报告共用该配置。Linux LibreOffice 预览与 Mac PowerPoint 实机结果分别登记，不以一方结果代替另一方。
 
 收到原始材料时，按[多格式材料接入](references/material-ingestion.md)先生成事实清单，再制定逐页内容。安装后统一用 `scripts/run.py --read-material --input <文件> --out <事实清单.json>` 读取 `.xls`、`.xlsx`、`.docx`、`.txt`、`.md`、`.pptx`、`.html`／`.htm`；旧 PPTX/HTML 只作内容来源，不自动复用其母版、CSS 或页面视觉。`.pdf` 和 PNG/JPEG 的文字先由当前 Agent 平台的 PDF 提取／OCR 工具取得，再用 `--extraction <平台提取.json>` 交给同一入口。技能不绑定某个平台的 OCR，也不把缺页码作为知识库匹配条件；来源不明的项目标记待复核。对无法可靠读取的 `.xls` 公式来源与内嵌图片、缺失的 `.xlsx` 公式缓存、尚未安放的 Word 图片及 OCR 错漏应明确记录，不能猜测事实。事实清单不等于逐页 `request.json`。
 
@@ -96,7 +98,7 @@ metadata:
 
 整套出稿开始时先检查 Git 知识库是否可获取，并记录成功时的 commit 或失败原因；Skill 自带风格预览不代表知识库已连接。知识库可用时逐页记录 `source_template`、`guided_composition` 或 `free_composition`，以及候选数和未复用原因；只有实际抽取并填充源页才计入模板复用率。交付前核对整套所选主题与实际颜色：新绘图形使用 `brand-baseline.json` 的语义颜色，原稿保留的其他颜色须说明来源或做逐对象映射，不得仅凭 Logo 或单一蓝色装饰宣称使用了整套模板。
 
-完整稿必须使用逐页来源验收。四类结构页的填充输入带 `library_commit`，组装清单逐页登记 `role`、`layout_id` 和填充报告的 `source_stamp`；仅当所有页面都复用原稿时设置 `require_template_source: true`，混合自由编排正文时保持按角色验收，四类结构页仍强制核对来源。由 `assemble_deck.ps1` 核对输入、来源主题及组件颜色独立性，再以同一份清单运行 `audit_deck.py --plan <清单> --input <成稿> --out <报告>`，检查最终文件的逐页来源。**最终保存的 PPTX**还须运行 `scripts/audit_component_color_independence.py --input <成稿> --report <报告>`，确保页面、版式和母版没有可见的主题色引用；即使 WPS 等软件重绑母版，也不能重新出现橙、黄、绿。`audit_theme_integrity.py` 仍可用于诊断母版引用差异，但固化后的组件以颜色独立检查及 PowerPoint 渲染为交付门槛。原生图表样式若含 `phClr` 占位符，须单页目视复核。视觉验收还需对照实际原稿预览。用户要求整套同色时，可在保留模板结构与品牌标志的前提下调整已核对的强调色。
+完整稿必须使用逐页来源验收。四类结构页的填充输入带 `library_commit`，组装清单逐页登记 `role`、`layout_id` 和填充报告的 `source_stamp`；仅当所有页面都复用原稿时设置 `require_template_source: true`，混合自由编排正文时保持按角色验收，四类结构页仍强制核对来源。由所选组装后端核对输入、来源主题及组件颜色独立性，再以同一份清单运行 `audit_deck.py --plan <清单> --input <成稿> --out <报告>`，检查最终文件的逐页来源。**最终保存的 PPTX**还须运行 `scripts/audit_component_color_independence.py --input <成稿> --report <报告>`，确保页面、版式和母版没有可见的主题色引用；即使 WPS 等软件重绑母版，也不能重新出现橙、黄、绿。`audit_theme_integrity.py` 仍可用于诊断母版引用差异，但固化后的组件以颜色独立检查及 PowerPoint 渲染为交付门槛。原生图表样式若含 `phClr` 占位符，须单页目视复核。视觉验收还需对照实际原稿预览。用户要求整套同色时，可在保留模板结构与品牌标志的前提下调整已核对的强调色。
 
 ## 核心工作流
 

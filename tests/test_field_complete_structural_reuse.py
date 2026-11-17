@@ -1,10 +1,11 @@
+import os
 import json
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-ROOT = Path(r'C:\Users\xiaoc\.codex\skills\github-knowledge-next')
+ROOT = Path(os.environ.get('EPOINT_TEST_LIBRARY', str(Path(__file__).resolve().parents[1] / '.test-library-required')))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from plan_deck import eligible, matches_structural_contract, matches_structural_discovery, count_profile
 from content_adapters import adapt_for_layout, structural_mapping_issue, field_source_evidence

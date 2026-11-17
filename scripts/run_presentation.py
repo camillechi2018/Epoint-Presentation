@@ -18,6 +18,7 @@ from library_location import SKILL, resolve_library
 from font_profile import probe as probe_font_profile
 from office_runtime import probe as probe_office, assemble as assemble_office
 from delivery_status import assess as assess_delivery, exit_code as delivery_exit_code
+from assembly_backend import BACKENDS, select_backend
 def _load_workflow():
     # Environment inspection and library preflight must not require rendering packages.
     global resolve, adapt_for_layout, classify_trial_failure, structural_mapping_issue
@@ -79,13 +80,16 @@ def style_assets(theme):
             'reason': None if hashes_ok else 'STYLE_PREVIEW_HASH_FAILED'}
 
 
-def capability():
-    windows = os.name == 'nt'
+def capability(assembly_backend='auto'):
+    selected = select_backend(assembly_backend)
+    windows = platform.system() == 'Windows'
     com = importlib.util.find_spec('win32com') is not None if windows else False
-    backend = probe_office() if windows else {'status': 'unavailable'}
+    backend = probe_office() if windows and selected == 'powerpoint' else {'status': 'not_probed'}
     registry = backend['status'] == 'detected'
     shell = shutil.which('pwsh') or shutil.which('powershell')
+    native = all(importlib.util.find_spec(name) is not None for name in ('pptx', 'PIL', 'lxml'))
     return {
+        'assembly_backend': selected, 'native_backend_available': native,
         'python': sys.version.split()[0], 'git': shutil.which('git'),
         'python_pptx': importlib.util.find_spec('pptx') is not None,
         'pillow': importlib.util.find_spec('PIL') is not None,
@@ -93,7 +97,7 @@ def capability():
         'powerpoint_registry': registry, 'powershell': shell, 'office_backend': backend,
         'can_plan': True,
         'can_fill_pptx': importlib.util.find_spec('pptx') is not None,
-        'can_assemble_pptx': windows and registry and bool(shell),
+        'can_assemble_pptx': native if selected == 'native' else windows and registry and bool(shell),
         'can_render_in_powerpoint': windows and registry and bool(shell),
     }
 
@@ -114,7 +118,9 @@ def candidate_counts(root, theme, family):
     return counts
 
 
-def preflight(request, *, library=None, offline=False, native_experimental=False):
+def preflight(request, *, library=None, offline=False, native_experimental=False,
+              assembly_backend='auto'):
+    selected = select_backend(assembly_backend, legacy_native=native_experimental)
     theme = request.get('theme', 'blue')
     if theme not in STYLES:
         raise ValueError('theme 仅支持 blue、red、deep-blue-tech')
@@ -135,13 +141,15 @@ def preflight(request, *, library=None, offline=False, native_experimental=False
               'complete_deck': complete, 'asset_policy': policy,
               'skill_version': _skill_version(), 'library_connected': False,
               'library_used': False, 'library_source': None, 'library_commit': None,
-              'style_kit': style_assets(theme), 'runtime': capability(),
+              'style_kit': style_assets(theme), 'runtime': capability(selected),
+              'assembly_backend': selected,
               'candidate_counts': None, 'warnings': []}
     if native_experimental:
-        result['assembly_backend'] = 'native_experimental'
-        result['runtime']['can_assemble_pptx'] = result['runtime']['can_fill_pptx']
-        result['runtime']['can_render_in_powerpoint'] = False
-        result['warnings'].append('原生组装为显式实验入口；LibreOffice 预览不等于 PowerPoint 视觉签收')
+        result['warnings'].append('--native-experimental 已兼容映射为 --assembly-backend native；'
+                                  'macOS/Linux 默认自动选择原生组装')
+    if selected == 'native':
+        result['warnings'].append('原生组装不依赖 Office；生成与应用验证分开记录，'
+                                  'LibreOffice 预览不等于 PowerPoint 视觉签收')
     root = None
     try:
         if library:
@@ -214,7 +222,7 @@ def execute_plan(request, plan, report, output: Path):
     office_timeout = request.get('office_timeout_seconds', 300)
     if type(office_timeout) is not int or not 1 <= office_timeout <= 3600:
         raise ValueError('OFFICE_TIMEOUT_INVALID')
-    if report.get('assembly_backend') != 'native_experimental':
+    if report.get('assembly_backend') not in ('native', 'native_experimental'):
         report['office_smoke_test'] = probe_office(smoke=True, directory=work / 'office-smoke')
         if report['office_smoke_test']['status'] != 'available':
             raise RuntimeError(report['office_smoke_test']['error_code'] + ': Office smoke test failed')
@@ -385,7 +393,7 @@ def execute_plan(request, plan, report, output: Path):
     manifest_path.write_text(json.dumps(assembly, ensure_ascii=False, indent=2), encoding='utf-8')
     render_dir = work / 'rendered'
     native_render = None
-    if report.get('assembly_backend') == 'native_experimental':
+    if report.get('assembly_backend') in ('native', 'native_experimental'):
         from native_deck_backend import assemble_and_check
         native = assemble_and_check(assembly, manifest_path, output, prefilled, render_dir)
         finished = native['finished']
@@ -429,16 +437,23 @@ def main():
     ap.add_argument('--execute-out', type=Path, help='所有页面均有 content 时填充并组装完整 PPTX')
     ap.add_argument('--library', type=Path, help='测试或固定版本时指定已下载知识库')
     ap.add_argument('--offline', action='store_true')
+    ap.add_argument('--assembly-backend', choices=BACKENDS, default='auto',
+                    help='auto: Windows 使用 PowerPoint，macOS/Linux 使用原生组装；可显式选择')
     ap.add_argument('--native-experimental', action='store_true',
-                    help='显式试用非 Windows 原生组装，结果仍须目标编辑器复核')
+                    help='兼容旧参数，等价于 --assembly-backend native')
     args = ap.parse_args()
+    try:
+        select_backend(args.assembly_backend, legacy_native=args.native_experimental)
+    except ValueError as exc:
+        ap.error(str(exc))
     if args.out.exists() or args.plan_out and args.plan_out.exists() or args.execute_out and args.execute_out.exists():
         ap.error('输出文件已存在')
     request = json.loads(args.request.read_text(encoding='utf-8-sig'))
     from structure_content import prepare
     request, content_preparation = prepare(request)
     report = preflight(request, library=args.library, offline=args.offline,
-                       native_experimental=args.native_experimental)
+                       native_experimental=args.native_experimental,
+                       assembly_backend=args.assembly_backend)
     report['content_preparation'] = content_preparation
     if content_preparation['tasks']:
         report['warnings'].append('部分正文仍为待整理的要点列表；先完成 content_preparation.tasks '

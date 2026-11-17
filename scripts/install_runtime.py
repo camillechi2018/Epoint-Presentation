@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 from runtime_paths import SKILL_ROOT, state_root
-from runtime_process import capture
+from runtime_process import capture_python as capture
 from runtime_storage import atomic_json, exclusive_lock
 
 PACKAGES = ('python-pptx', 'Pillow', 'lxml', 'openpyxl', 'xlrd', 'python-docx',

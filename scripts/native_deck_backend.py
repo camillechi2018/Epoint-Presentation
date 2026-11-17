@@ -1,4 +1,4 @@
-"""Experimental native assembly for a fully prefilled, source-gated deck."""
+"""Cross-platform native assembly for a fully prefilled, source-gated deck."""
 from __future__ import annotations
 
 import json

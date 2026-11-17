@@ -1,10 +1,11 @@
+import os
 import json
 import sys
 import unittest
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[1] / 'scripts'
-LIBRARY = Path(r'C:\Users\xiaoc\.codex\skills\github-knowledge-next')
+LIBRARY = Path(os.environ.get('EPOINT_TEST_LIBRARY', str(Path(__file__).resolve().parents[1] / '.test-library-required')))
 sys.path.insert(0, str(SCRIPT))
 from content_adapters import adapt_for_layout
 from plan_deck import matches_structural_contract

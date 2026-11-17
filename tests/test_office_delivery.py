@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from types import SimpleNamespace
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
@@ -86,7 +87,8 @@ class OfficeDeliveryTests(unittest.TestCase):
         def fail(*args, **kwargs):
             (self.root / 'backend.json').write_text(json.dumps({'status': 'failed', 'error_code': 'OFFICE_BACKEND_UNSUPPORTED'}))
             raise RuntimeError('OFFICE_OPERATION_FAILED')
-        with patch.object(office.os, 'name', 'nt'), patch.object(office, 'run_worker', side_effect=fail):
+        # Mock only this module: changing global os.name breaks POSIX pathlib.
+        with patch.object(office, 'os', SimpleNamespace(name='nt')), patch.object(office, 'run_worker', side_effect=fail):
             result = office.probe(smoke=True, directory=self.root)
         self.assertEqual(result['status'], 'unavailable')
         self.assertEqual(result['error_code'], 'OFFICE_BACKEND_UNSUPPORTED')

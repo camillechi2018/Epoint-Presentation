@@ -3,6 +3,8 @@ import hashlib
 import io
 import json
 import os
+import platform
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -70,7 +72,9 @@ class DistributionRuntimeTests(unittest.TestCase):
             self.assertEqual(run.returncode, 2, run.stderr)
             self.assertIn('DEPENDENCY_IMPORT_FAILED', data['blockers'])
             self.assertEqual(data['library']['status'], 'available')
-            self.assertEqual(data['rendering']['status'], 'untested')
+            expected = ('detected_unverified' if platform.system() == 'Linux' and shutil.which('soffice')
+                        else 'untested')
+            self.assertEqual(data['rendering']['status'], expected)
             self.assertFalse((self.root / 'venv').exists())
 
     def test_state_override_does_not_write_to_installation(self):
