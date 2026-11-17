@@ -2,9 +2,9 @@
 
 把材料整理成符合新点品牌风格、可继续编辑的企业演示文稿。先选 **蓝色系、红色系或科技风格**，再由 Agent 梳理内容与信息关系，优先试用知识库组件；正文不适配时使用技能内的排版规则，仍保持同一套色彩、字体和 Logo。
 
-**`main` 当前开发版本：1.0.33-dev；最新正式版本：1.0.32。** [查看技能入口](SKILL.md) · [查看 v1.0.32 发布版](https://github.com/camillechi2018/Epoint-Presentation/releases/tag/v1.0.32) · [查看完整模板知识库](https://github.com/camillechi2018/Epoint-Presentation-KnowledgeBase)
+**当前版本：1.0.33。** [查看技能入口](SKILL.md) · [查看 v1.0.33 发布版](https://github.com/camillechi2018/Epoint-Presentation/releases/tag/v1.0.33) · [查看完整模板知识库](https://github.com/camillechi2018/Epoint-Presentation-KnowledgeBase)
 
-本说明对应当前开发候选。统一入口默认按系统选择组装方式：Windows 使用 PowerPoint，macOS/Linux 使用 Python 原生组装。来源与内容审计保持一致，生成、预览和 PowerPoint 验收分别记录；尚未发布为新的正式版本。
+统一入口默认按系统选择组装方式：Windows 使用 PowerPoint，macOS/Linux 使用 Python 原生组装。来源与内容审计保持一致，生成、预览和 PowerPoint 验收分别记录。v1.0.33 完成技能与私有维护工具拆分；Mac 三色各 20 页完整材料生成及内容保真实测通过，后续应用、逐页视觉与 DSL 项目由项目负责人接受为本次发布豁免，未作为已实测结果。该发布决定不改变每份成稿的验收规则。
 
 ## 先看三种风格
 

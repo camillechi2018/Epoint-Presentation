@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "version": "1.0.33-dev",
+  "version": "1.0.33",
   "files": [
     ".gitattributes",
     "LICENSE",
