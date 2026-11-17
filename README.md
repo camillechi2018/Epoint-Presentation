@@ -1,10 +1,10 @@
 # Epoint Presentation
 
-Windows Office 检测、限时组装及候选交付状态见 [Office 后端与交付状态](references/office-delivery-safety.md)。自动生成不等于目标应用和视觉验收完成；执行入口退出码 3 表示候选已生成、仍待验收。
-
 把材料整理成符合新点品牌风格、可继续编辑的企业演示文稿。先选 **蓝色系、红色系或科技风格**，再由 Agent 梳理内容与信息关系，优先试用知识库组件；正文不适配时使用技能内的排版规则，仍保持同一套色彩、字体和 Logo。
 
 **`main` 当前开发版本：1.0.33-dev；最新正式版本：1.0.32。** [查看技能入口](SKILL.md) · [查看 v1.0.32 发布版](https://github.com/camillechi2018/Epoint-Presentation/releases/tag/v1.0.32) · [查看完整模板知识库](https://github.com/camillechi2018/Epoint-Presentation-KnowledgeBase)
+
+本说明对应当前 `main`。最新改进加强了已有的 PowerPoint 验证：核实实际 Office 后端、为组装和导出设置超时、将候选生成与验收状态分开记录。这些改进尚未另行发布为新的正式版本。
 
 ## 先看三种风格
 
@@ -42,7 +42,8 @@ Windows Office 检测、限时组装及候选交付状态见 [Office 后端与�
 - **字体适配：** 按 Windows、macOS、Linux 的已安装字体为任务副本选择明确的中英文字体，并检查正文、表格、图表及母版。跨设备打开仍需复核字形和实际换行。
 - **整稿协调：** 根据封面、目录、章节、流程、对比、数据等页面职责，以及内容关系和容量选择版式；封面配图优先匹配所选主题色。章节页在同一整稿中保持统一。
 - **先规划再组装：** 先梳理每页讲什么、适合什么版式，再逐页填充和组装，方便发现内容与模板不匹配的问题。
-- **交付前检查：** 逐页核对压字、溢出、图片裁切、Logo 位置和 PowerPoint 渲染；数据与案例以用户提供的材料为准，不编造。
+- **运行前验证：** Windows 正式生成前核实微软 PowerPoint，并实际测试保存、关闭、重新打开和导出；仅有兼容 COM 注册不算后端可用。
+- **交付前检查：** 对最终 PPTX 执行 PowerPoint 打开与逐页导出，记录对应文件的验证证据，再检查压字、溢出、图片裁切和 Logo 位置。生成成功、渲染成功与视觉验收分别记录；数据与案例以用户材料为准，不编造。
 
 ## 适用场景
 
@@ -54,13 +55,27 @@ Windows Office 检测、限时组装及候选交付状态见 [Office 后端与�
 
 ## 快速开始
 
+需要 Python 3.10 或更高版本。Windows 正式整稿组装还需要安装并通过检查的 **Microsoft PowerPoint**；只有 WPS 的环境不满足这一后端要求。安装技能和 Python 依赖不会自动安装 Office。
+
 将本仓库完整克隆到所用 Agent 的技能目录，确保 `SKILL.md`、`assets/`、`references/` 和 `scripts/` 都在同一目录。以 Codex 的用户技能目录为例：
 
 ```powershell
 git clone https://github.com/camillechi2018/Epoint-Presentation.git "$HOME/.codex/skills/epoint-presentation"
+cd "$HOME/.codex/skills/epoint-presentation"
+powershell -File .\install.ps1
 ```
 
-WorkBuddy 的 macOS/Linux 用户可改为：
+WorkBuddy 用户可使用其用户级技能目录；以下以 `$HOME/.workbuddy/skills` 为例，若平台配置了其他目录，替换为实际位置。
+
+Windows PowerShell：
+
+```powershell
+git clone https://github.com/camillechi2018/Epoint-Presentation.git "$HOME/.workbuddy/skills/epoint-presentation"
+cd "$HOME/.workbuddy/skills/epoint-presentation"
+powershell -File .\install.ps1
+```
+
+macOS / Linux：
 
 ```sh
 git clone https://github.com/camillechi2018/Epoint-Presentation.git "$HOME/.workbuddy/skills/epoint-presentation"
@@ -72,14 +87,14 @@ sh ./install.sh
 
 升级时先检查技能目录是否有本地修改。若远端历史发生 `forced update`，不要直接 `git pull` 或覆盖有修改的目录；将旧副本移出 `skills/` 后重新克隆，再按需迁移个人配置。备份目录不要放在 Agent 的 `skills/` 下，避免被识别为另一项旧版技能。
 
-需要 Python 3.10 或更高版本。在技能目录安装隔离的运行环境：
+如果已克隆技能但尚未安装依赖，在技能目录执行对应命令，安装隔离的运行环境：
 
 | 系统 | 安装命令 |
 | --- | --- |
 | Windows | `powershell -File .\install.ps1` |
 | macOS、Linux | `sh ./install.sh` |
 
-安装器先复验并复用已登记的有效运行环境，避免 PATH 中的 Agent 内嵌 Python 触发重复安装；首次安装仍会选用可执行的 Python。需要指定解释器时，先设置 `EPOINT_PYTHON` 为 Python 3.10+ 的完整路径。断网安装可提供兼容的 `--wheelhouse <目录>`。不同系统的字体、Office 渲染和整稿交付仍须按目标环境复核。[查看跨系统安装与验证说明](references/cross-platform-runtime.md)。
+安装器先复验并复用已登记的有效运行环境，避免 PATH 中的 Agent 内嵌 Python 触发重复安装；首次安装仍会选用可执行的 Python。需要指定解释器时，先设置 `EPOINT_PYTHON` 为 Python 3.10+ 的完整路径。断网安装可提供兼容的 `--wheelhouse <目录>`。跨系统安装成功不代表具备正式组装后端；各平台字体与预览边界见[跨系统安装与验证说明](references/cross-platform-runtime.md)。
 
 材料入口直接读取 `.xlsx`、`.xls`、`.docx`、`.txt`、`.md`、`.pptx` 和 `.html`，安装后通过 `scripts/run.py --read-material` 使用。PDF 和 PNG/JPEG 的文字由当前 Agent 平台提取或 OCR，再以统一 JSON 交给材料入口；没有可用平台工具时明确报告，技能不会猜写。旧 PPT/HTML 仅作为内容来源，不自动复用原页面设计。[查看多格式材料接入方法](references/material-ingestion.md)。
 
@@ -91,6 +106,37 @@ sh ./install.sh
 
 如果已指定风格，可直接说“用蓝色系制作”，不需要再次选择。完整模板知识库由 [`knowledge-base.json`](knowledge-base.json) 指向独立 Git 仓库；首次使用远端模板需要能够访问 GitHub，离线时按校验结果使用本地缓存或最小模板包。
 
+## PowerPoint 验证与生成状态
+
+正式流程原本就使用 PowerPoint 打开和导出成稿；当前版本加强了后端识别、超时处理和验证证据检查。**交付只要求 PowerPoint 验证，不增加 WPS 验证步骤。** PowerPoint 打开、逐页导出通过后，仍须检查实际画面的文字、图形和排版。
+
+Windows 安装后，可在技能目录运行诊断。下例使用 Python Launcher；没有 `py` 命令时，使用本机可运行的 Python 3.10+ 解释器启动同一个入口。`run.py` 会转调安装器已登记的运行环境。
+
+```powershell
+# 只检查环境，不启动 Office
+py -3 scripts/run.py --doctor --out environment-check.json
+
+# 核实 PowerPoint，并实际测试保存、重开和导出
+py -3 scripts/run.py --doctor --goal assemble --office-smoke --out powerpoint-check.json
+```
+
+正式完整稿执行前也会自动进行上述 Office 操作测试。仅检测到程序时标记为未验证；操作失败则阻断正式组装，不自动切换到实验入口。组装和最终打开／逐页导出分别默认限时 300 秒，失败保留诊断记录；只对确认属于本次任务的 Office 进程尝试清理。
+
+生成结果按以下状态读取：
+
+| 状态 | 含义与下一步 |
+| --- | --- |
+| `status=ready` | 预检可执行，不表示已生成或已验收。 |
+| `status=candidate_created` | 候选 PPTX 已生成，继续查看 `delivery_status`。 |
+| `delivery_status=pending_render` | 尚无有效导出结果，或导出失败，需处理渲染问题。 |
+| `delivery_status=pending_powerpoint_validation` | 已有预览，但缺少 PowerPoint 对当前文件的验证。 |
+| `delivery_status=pending_visual_review` | PowerPoint 打开及逐页导出通过，待人工或 Agent 实际视觉复核。 |
+| `delivery_status=blocked` | 必要执行步骤失败，查看错误代码和任务记录。 |
+
+PowerPoint 验证同时核对应用身份、页数、可解码的预览图片及最终文件 SHA-256；修改 PPTX 后，旧证据不能继续作为验证结果。自动生成的候选保持 `deliverable=false`，不会自动宣称整稿验收完成。
+
+接入脚本时注意：规划成功退出码为 **0**；统一入口阻断为 **2**；候选生成但仍待验收为 **3**。退出码 3 不是重新生成的理由，应读取报告并继续验证或视觉复核。超时配置、错误记录及完整状态说明见 [Office 后端与交付状态](references/office-delivery-safety.md)。
+
 ## 它怎样组织一份 PPT
 
 材料提取后，Agent 会先整理标题、正文、指标和真实信息关系，再匹配组件。并列条目可通过 `scripts/run.py --structure-content` 规范为“标题＋原文正文”，保留来源；未完成整理的页面会列出待办。[查看材料结构化流程](references/content-structuring.md)。
@@ -99,7 +145,7 @@ sh ./install.sh
 2. **锁定风格。** 整稿使用所选色系、字体、Logo 和页面规则；红色系使用单色 Logo。
 3. **优先匹配知识库。** 按页面职责、信息关系、字段和容量试填组件。封面、目录、章节页、封底必须使用合格的模板；同一整稿的章节页保持同一版式。
 4. **补足正文。** 没有合适组件时，先使用技能内的正文排版规则；仍不适用时，在所选风格约束下自由编排，并记录页面来源。
-5. **检查成稿。** 核对文字边界、字体、颜色、Logo、图片及实际 PowerPoint 渲染；保留需要人工审阅的状态。
+5. **检查成稿。** 核对来源、字体、颜色、Logo 和资源引用，验证最终文件能被 PowerPoint 打开并逐页导出，再检查实际文字边界、图片和排版；保留尚未完成的审阅状态。
 
 详细规则见[选版与知识库契约](references/library-contract.md)、[正文托底排版](references/body-fallback-layouts.md)和[质量检查](references/source-and-qa.md)。
 
@@ -111,7 +157,11 @@ sh ./install.sh
 | 三种风格 | 技能自带颜色、字体、Logo 规则和预览；科技风格独立于简约蓝红版。 |
 | 目录变项数 | 依据具体目录组件的已验证项数和文字容量选版。 |
 | 知识库暂不可达 | 可检查已校验的本地结构页最小包；无合格结构页时停止完整出稿。仅制作正文局部草稿可使用离线品牌排版。 |
-| 跨系统安装 | Windows、macOS、Linux 使用对应安装入口；成功安装不等于目标 PowerPoint、WPS 或 Keynote 中的整稿视觉验收。 |
+| Windows 正式组装 | 要求经身份核实及实际操作测试的微软 PowerPoint；WPS 的兼容注册不能代替它。 |
+| 跨系统安装 | Windows、macOS、Linux 使用对应安装入口；依赖安装与正式组装后端分别检查。 |
+| 实验原生组装 | 需显式启用 `--native-experimental`，继续执行来源、字体、颜色、媒体和 Logo 检查；实验产物仍为待验收候选。 |
+| 跨系统预览 | LibreOffice 导出只作为预览，不等于 PowerPoint 验证通过；macOS 当前需手动在 PowerPoint 中打开、导出和复核。 |
+| 母版与版式 | 本轮未实施跨页去重优化，不承诺组装后自动合并相同母版或精简全部冗余版式。 |
 | HTML 与动效 | 按具体组件的独立验收状态判断，不能从静态 PPTX 可用推断其已可用。 |
 
 技能默认添加 Logo，并锁定主题变量；具体页面仍须用本次材料试填。模板和品牌素材目前标记为 `draft_pending_review`，这是审阅状态，不是正式品牌授权或交付质量保证。
