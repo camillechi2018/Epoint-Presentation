@@ -1,5 +1,7 @@
 # Epoint Presentation
 
+Windows Office 检测、限时组装及候选交付状态见 [Office 后端与交付状态](references/office-delivery-safety.md)。自动生成不等于目标应用和视觉验收完成；执行入口退出码 3 表示候选已生成、仍待验收。
+
 把材料整理成符合新点品牌风格、可继续编辑的企业演示文稿。先选 **蓝色系、红色系或科技风格**，再由 Agent 梳理内容与信息关系，优先试用知识库组件；正文不适配时使用技能内的排版规则，仍保持同一套色彩、字体和 Logo。
 
 **`main` 当前开发版本：1.0.33-dev；最新正式版本：1.0.32。** [查看技能入口](SKILL.md) · [查看 v1.0.32 发布版](https://github.com/camillechi2018/Epoint-Presentation/releases/tag/v1.0.32) · [查看完整模板知识库](https://github.com/camillechi2018/Epoint-Presentation-KnowledgeBase)

@@ -27,7 +27,7 @@
 - `--goal inspect`：校验环境和模板包。可选依赖缺失会报告，但不阻断检查本身。
 - `--goal fill`：另外要求核心 Python 包能导入；不代表已经完成实际单页或视觉验收。
 - `--goal read`：要求 Excel/Word 只读提取所需的 openpyxl、xlrd 和 python-docx 能导入；不代表已完成内容规划或整稿。
-- `--goal assemble`：要求已验证的整稿后端。本轮尚未实现深度后端冒烟测试，Windows 检出 COM 也标记 `untested`，不会据此宣称整稿验收通过。
+- `--goal assemble`：要求已验证的整稿后端。Windows 检测核实程序身份，普通检查仍标记 `untested`；加 `--office-smoke` 执行限时保存、重开及导出验证。完整稿执行前自动运行该验证，详见 [Office 后端与交付状态](office-delivery-safety.md)。
 - `--goal native-assemble`：单独检查显式实验原生组装模块能否导入；通过只表示候选后端及必要依赖可加载。实际 PPTX 的组装、渲染和目标应用视觉复核仍需按真实任务检查。macOS 的 `--goal assemble` 被阻断不等于安装失败。
 
 显式添加 `--deep` 时，在指定用户状态目录及缓存目录写入并读取临时文件，并用当前 Python 创建一页含中文可编辑文本的 PPTX，保存后重开核对。`--state-dir` 与 `EPOINT_CACHE_DIR` 可指定这些检查使用的目录；检查报告的 `deep_checks` 记录结果。此检查验证写入与 PPTX 基础往返，不代表已有模板的合并、目标 Office 打开、导出或视觉验收。
@@ -97,6 +97,6 @@ Linux 安装并自检后，可在已校验的知识库快照上运行：
 <Python> scripts/run_presentation.py --request <逐页请求.json> --library <知识库目录> --out <报告.json> --plan-out <计划.json> --execute-out <成稿.pptx> --native-experimental
 ```
 
-此参数只切换组装后端；候选筛选、真实字段试填、结构页完整性、来源校验、任务字体归一和最终审计仍执行。输出报告中的 `assembly_backend=native_experimental`、`execution.assembly_status`、`execution.static_audit_status`、`execution.render_status` 与 `delivery_status` 要分别读取。LibreOffice 逐页渲染成功后仍为 `pending_visual_review`；应检查实际 PNG，并用目标 PowerPoint/WPS 打开或导出。macOS 自动预览当前标为 `pending_manual`，需在目标编辑器中逐页导出和检查。渲染失败时保留已通过组装及静态审计的候选 PPTX，交付状态为 `pending_render`，不能报已完成。找不到渲染器时同样不能把视觉状态标为通过。缺结构页、缺字体或未显式启用后端时继续阻断完整稿。
+此参数只切换组装后端；候选筛选、真实字段试填、结构页完整性、来源校验、任务字体归一和最终审计仍执行。输出报告中的 `assembly_backend=native_experimental`、`execution.assembly_status`、`execution.static_audit_status`、`execution.render_status` 与 `delivery_status` 要分别读取。LibreOffice 逐页渲染只提供预览，状态为 `pending_powerpoint_validation`；须由 PowerPoint 打开并逐页导出当前文件，证据匹配后进入 `pending_visual_review`，不要求 WPS 验证。macOS 自动预览当前标为 `pending_manual`，需在目标编辑器中逐页导出和检查。渲染失败时保留已通过组装及静态审计的候选 PPTX，交付状态为 `pending_render`，不能报已完成。找不到渲染器时同样不能把视觉状态标为通过。缺结构页、缺字体或未显式启用后端时继续阻断完整稿。
 
 macOS/Linux 已完成候选入口的代表性实测，仍使用 `--native-experimental`；是否将其转为正式发布能力，要另行确定支持范围、发布归档和目标应用视觉验收口径。S5 真实材料及用户 macOS 实测结论以对应验收记录为准。

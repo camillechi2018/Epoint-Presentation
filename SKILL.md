@@ -7,6 +7,8 @@ metadata:
 
 # 新点企业演示文稿：新模板方案
 
+**Office 与交付硬门槛。** Windows 正式执行核实实际微软 PowerPoint 并进行限时保存／重开／导出冒烟检查；WPS 兼容注册不算正式后端，失败不得自动降级实验入口。COM 组装及最终重开导出受超时监督。交付只要求 Microsoft PowerPoint 打开及逐页导出验证，不设置 WPS 验证标识或目标软件选择。执行生成后 `status=candidate_created`、`deliverable=false`，只有 PowerPoint 实际打开、完整导出且证据绑定当前文件哈希时，才进入 `pending_visual_review`，仍须实际视觉复核。退出码 3 表示候选待验收，不是生成失败，不要盲目重试或宣布交付完成。详细状态、超时配置及诊断见 [Office 后端与交付状态](references/office-delivery-safety.md)。
+
 分发完整性故障不得降格成交付：出现清单哈希错误时，保留具体错误文件、期望哈希、实际哈希及来源提交，先检查安装包与缓存；不得跳过校验、现场重算清单或将完整稿静默改为品牌重绘。发布前在暂存拟发布文件后运行 `scripts/prepare_distribution.py --root <技能根目录> --manifest-root <最小包目录> --write`，统一文本字节后重建清单，并对 Git 归档和 LF/CRLF 检出分别验收。不带 `--write` 仅校验；运行期始终比较原始字节。
 
 ## 跨平台统一入口
@@ -21,7 +23,7 @@ metadata:
 
 **整稿章节页版式锁定。** 同一份演示稿的所有 `section` 页使用同一个知识库 `layout_id`，只替换章节编号、标题与该版式允许的文字字段。第一张章节页实际填充成功后锁定其版式；后续章节页不得因换封面、随机种子、相邻去重或候选排序而改用另一款。若该版式容纳不了后续章节文字，应调整该章节文案或重新为整稿选择一款能容纳全部章节的版式；不得只把这一页换版。目录条目数可读取时，章节页数量须与之相同；目录四项却只做一张章节页应停止完整出稿。最终检查全部章节页的实际 `layout_id` 一致。
 
-整套出稿先调用 `scripts/run.py --request <逐页请求.json> --out <预检报告.json> --plan-out <逐页计划.json>`；具备每页 `content` 时再加 `--execute-out <成稿.pptx>`。在无网络环境加 `--offline`。入口统一返回 `ready`、`partial_draft` 或 `blocked`、错误代码、知识库来源与提交号、三风格本地样本状态、逐页选版和未复用原因。远端可达时固定经清单校验的提交；远端失败或显式离线时，先验证上次成功提交的完整、干净缓存及其来源和清单哈希，再使用 12 页最小包。完整缓存来源标为 `verified_full_cache`，最小包标为 `local_verified_template`；首次离线没有完整缓存会降低正文候选覆盖，须在报告中说明。只在 `ready` 时组装完整 PPTX；组装后核对结构页来源及颜色独立性。`library_used` 只按实际填充源模板页记录。
+整套出稿先调用 `scripts/run.py --request <逐页请求.json> --out <预检报告.json> --plan-out <逐页计划.json>`；具备每页 `content` 时再加 `--execute-out <成稿.pptx>`。在无网络环境加 `--offline`。预检返回 `ready`、`partial_draft` 或 `blocked`，执行生成候选后返回 `candidate_created`，同时记录错误代码、知识库来源与提交号、三风格本地样本状态、逐页选版和未复用原因。远端可达时固定经清单校验的提交；远端失败或显式离线时，先验证上次成功提交的完整、干净缓存及其来源和清单哈希，再使用 12 页最小包。完整缓存来源标为 `verified_full_cache`，最小包标为 `local_verified_template`；首次离线没有完整缓存会降低正文候选覆盖，须在报告中说明。只在 `ready` 时组装完整 PPTX；组装后核对结构页来源及颜色独立性。`library_used` 只按实际填充源模板页记录。
 
 完整稿执行门槛只检查必要的交付链：封面、目录、章节、封底齐全且顺序正确；所有章节页同一版式；结构页真实单页与当前已校验知识库的组件、源文件哈希及提交号相符；组装后包内关系和最终页来源能对应。失败时阻断完整稿。入口的 `status=ready` 表示预检可执行，成稿还须看 `delivery_status`；渲染成功但未完成实际视觉复核时为 `pending_visual_review`，不能称为质量验收通过。明确的局部正文稿使用 `complete_deck:false`。
 

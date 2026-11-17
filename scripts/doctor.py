@@ -1,4 +1,4 @@
-"""Dependency-free diagnostics. Does not install packages or launch Office applications."""
+"""Dependency-free diagnostics. Office launches only with explicit --office-smoke."""
 from __future__ import annotations
 
 import argparse
@@ -14,6 +14,7 @@ from distribution import verify_manifest, write_json
 from runtime_paths import SKILL_ROOT, locations
 from runtime_process import capture
 from font_profile import probe as probe_font_profile
+from office_runtime import probe as probe_office
 
 IMPORTS = {'pptx': 'python-pptx', 'PIL': 'Pillow', 'lxml': 'lxml',
            'openpyxl': 'openpyxl', 'xlrd': 'xlrd', 'docx': 'python-docx'}
@@ -83,7 +84,7 @@ def deep_probe(paths):
     return outcome
 
 
-def report(*, library=None, state_dir=None, goal='inspect', deep=False, font_profile=None):
+def report(*, library=None, state_dir=None, goal='inspect', deep=False, font_profile=None, office_smoke=False):
     paths = locations(state_dir)
     root = Path(library).resolve() if library else SKILL_ROOT / 'assets' / 'minimal-template-pack'
     dependencies = {name: probe_import(name) for name in IMPORTS}
@@ -101,16 +102,9 @@ def report(*, library=None, state_dir=None, goal='inspect', deep=False, font_pro
     if goal == 'native-assemble':
         assembly = probe_native_backend()
     elif os.name == 'nt':
-        try:
-            import winreg
-            with winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, 'PowerPoint.Application'):
-                pass
-            shell = shutil.which('pwsh') or shutil.which('powershell')
-            if shell:
-                assembly = {'status': 'untested', 'backend': 'windows_powerpoint_com',
-                            'shell': shell, 'error_code': 'BACKEND_SMOKE_TEST_REQUIRED'}
-        except OSError:
-            pass
+        assembly = probe_office(smoke=office_smoke)
+        if assembly['status'] == 'detected':
+            assembly.update(status='untested', error_code='BACKEND_SMOKE_TEST_REQUIRED')
     blockers = []
     if sys.version_info < (3, 10):
         blockers.append('PYTHON_VERSION_UNSUPPORTED')
@@ -157,10 +151,11 @@ def main(argv=None):
     parser.add_argument('--goal', choices=['inspect', 'read', 'fill', 'assemble', 'native-assemble'], default='inspect')
     parser.add_argument('--out', type=Path)
     parser.add_argument('--deep', action='store_true')
+    parser.add_argument('--office-smoke', action='store_true', help='Launch a bounded Microsoft PowerPoint save/reopen/export test')
     parser.add_argument('--font-profile', choices=('windows', 'macos', 'linux'))
     args = parser.parse_args(argv)
     result = report(library=args.library, state_dir=args.state_dir, goal=args.goal,
-                    deep=args.deep, font_profile=args.font_profile)
+                    deep=args.deep, font_profile=args.font_profile, office_smoke=args.office_smoke)
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)
         write_json(args.out, result)

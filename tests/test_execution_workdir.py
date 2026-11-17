@@ -17,6 +17,7 @@ class ExecutionWorkdirTests(unittest.TestCase):
             plan = {'pages': [{'selection_mode': 'guided_composition'}]}
             paths = []
             with patch.object(run_presentation, '_load_workflow'), \
+                 patch.object(run_presentation, 'probe_office', return_value={'status': 'available'}), \
                  patch.object(run_presentation, 'check_directory_section_count', create=True), \
                  patch.object(run_presentation, 'check_structure', create=True):
                 for _ in range(2):

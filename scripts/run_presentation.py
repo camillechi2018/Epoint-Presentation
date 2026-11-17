@@ -16,6 +16,8 @@ from pathlib import Path
 
 from library_location import SKILL, resolve_library
 from font_profile import probe as probe_font_profile
+from office_runtime import probe as probe_office, assemble as assemble_office
+from delivery_status import assess as assess_delivery, exit_code as delivery_exit_code
 def _load_workflow():
     # Environment inspection and library preflight must not require rendering packages.
     global resolve, adapt_for_layout, classify_trial_failure, structural_mapping_issue
@@ -80,28 +82,20 @@ def style_assets(theme):
 def capability():
     windows = os.name == 'nt'
     com = importlib.util.find_spec('win32com') is not None if windows else False
-    registry = bool(_powerpoint_registry()) if windows else False
+    backend = probe_office() if windows else {'status': 'unavailable'}
+    registry = backend['status'] == 'detected'
     shell = shutil.which('pwsh') or shutil.which('powershell')
     return {
         'python': sys.version.split()[0], 'git': shutil.which('git'),
         'python_pptx': importlib.util.find_spec('pptx') is not None,
         'pillow': importlib.util.find_spec('PIL') is not None,
         'powerpoint_com_module': com,
-        'powerpoint_registry': registry, 'powershell': shell,
+        'powerpoint_registry': registry, 'powershell': shell, 'office_backend': backend,
         'can_plan': True,
         'can_fill_pptx': importlib.util.find_spec('pptx') is not None,
         'can_assemble_pptx': windows and registry and bool(shell),
         'can_render_in_powerpoint': windows and registry and bool(shell),
     }
-
-
-def _powerpoint_registry():
-    try:
-        import winreg
-        with winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, 'PowerPoint.Application'):
-            return True
-    except (ImportError, OSError):
-        return False
 
 
 def candidate_counts(root, theme, family):
@@ -217,6 +211,13 @@ def execute_plan(request, plan, report, output: Path):
     report['execution_work_dir'] = str(work)
     slides = []
     audit_pages = []
+    office_timeout = request.get('office_timeout_seconds', 300)
+    if type(office_timeout) is not int or not 1 <= office_timeout <= 3600:
+        raise ValueError('OFFICE_TIMEOUT_INVALID')
+    if report.get('assembly_backend') != 'native_experimental':
+        report['office_smoke_test'] = probe_office(smoke=True, directory=work / 'office-smoke')
+        if report['office_smoke_test']['status'] != 'available':
+            raise RuntimeError(report['office_smoke_test']['error_code'] + ': Office smoke test failed')
     used_guided_variants = {}
     locked_section_layout_id = None
     for index, (page, choice) in enumerate(zip(pages, plan['pages']), 1):
@@ -390,14 +391,8 @@ def execute_plan(request, plan, report, output: Path):
         finished = native['finished']
         native_render = native['render']
     else:
-        command = [report['runtime']['powershell'], '-NoProfile', '-File',
-                   str(SKILL / 'scripts' / 'assemble_deck.ps1'), '-Manifest', str(manifest_path),
-                   '-OutputPath', str(output), '-RenderDirectory', str(render_dir),
-                   '-PythonExe', sys.executable,
-                   '-FontProfile', report['font_profile']['profile']['id']]
-        completed = subprocess.run(command, capture_output=True, text=True, encoding='utf-8', errors='replace')
-        if completed.returncode:
-            raise RuntimeError('PowerPoint 组装失败：' + (completed.stderr or completed.stdout)[-1000:])
+        native_render = assemble_office(manifest_path, output, render_dir, sys.executable,
+                                        report['font_profile']['profile']['id'], timeout=office_timeout)
         finished = check_finished(output, assembly, prefilled)
     (work / 'final-gate.json').write_text(
         json.dumps(finished, ensure_ascii=False, indent=2), encoding='utf-8')
@@ -408,14 +403,7 @@ def execute_plan(request, plan, report, output: Path):
         raise RuntimeError('成稿来源或内容验收失败：' + str(audit['issues'][:5]))
     plan['selection_summary'] = {label: sum(row['selection_label'] == label for row in plan['pages'])
                                  for label in ('知识库模板', '技能排版', '自由编排')}
-    rendered = all((render_dir / f'P{index:03d}.png').is_file()
-                   for index in range(1, len(slides) + 1))
-    render_status = ('passed' if rendered else 'failed'
-                     if native_render and native_render['status'] == 'passed' else
-                     native_render['status'] if native_render else 'pending')
-    render_error = ('RENDER_OUTPUT_INCOMPLETE' if native_render and not rendered
-                    and native_render['status'] == 'passed' else
-                    native_render.get('error_code') if native_render and not rendered else None)
+    delivery = assess_delivery(output, render_dir, len(slides), native_render)
     return {'output': str(output.resolve()), 'slides': len(slides),
             'library_used': any(x['selection_mode'] == 'source_template' for x in plan['pages']),
             'source_template_pages': sum(x['selection_mode'] == 'source_template' for x in plan['pages']),
@@ -426,10 +414,8 @@ def execute_plan(request, plan, report, output: Path):
             'pre_assembly_gate': str(work / 'pre-assembly-gate.json'),
             'final_gate': str(work / 'final-gate.json'),
             'assembly_status': 'passed', 'static_audit_status': 'passed',
-            'render_status': render_status,
-            'render_error_code': render_error,
-            'render_detail': native_render.get('detail') if native_render and not rendered else None,
-            'delivery_status': 'pending_visual_review' if rendered else 'pending_render'}
+            'render_evidence': native_render, **delivery}
+
 
 
 def main():
@@ -474,6 +460,7 @@ def main():
         return 2
     report['font_profile'] = font_check
     report['delivery_status'] = 'not_started'
+    report['deliverable'] = False
     if args.execute_out and font_check['status'] != 'available':
         report['status'] = 'blocked'
         report['error_code'] = font_check['error_code']
@@ -504,6 +491,8 @@ def main():
                         os.environ['EPOINT_FONT_PROFILE'] = previous_profile
                 report['library_used'] = report['execution']['library_used']
                 report['delivery_status'] = report['execution']['delivery_status']
+                report['deliverable'] = report['execution']['deliverable']
+                report['status'] = 'candidate_created'
                 if report['execution'].get('render_error_code'):
                     report['warnings'].append('候选 PPTX 已生成并通过静态审计；渲染待处理：'
                                               + report['execution']['render_error_code'])
@@ -523,7 +512,7 @@ def main():
                           'SOURCE_STAMP_NOT_CATALOG_BOUND',
                           'SOURCE_FILE_HASH_MISMATCH', 'RELATION_TARGET_MISSING',
                           'FINISHED_SOURCE_ASSOCIATION_MISMATCH'}
-            report['error_code'] = (gate_error if gate_error in gate_codes
+            report['error_code'] = (gate_error if gate_error in gate_codes or gate_error.startswith(('OFFICE_', 'POWERPOINT_', 'RENDER_'))
                                     else 'RUNTIME_DEPENDENCY_MISSING' if isinstance(exc, ImportError)
                                     else 'PAGE_LAYOUT_UNAVAILABLE' if stage == 'planning'
                                     else 'PPTX_EXECUTION_FAILED')
@@ -531,8 +520,9 @@ def main():
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
     print(json.dumps({'status': report['status'], 'error_code': report['error_code'],
-                      'library_source': report['library_source'], 'report': str(args.out)}, ensure_ascii=False))
-    return 0 if report['status'] in ('ready', 'partial_draft') else 2
+                      'library_source': report['library_source'], 'report': str(args.out),
+                      'delivery_status': report['delivery_status'], 'deliverable': report.get('deliverable', False)}, ensure_ascii=False))
+    return delivery_exit_code(report, executing=bool(args.execute_out))
 
 
 if __name__ == '__main__':

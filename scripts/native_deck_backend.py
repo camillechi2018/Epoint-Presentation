@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import platform
 import posixpath
 import shutil
@@ -67,6 +68,10 @@ def _basic_package_audit(path: Path) -> dict:
 
 
 def _render(path: Path, directory: Path) -> dict:
+    if platform.system() == 'Windows':
+        from office_runtime import probe, render
+        if probe()['status'] == 'detected':
+            return render(path, directory)
     if platform.system() == 'Darwin':
         return {'status': 'pending_manual', 'error_code': 'MAC_RENDERER_MANUAL_REQUIRED',
                 'detail': '请在目标编辑器中打开候选 PPTX 并逐页导出预览；不以 LibreOffice 替代 Mac 目标应用验收'}
@@ -92,7 +97,9 @@ def _render(path: Path, directory: Path) -> dict:
         raise RuntimeError('PDF_RENDER_EMPTY')
     for number, image in enumerate(images, 1):
         image.rename(directory / f'P{number:03d}.png')
-    return {'status': 'passed', 'error_code': None, 'application': 'LibreOffice'}
+    return {'status': 'passed', 'error_code': None, 'application': 'LibreOffice',
+            'opened': True, 'slide_count': len(images),
+            'output_sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
 
 
 def assemble_and_check(assembly: dict, manifest: Path, output: Path,
