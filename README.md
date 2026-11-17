@@ -4,7 +4,7 @@
 
 **`main` 当前开发版本：1.0.33-dev；最新正式版本：1.0.32。** [查看技能入口](SKILL.md) · [查看 v1.0.32 发布版](https://github.com/camillechi2018/Epoint-Presentation/releases/tag/v1.0.32) · [查看完整模板知识库](https://github.com/camillechi2018/Epoint-Presentation-KnowledgeBase)
 
-本说明对应当前 `main`。最新改进加强了已有的 PowerPoint 验证：核实实际 Office 后端、为组装和导出设置超时、将候选生成与验收状态分开记录。这些改进尚未另行发布为新的正式版本。
+本说明对应当前开发候选。统一入口默认按系统选择组装方式：Windows 使用 PowerPoint，macOS/Linux 使用 Python 原生组装。来源与内容审计保持一致，生成、预览和 PowerPoint 验收分别记录；尚未发布为新的正式版本。
 
 ## 先看三种风格
 
@@ -55,7 +55,7 @@
 
 ## 快速开始
 
-需要 Python 3.10 或更高版本。Windows 正式整稿组装还需要安装并通过检查的 **Microsoft PowerPoint**；只有 WPS 的环境不满足这一后端要求。安装技能和 Python 依赖不会自动安装 Office。
+需要 Python 3.10 或更高版本。Windows 默认 PowerPoint 后端需要安装并通过检查的 **Microsoft PowerPoint**；macOS/Linux 默认使用 Python 原生组装，无需 Windows Office。Windows 也可显式选择原生组装。安装技能和 Python 依赖不会自动安装 Office。
 
 将本仓库完整克隆到所用 Agent 的技能目录，确保 `SKILL.md`、`assets/`、`references/` 和 `scripts/` 都在同一目录。以 Codex 的用户技能目录为例：
 
@@ -106,6 +106,10 @@ sh ./install.sh
 
 如果已指定风格，可直接说“用蓝色系制作”，不需要再次选择。完整模板知识库由 [`knowledge-base.json`](knowledge-base.json) 指向独立 Git 仓库；首次使用远端模板需要能够访问 GitHub，离线时按校验结果使用本地缓存或最小模板包。
 
+## 跨平台统一出稿
+
+安装后使用 `python3 scripts/run.py --doctor --goal assemble --out doctor.json` 检查所选后端，再运行 `python3 scripts/run.py --request request.json --out report.json --execute-out candidate.pptx`。Windows 可使用 `python`。macOS/Linux 不再需要 `--native-experimental`，旧参数仍兼容；可用 `--assembly-backend auto|native|powerpoint` 指定后端。[查看平台差异及验收步骤](references/cross-platform-assembly.md)。
+
 ## PowerPoint 验证与生成状态
 
 正式流程原本就使用 PowerPoint 打开和导出成稿；当前版本加强了后端识别、超时处理和验证证据检查。**交付只要求 PowerPoint 验证，不增加 WPS 验证步骤。** PowerPoint 打开、逐页导出通过后，仍须检查实际画面的文字、图形和排版。
@@ -120,7 +124,7 @@ py -3 scripts/run.py --doctor --out environment-check.json
 py -3 scripts/run.py --doctor --goal assemble --office-smoke --out powerpoint-check.json
 ```
 
-正式完整稿执行前也会自动进行上述 Office 操作测试。仅检测到程序时标记为未验证；操作失败则阻断正式组装，不自动切换到实验入口。组装和最终打开／逐页导出分别默认限时 300 秒，失败保留诊断记录；只对确认属于本次任务的 Office 进程尝试清理。
+Windows PowerPoint 后端执行前自动进行上述 Office 操作测试。仅检测到程序时标记为未验证；操作失败则阻断该后端，不自动切换原生组装。macOS/Linux 默认走原生后端，不执行 Windows Office 冒烟。组装和最终打开／逐页导出分别默认限时 300 秒，失败保留诊断记录；只对确认属于本次任务的 Office 进程尝试清理。
 
 生成结果按以下状态读取：
 
@@ -159,7 +163,7 @@ PowerPoint 验证同时核对应用身份、页数、可解码的预览图片及
 | 知识库暂不可达 | 可检查已校验的本地结构页最小包；无合格结构页时停止完整出稿。仅制作正文局部草稿可使用离线品牌排版。 |
 | Windows 正式组装 | 要求经身份核实及实际操作测试的微软 PowerPoint；WPS 的兼容注册不能代替它。 |
 | 跨系统安装 | Windows、macOS、Linux 使用对应安装入口；依赖安装与正式组装后端分别检查。 |
-| 实验原生组装 | 需显式启用 `--native-experimental`，继续执行来源、字体、颜色、媒体和 Logo 检查；实验产物仍为待验收候选。 |
+| 跨平台原生组装 | macOS/Linux 默认启用，Windows 可指定 `--assembly-backend native`；继续执行来源、字体、颜色、媒体和 Logo 检查，生成候选后另行验收。 |
 | 跨系统预览 | LibreOffice 导出只作为预览，不等于 PowerPoint 验证通过；macOS 当前需手动在 PowerPoint 中打开、导出和复核。 |
 | 母版与版式 | 本轮未实施跨页去重优化，不承诺组装后自动合并相同母版或精简全部冗余版式。 |
 | HTML 与动效 | 按具体组件的独立验收状态判断，不能从静态 PPTX 可用推断其已可用。 |

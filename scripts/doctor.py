@@ -15,6 +15,7 @@ from runtime_paths import SKILL_ROOT, locations
 from runtime_process import capture
 from font_profile import probe as probe_font_profile
 from office_runtime import probe as probe_office
+from assembly_backend import BACKENDS, select_backend
 
 IMPORTS = {'pptx': 'python-pptx', 'PIL': 'Pillow', 'lxml': 'lxml',
            'openpyxl': 'openpyxl', 'xlrd': 'xlrd', 'docx': 'python-docx'}
@@ -45,12 +46,12 @@ def probe_command(name):
 
 
 def probe_native_backend():
-    """Import-only check for the explicitly selected experimental assembler."""
+    """Import-only check; it does not certify assembly or rendered output."""
     code = ('import sys; sys.path.insert(0, ' + repr(str(SKILL_ROOT / 'scripts')) + '); '
-            'from assemble_native import assemble_many; assert callable(assemble_many)')
+            'from native_deck_backend import assemble_and_check; assert callable(assemble_and_check)')
     result = capture([sys.executable, '-c', code], timeout=25)
     ok = result['returncode'] == 0
-    return {'status': 'available' if ok else 'unavailable', 'backend': 'native_experimental',
+    return {'status': 'available' if ok else 'unavailable', 'backend': 'native',
             'validation': 'import_only',
             'error_code': None if ok else result['error'] or 'NATIVE_BACKEND_IMPORT_FAILED'}
 
@@ -84,7 +85,11 @@ def deep_probe(paths):
     return outcome
 
 
-def report(*, library=None, state_dir=None, goal='inspect', deep=False, font_profile=None, office_smoke=False):
+def report(*, library=None, state_dir=None, goal='inspect', deep=False, font_profile=None,
+           office_smoke=False, assembly_backend='auto'):
+    selected = select_backend(assembly_backend, legacy_native=goal == 'native-assemble')
+    if office_smoke and selected != 'powerpoint':
+        raise ValueError('OFFICE_SMOKE_REQUIRES_POWERPOINT_BACKEND')
     paths = locations(state_dir)
     root = Path(library).resolve() if library else SKILL_ROOT / 'assets' / 'minimal-template-pack'
     dependencies = {name: probe_import(name) for name in IMPORTS}
@@ -99,12 +104,13 @@ def report(*, library=None, state_dir=None, goal='inspect', deep=False, font_pro
     git = probe_command('git')
     assembly = {'status': 'unavailable', 'backend': None,
                 'error_code': 'PPTX_BACKEND_UNAVAILABLE'}
-    if goal == 'native-assemble':
+    if selected == 'native':
         assembly = probe_native_backend()
-    elif os.name == 'nt':
+    elif platform.system() == 'Windows':
         assembly = probe_office(smoke=office_smoke)
         if assembly['status'] == 'detected':
             assembly.update(status='untested', error_code='BACKEND_SMOKE_TEST_REQUIRED')
+    assembly['backend'] = selected
     blockers = []
     if sys.version_info < (3, 10):
         blockers.append('PYTHON_VERSION_UNSUPPORTED')
@@ -141,7 +147,7 @@ def report(*, library=None, state_dir=None, goal='inspect', deep=False, font_pro
             'assembly': assembly, 'rendering': renderer, 'fonts': font_check,
             'guidance': ['Use the dedicated environment installer for missing Python dependencies.',
                          'An available package or registered application is not a rendered-deck acceptance.',
-                         'native-assemble checks only experimental backend import; a real deck still needs assembly, rendering and visual review.']}
+                         'Native assembly diagnostics check imports only; a real deck still needs assembly, rendering and visual review.']}
 
 
 def main(argv=None):
@@ -152,10 +158,15 @@ def main(argv=None):
     parser.add_argument('--out', type=Path)
     parser.add_argument('--deep', action='store_true')
     parser.add_argument('--office-smoke', action='store_true', help='Launch a bounded Microsoft PowerPoint save/reopen/export test')
+    parser.add_argument('--assembly-backend', choices=BACKENDS, default='auto')
     parser.add_argument('--font-profile', choices=('windows', 'macos', 'linux'))
     args = parser.parse_args(argv)
-    result = report(library=args.library, state_dir=args.state_dir, goal=args.goal,
-                    deep=args.deep, font_profile=args.font_profile, office_smoke=args.office_smoke)
+    try:
+        result = report(library=args.library, state_dir=args.state_dir, goal=args.goal,
+                        deep=args.deep, font_profile=args.font_profile, office_smoke=args.office_smoke,
+                        assembly_backend=args.assembly_backend)
+    except ValueError as exc:
+        parser.error(str(exc))
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)
         write_json(args.out, result)
