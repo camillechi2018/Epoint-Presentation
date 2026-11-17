@@ -1,3 +1,4 @@
+import os
 import json
 import sys
 import tempfile
@@ -6,7 +7,7 @@ from pathlib import Path
 
 from pptx import Presentation
 
-ROOT = Path(r'C:\Users\xiaoc\.codex\skills\github-knowledge-next')
+ROOT = Path(os.environ.get('EPOINT_TEST_LIBRARY', str(Path(__file__).resolve().parents[1] / '.test-library-required')))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from content_adapters import adapt_for_layout, adapt_structural_fields
 from fill_layout import fill

@@ -1,3 +1,4 @@
+import os
 """Regression for activated cross-scenario body layouts."""
 import json
 import sys
@@ -11,7 +12,7 @@ from plan_deck import binding_gap, eligible
 from relation_match import load_taxonomy
 
 
-LIBRARY = Path(r'C:\Users\xiaoc\.codex\skills\github-knowledge-next')
+LIBRARY = Path(os.environ.get('EPOINT_TEST_LIBRARY', str(Path(__file__).resolve().parents[1] / '.test-library-required')))
 
 
 def sample(layout_id):

@@ -36,14 +36,9 @@
 
 ## 分发与校验
 
-源码文本采用 `.gitattributes` 定义的 LF 规范；Windows PowerShell 脚本保留 UTF-8 BOM；二进制不转换。发布者在隔离工作区先暂存拟分发的新文件，再执行：
+源码文本采用 `.gitattributes` 定义的 LF 规范；Windows PowerShell 脚本保留 UTF-8 BOM；二进制不转换。发布字节规范化与清单生成已迁至私有维护仓库，用户端仅校验，不执行清单重写。
 
-```text
-<Python> scripts/prepare_distribution.py --root <技能根目录> --manifest-root <技能根目录>/assets/minimal-template-pack --write
-<Python> scripts/prepare_distribution.py --root <知识库根目录> --write
-```
-
-不带 `--write` 时只校验。重建清单只包含 Git 已跟踪/已暂存文件，防止把验证产物或工作区杂项混入发布包。`update_knowledge_manifest.py` 同样采用该规则；不再自动吸收未跟踪文件。
+发布者在隔离工作区审核来源、规范化文本并验证知识库清单后，提交拟分发文件。安装包制作器从固定提交及 `distribution-files.json` 明确清单读取内容，不吸收未跟踪或未提交文件；最终包附来源提交和逐文件哈希。维护仓库的清单重建命令不属于用户出稿流程。
 
 运行时校验只计算原始文件字节哈希，不自动修复、改写或忽略换行差异。跨平台修复应发布新版本，不覆盖旧标签；仓库 `main` 与已发布标签是不同快照。
 

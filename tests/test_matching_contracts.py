@@ -1,3 +1,4 @@
+import os
 """Pilot: business labels are soft for structural layouts, strict invariants stay hard."""
 import json
 import sys
@@ -12,7 +13,7 @@ from content_adapters import adapt_for_layout
 from fill_layout import fill
 from pptx import Presentation
 
-LIBRARY = Path(r'C:\Users\xiaoc\.codex\skills\github-knowledge-next')
+LIBRARY = Path(os.environ.get('EPOINT_TEST_LIBRARY', str(Path(__file__).resolve().parents[1] / '.test-library-required')))
 
 
 @unittest.skipUnless(LIBRARY.is_dir(), 'local knowledge base unavailable')
