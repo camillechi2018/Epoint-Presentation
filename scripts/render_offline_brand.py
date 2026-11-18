@@ -22,7 +22,7 @@ from pptx.oxml.xmlchemy import OxmlElement
 from pptx.oxml.ns import qn
 from pptx.util import Inches, Pt
 from audit_new_drawn_palette import audit as audit_palette
-from audit_brand_palette_source import locked_colors
+from brand_palette import locked_colors
 from audit_component_color_independence import audit as audit_color_independence
 from audit_logo import audit as audit_logo
 from materialize_component_colors import freeze_uniform_deck

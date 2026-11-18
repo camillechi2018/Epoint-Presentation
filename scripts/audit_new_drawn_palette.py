@@ -12,7 +12,7 @@ from zipfile import ZipFile
 from lxml import etree
 
 from audit_theme_integrity import A, related, slide_parts
-from audit_brand_palette_source import locked_colors
+from brand_palette import locked_colors
 
 def allowed_colors(theme):
     return locked_colors(theme)

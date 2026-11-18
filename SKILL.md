@@ -2,7 +2,7 @@
 name: epoint-presentation
 description: 制作新点品牌可编辑 PPTX；Skill 自带 Logo、锁定色系、字体、三风格资料包和已校验结构页最小包。优先读取 Git 知识库，断网时使用本地已校验模板；正文可灵活编排。
 metadata:
-  version: "1.0.33"
+  version: "1.0.34-rc.1"
 ---
 
 # 新点企业演示文稿：新模板方案
@@ -71,7 +71,7 @@ metadata:
 
 **技能排版仍不适用时，进入受约束的正文自由编排。** 模型先说明既有结构不适用的具体原因，再提供逐元素 `free_layout`；执行器按[自由编排协议](references/free-composition.md)绘制可编辑文本和图形，只使用所选风格的品牌变量、字体与默认 Logo。逐页 `selection_mode` 与 `selection_label` 明确区分“知识库模板／技能排版／自由编排”；自由编排不计入知识库复用。正文容量校验失败且无 `free_layout` 时停止该页，不强行压缩。四类结构页仍必须使用已校验模板。完整稿在 PowerPoint 中复核文字边界和视觉节奏。
 
-**颜色只从锁定变量或来源组件取值。** 先固定 `blue`、`red` 或 `deep-blue-tech`，新绘页面的全部 RGB 只能取自 `assets/brand/brand-baseline.json` 与 `assets/brand/brand-palette-lock.json` 相同主题下已登记的角色；不得由模型另造 RGB、灰阶、透明白或暗色文字，也不得从封面图片临时抽色。绿系实验主题不进入常规出稿。蓝色内容页浅底使用 `F6F9FF`；来源封面的 `E7E6E6` 不作为蓝色内容页通用灰底。`audit_brand_palette_source.py` 可对照知识库原稿验证锁定值的来源；新绘 PPTX 用 `scripts/audit_new_drawn_palette.py --input <PPTX> --theme <主题> --report <报告>` 拦截锁外颜色或擅改变量，内置离线出稿器自动执行。复用原稿时，`fill_layout.py` 先对照知识库来源页核验全部 12 个主题色槽，再将所选单页及其版式、母版、原生图表的主题色引用固化到组件对象中；原始来源 PPTX 保留作对照。模板里原有的显式色、渐变及非 Logo 图片保留来源视觉，不能因此开放给新绘页面任意取用。PPTX 格式仍保留主题部件，但可见组件不得依赖母版颜色槽。红色来源页的彩色 Logo 在原锚点替换为黑／白资产，整稿运行 `audit_logo.py --theme red --require-every-slide` 拦截彩色标识。
+**颜色只从锁定变量或来源组件取值。** 先固定 `blue`、`red` 或 `deep-blue-tech`，新绘页面的全部 RGB 只能取自 `assets/brand/brand-baseline.json` 与 `assets/brand/brand-palette-lock.json` 相同主题下已登记的角色；不得由模型另造 RGB、灰阶、透明白或暗色文字，也不得从封面图片临时抽色。绿系实验主题不进入常规出稿。蓝色内容页浅底使用 `F6F9FF`；来源封面的 `E7E6E6` 不作为蓝色内容页通用灰底。新绘 PPTX 用 `scripts/audit_new_drawn_palette.py --input <PPTX> --theme <主题> --report <报告>` 拦截锁外颜色或擅改变量，内置离线出稿器自动执行。复用原稿时，`fill_layout.py` 先对照知识库来源页核验全部 12 个主题色槽，再将所选单页及其版式、母版、原生图表的主题色引用固化到组件对象中；原始来源 PPTX 保留作对照。模板里原有的显式色、渐变及非 Logo 图片保留来源视觉，不能因此开放给新绘页面任意取用。PPTX 格式仍保留主题部件，但可见组件不得依赖母版颜色槽。红色来源页的彩色 Logo 在原锚点替换为黑／白资产，整稿运行 `audit_logo.py --theme red --require-every-slide` 拦截彩色标识。
 
 蓝红补充模板与其他新模板统一由当前 Git 知识库登记。补充模板的来源、支持主题、角色、目录项数和正文容量均从 `catalog.json`、`source-pages.json`、各组件的 `bindings.json`／`layout_rules.json` 实时读取；不要使用 Skill 中的历史版式数量判断当前可调用范围。红色独有页面仍只按该组件登记的 `themes` 调用，跨色系换色、动效与 HTML 也只按当前能力字段判断。
 

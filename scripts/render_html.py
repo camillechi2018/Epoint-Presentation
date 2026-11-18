@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse,base64,html,json,re
 from pathlib import Path
 from library_location import get_library
-from audit_brand_palette_source import source_xml_colors
+from brand_palette import source_xml_colors
 from PIL import Image
 
 def uri(path:Path,mime:str):
