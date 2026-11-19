@@ -2,7 +2,7 @@
 
 把材料整理成符合新点品牌风格、可继续编辑的企业演示文稿。先选 **蓝色系、红色系或科技风格**，再由 Agent 梳理内容与信息关系，优先试用知识库组件；正文不适配时使用技能内的排版规则，仍保持同一套色彩、字体和 Logo。
 
-**当前源码候选版本：1.0.34-rc.1。** [查看技能入口](SKILL.md) · [查看 v1.0.33 发布版](https://github.com/camillechi2018/Epoint-Presentation/releases/tag/v1.0.33) · [查看完整模板知识库](https://github.com/camillechi2018/Epoint-Presentation-KnowledgeBase)
+**当前源码候选版本：1.0.34-rc.2。** [查看技能入口](SKILL.md) · [查看 v1.0.33 发布版](https://github.com/camillechi2018/Epoint-Presentation/releases/tag/v1.0.33) · [查看完整模板知识库](https://github.com/camillechi2018/Epoint-Presentation-KnowledgeBase)
 
 **配套知识库：v1.0.3。** [下载固定知识库快照](https://github.com/camillechi2018/Epoint-Presentation-KnowledgeBase/releases/tag/v1.0.3)。默认配置仍从知识库 `main` 获取更新；需要复现本次配套版本或离线部署时，使用该标签或发布页 ZIP，并通过本地知识库目录参数指定。技能安装包与完整知识库分开分发，普通用户不需要访问私有维护仓库。稳定版见上方 v1.0.33 发布链接。
 
@@ -12,8 +12,8 @@
 
 | 页面 | 蓝色系 · 蓝白简约 | 红色系 · 红白简约 | 科技风格 · 深蓝科技 |
 | --- | --- | --- | --- |
-| 封面 | ![蓝色系 P001 封面样张](assets/style-previews/blue-cover-P001.png) | ![红色系封面样张](assets/style-kits/red/cover-supp-cover-red-06.png) | ![科技风格封面样张](assets/style-kits/deep-blue-tech/cover-cover-tech-001.png) |
-| 目录 | ![蓝色系目录预览](assets/style-previews/blue.png) | ![红色系目录预览](assets/style-previews/red.png) | ![科技风格目录预览](assets/style-previews/tech.png) |
+| 封面 | ![蓝色系 P001 封面样张](assets/minimal-template-pack/source-previews/cover/P001.png) | ![红色系封面样张](assets/minimal-template-pack/source-previews/red-supplement/P006.png) | ![科技风格封面样张](assets/minimal-template-pack/source-previews/tech/P001.png) |
+| 目录 | ![蓝色系目录预览](assets/style-previews/blue.png) | ![红色系目录预览](assets/style-previews/red.png) | ![科技风格目录预览](assets/minimal-template-pack/source-previews/tech/P006.png) |
 | 正文 | ![蓝色系流程正文样张](assets/style-kits/blue/process-content-blue-060.png) | ![红色系对比正文样张](assets/style-kits/red/comparison-content-blue-133.png) | ![科技风格并列正文样张](assets/style-kits/deep-blue-tech/parallel-content-tech-021.png) |
 
 图片取自技能包内的模板样张，文字是演示内容，实际出稿会按用户材料替换。预览用于选择整稿视觉方向，不表示最终一定使用图中的页面。实际封面、目录、章节页和封底从适配的知识库模板或已校验的本地最小包中选择。

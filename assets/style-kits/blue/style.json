@@ -71,7 +71,7 @@
     {
       "role": "cover",
       "layout_id": "cover-01",
-      "preview": "cover-cover-01.png",
+      "preview": "../../minimal-template-pack/source-previews/cover/P001.png",
       "source_preview": "source-previews/cover/P001.png",
       "status": "verified_draft",
       "sha256": "f3300e97a125374403e087ff22343d4137601571dd21519d333e524479ca9464",
@@ -80,7 +80,7 @@
     {
       "role": "directory",
       "layout_id": "content-blue-001",
-      "preview": "directory-content-blue-001.png",
+      "preview": "../../minimal-template-pack/source-previews/blue/P001.png",
       "source_preview": "source-previews/blue/P001.png",
       "status": "verified_draft",
       "sha256": "fb2946f2a92b5b0c8abfa153f05bd09e3efeb8b0bb5f50bea9568937e69ac15a",
@@ -89,7 +89,7 @@
     {
       "role": "section",
       "layout_id": "content-blue-002",
-      "preview": "section-content-blue-002.png",
+      "preview": "../../minimal-template-pack/source-previews/blue/P002.png",
       "source_preview": "source-previews/blue/P002.png",
       "status": "verified_draft",
       "sha256": "3203a2057c2e7d9b9a85b7fb61fc2afdf6e722caf7783183fc565e5308c49f22",
@@ -125,7 +125,7 @@
     {
       "role": "closing",
       "layout_id": "supp-closing-01",
-      "preview": "closing-supp-closing-01.png",
+      "preview": "../../minimal-template-pack/source-previews/blue-supplement/P010.png",
       "source_preview": "source-previews/blue-supplement/P010.png",
       "status": "verified_draft",
       "sha256": "4ddbe4a6eeec62a4a69d1c27f55f6e2ec11ee4cfb38fd8e1b5c7edd083e33bd1",
