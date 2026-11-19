@@ -13,6 +13,13 @@ from managed_library_cache import online_snapshot, cached as managed_cached
 SKILL = Path(__file__).resolve().parents[1]
 
 
+def binding_path_key(entry, theme):
+    """Select the catalog field that names the layout's text binding file."""
+    if theme == 'red' and entry.get('red_bindings'):
+        return 'red_bindings'
+    return 'bindings'
+
+
 def config():
     return json.loads((SKILL / 'knowledge-base.json').read_text(encoding='utf-8-sig'))
 

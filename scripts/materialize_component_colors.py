@@ -66,6 +66,65 @@ def color_map(z, slide, layout, master):
     return mapping
 
 
+def _write_frozen_package(zin, output_path, parts, values, mapping, report_path, source_details):
+    """Bake the selected parts and close the input archive before replacing the output."""
+    # Include chart parts; phClr placeholders are counted for visual review.
+    parts.update(name for name in zin.namelist()
+                 if name.startswith("ppt/charts/") and name.endswith(".xml"))
+    changed = {}
+    unresolved = {}
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(prefix=".colors-", suffix=".pptx", dir=output_path.parent)
+    os.close(descriptor)
+    temporary = Path(temporary_name)
+    try:
+        with ZipFile(temporary, "w") as zout:
+            for info in zin.infolist():
+                data = zin.read(info.filename)
+                if info.filename in parts:
+                    root = ET.fromstring(data)
+                    count = 0
+                    pending = 0
+                    for element in root.iter(SCHEME):
+                        role = element.get("val")
+                        if role == "phClr":
+                            pending += 1
+                            continue
+                        resolved = mapping.get(role, role)
+                        if resolved not in values:
+                            raise ValueError(f"未登记的主题色槽 {role}: {info.filename}")
+                        element.tag = RGB
+                        element.set("val", values[resolved])
+                        count += 1
+                    if count:
+                        data = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+                        changed[info.filename] = count
+                    if pending:
+                        unresolved[info.filename] = pending
+                zout.writestr(info, data)
+        # Windows cannot replace a ZIP that is still open for reading.
+        zin.close()
+        for attempt in range(6):
+            try:
+                os.replace(temporary, output_path)
+                break
+            except PermissionError:
+                if attempt == 5:
+                    raise
+                time.sleep(0.15 * (attempt + 1))
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+    result = {"input": str(zin.filename), "output": str(output_path), **source_details,
+              "source_colors": values, "materialized_by_part": changed,
+              "remaining_chart_style_placeholders": unresolved,
+              "rendering_depends_on_master_theme_slots": False,
+              "chart_visual_review_required": bool(unresolved)}
+    if report_path:
+        Path(report_path).write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    return result
+
+
 def freeze(input_path, output_path, report_path=None, expected_source_path=None, expected_source_page=None):
     input_path = Path(input_path)
     output_path = Path(output_path)
@@ -91,62 +150,8 @@ def freeze(input_path, output_path, report_path=None, expected_source_path=None,
                 raise ValueError("组件主题槽与知识库来源页不一致，拒绝固化：" + json.dumps(changed, ensure_ascii=False))
         mapping = color_map(zin, slide, layout, master)
         parts = {slide, layout, master}
-        # Charts belong to the extracted page's package. Chart style phClr is
-        # a chart-style placeholder, not a master color slot, and is reported.
-        parts.update(name for name in zin.namelist()
-                     if name.startswith("ppt/charts/") and name.endswith(".xml"))
-        changed = {}
-        unresolved = {}
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        descriptor, temporary_name = tempfile.mkstemp(prefix=".colors-", suffix=".pptx", dir=output_path.parent)
-        os.close(descriptor)
-        temporary = Path(temporary_name)
-        try:
-            with ZipFile(temporary, "w") as zout:
-                for info in zin.infolist():
-                    data = zin.read(info.filename)
-                    if info.filename in parts:
-                        root = ET.fromstring(data)
-                        count = 0
-                        pending = 0
-                        for element in root.iter(SCHEME):
-                            role = element.get("val")
-                            if role == "phClr":
-                                pending += 1
-                                continue
-                            resolved = mapping.get(role, role)
-                            if resolved not in values:
-                                raise ValueError(f"未登记的主题色槽 {role}: {info.filename}")
-                            element.tag = RGB
-                            element.set("val", values[resolved])
-                            count += 1
-                        if count:
-                            data = ET.tostring(root, encoding="utf-8", xml_declaration=True)
-                            changed[info.filename] = count
-                        if pending:
-                            unresolved[info.filename] = pending
-                    zout.writestr(info, data)
-            # Windows cannot replace a ZIP that is still open for reading.
-            zin.close()
-            for attempt in range(6):
-                try:
-                    os.replace(temporary, output_path)
-                    break
-                except PermissionError:
-                    if attempt == 5:
-                        raise
-                    time.sleep(0.15 * (attempt + 1))
-        finally:
-            if temporary.exists():
-                temporary.unlink()
-    result = {"input": str(input_path), "output": str(output_path), "theme_source": theme,
-              "source_colors": values, "materialized_by_part": changed,
-              "remaining_chart_style_placeholders": unresolved,
-              "rendering_depends_on_master_theme_slots": False,
-              "chart_visual_review_required": bool(unresolved)}
-    if report_path:
-        Path(report_path).write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
-    return result
+        return _write_frozen_package(zin, output_path, parts, values, mapping, report_path,
+                                     {"theme_source": theme})
 
 
 def freeze_uniform_deck(input_path, output_path, report_path=None, role_overrides=None):
@@ -170,65 +175,13 @@ def freeze_uniform_deck(input_path, output_path, report_path=None, role_override
             elif common != (values, mapping):
                 raise ValueError("整稿有不同母版配色，请逐页固化")
             parts.update((slide, layout, master))
-        chart_parts = {name for name in zin.namelist()
-                       if name.startswith("ppt/charts/") and name.endswith(".xml")}
-        parts.update(chart_parts)
         values, mapping = common
         if role_overrides:
             if any(role not in values or len(color) != 6 for role, color in role_overrides.items()):
                 raise ValueError("离线主题覆盖值无效")
             values = {**values, **{role: color.upper() for role, color in role_overrides.items()}}
-        changed = {}
-        unresolved = {}
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        descriptor, temporary_name = tempfile.mkstemp(prefix=".colors-", suffix=".pptx", dir=output_path.parent)
-        os.close(descriptor)
-        temporary = Path(temporary_name)
-        try:
-            with ZipFile(temporary, "w") as zout:
-                for info in zin.infolist():
-                    data = zin.read(info.filename)
-                    if info.filename in parts:
-                        root = ET.fromstring(data)
-                        count = 0
-                        pending = 0
-                        for element in root.iter(SCHEME):
-                            role = element.get("val")
-                            if role == "phClr":
-                                pending += 1
-                                continue
-                            resolved = mapping.get(role, role)
-                            if resolved not in values:
-                                raise ValueError(f"未登记的主题色槽 {role}: {info.filename}")
-                            element.tag = RGB
-                            element.set("val", values[resolved])
-                            count += 1
-                        if count:
-                            data = ET.tostring(root, encoding="utf-8", xml_declaration=True)
-                            changed[info.filename] = count
-                        if pending:
-                            unresolved[info.filename] = pending
-                    zout.writestr(info, data)
-            zin.close()
-            for attempt in range(6):
-                try:
-                    os.replace(temporary, output_path)
-                    break
-                except PermissionError:
-                    if attempt == 5:
-                        raise
-                    time.sleep(0.15 * (attempt + 1))
-        finally:
-            if temporary.exists():
-                temporary.unlink()
-    result = {"input": str(input_path), "output": str(output_path), "slide_count": len(slides),
-              "source_colors": values, "materialized_by_part": changed,
-              "remaining_chart_style_placeholders": unresolved,
-              "rendering_depends_on_master_theme_slots": False,
-              "chart_visual_review_required": bool(unresolved)}
-    if report_path:
-        Path(report_path).write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
-    return result
+        return _write_frozen_package(zin, output_path, parts, values, mapping, report_path,
+                                     {"slide_count": len(slides)})
 
 
 def main():

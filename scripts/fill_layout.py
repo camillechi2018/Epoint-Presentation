@@ -1,5 +1,5 @@
 """Fill one editable template; fail before writing on missing facts or capacity errors."""
-from library_location import get_library
+from library_location import binding_path_key, get_library
 from normalize_fonts import normalize
 from font_profile import resolve as resolve_font_profile
 from pathlib import Path
@@ -638,7 +638,7 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
     source=(lib/source_rel).resolve()
     if not source.is_relative_to(lib):raise ValueError('源文件越出库根目录')
     if out==source or out.is_relative_to(lib/'layouts') or out.is_relative_to(lib/'diagrams') or out.is_relative_to(lib/'master'):raise ValueError('输出不能覆盖模板库资产')
-    binding_rel=m.get('red_bindings') if theme=='red' and m.get('red_bindings') else m['bindings']
+    binding_rel = m[binding_path_key(m, theme)]
     binding_data=json.loads((lib/binding_rel).read_text(encoding='utf-8-sig'))
     if m.get('collection')=='new-template-content' and not internal:
         safe_media={'brand_logo_locked','source_decorative_locked','source_visual_locked','cover_visual_layer'}

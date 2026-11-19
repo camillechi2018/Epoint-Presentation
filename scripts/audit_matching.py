@@ -12,6 +12,7 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+from library_location import binding_path_key
 from fill_layout import fill
 from plan_deck import resolve
 from content_adapters import (adapt_for_layout, adapt_structural_fields,
@@ -23,7 +24,7 @@ from capacity_preflight import preflight
 def unmapped_binding_paths(library: Path, layout_id: str, content: dict, theme: str) -> list[str]:
     catalog = json.loads((library / 'catalog.json').read_text(encoding='utf-8-sig'))
     entry = next(item for item in catalog['layouts'] if item['id'] == layout_id)
-    binding = entry.get('red_bindings') if theme == 'red' and entry.get('red_bindings') else entry['bindings']
+    binding = entry[binding_path_key(entry, theme)]
     fields = json.loads((library / binding).read_text(encoding='utf-8-sig'))['fields']
     texts = content.get('texts') if isinstance(content.get('texts'), dict) else {}
     return sorted({field.get('semantic_path') or field['field'] for field in fields

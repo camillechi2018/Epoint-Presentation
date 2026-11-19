@@ -5,7 +5,7 @@ from text_width import directory_text_over_capacity, visual_width_units
 import argparse, json, random, re
 from collections import Counter
 from pathlib import Path
-from library_location import get_library
+from library_location import binding_path_key, get_library
 from relation_match import canonical, load_taxonomy, match_relation, match_role, supports_input_structure
 from fallback_rules import fallback_type, fallback_catalog
 from content_adapters import adapt_for_layout
@@ -85,7 +85,7 @@ def binding_gap(entry, page, root, theme):
     content = page.get('content') if isinstance(page.get('content'), dict) else {}
     content, _ = adapt_for_layout(entry['id'], content, page.get('title'), entry=entry)
     texts = content.get('texts') if isinstance(content.get('texts'), dict) else {}
-    binding_rel = entry.get('red_bindings') if theme == 'red' and entry.get('red_bindings') else entry['bindings']
+    binding_rel = entry[binding_path_key(entry, theme)]
     fields = json.loads((root / binding_rel).read_text(encoding='utf-8-sig'))['fields']
     provided = set(texts)
     return sum(field.get('required', True) is not False
@@ -331,7 +331,7 @@ def eligible(e, p, request, taxonomy):
             rules=json.loads((request['_root']/e['layout_rules']).read_text(encoding='utf-8'))
             if title_chars>rules.get('title_pressure_test',{}).get('safe_title_chars',0):reasons.append('title_over_capacity')
         if isinstance(p.get('title'),str) and e.get('role') in ('cover','directory','section','closing'):
-            binding_rel=e.get('red_bindings') if theme=='red' and e.get('red_bindings') else e.get('bindings')
+            binding_rel = e.get(binding_path_key(e, theme))
             fields=json.loads((request['_root']/binding_rel).read_text(encoding='utf-8'))['fields']
             aliases={'cover':('cover.title',),'closing':('closing.title',),
                      'section':('chapter.title','section.title'),
@@ -354,7 +354,7 @@ def eligible(e, p, request, taxonomy):
         if len(items) not in rules.get('verified_counts',[]) or (need.get('item_count') is not None and need['item_count']!=len(items)):
             reasons.append('item_count_unverified')
         elif rules.get('directory_item_fields'):
-            binding_rel=e.get('red_bindings') if theme=='red' and e.get('red_bindings') else e['bindings']
+            binding_rel = e[binding_path_key(e, theme)]
             bindings=json.loads((request['_root']/binding_rel).read_text(encoding='utf-8'))['fields']
             field_limits={field['field']:field for field in bindings}
             for index,item in enumerate(items):
@@ -457,8 +457,7 @@ def resolve(library,request):
         candidate_summaries=[]
         for row in scored[:12]:
             candidate=row[12]
-            binding_rel=(candidate.get('red_bindings') if p.get('theme',request.get('theme'))=='red'
-                         and candidate.get('red_bindings') else candidate['bindings'])
+            binding_rel = candidate[binding_path_key(candidate, p.get('theme', request.get('theme')))]
             binding_fields=json.loads((root/binding_rel).read_text(encoding='utf-8-sig'))['fields']
             candidate_summaries.append({
                 'layout_id':candidate['id'],

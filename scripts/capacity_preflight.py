@@ -6,6 +6,7 @@ import json
 from functools import lru_cache
 from pathlib import Path
 
+from library_location import binding_path_key
 from content_adapters import adapt_for_layout
 from text_width import visual_width_units
 
@@ -78,8 +79,7 @@ def preflight(library: Path, entry: dict, content: dict, page_title: str | None,
     library = Path(library).resolve()
     mapped, adapter = adapt_for_layout(entry['id'], content, page_title, entry=entry)
     texts = mapped.get('texts') if isinstance(mapped.get('texts'), dict) else {}
-    binding_rel = (entry.get('red_bindings') if theme == 'red' and entry.get('red_bindings')
-                   else entry['bindings'])
+    binding_rel = entry[binding_path_key(entry, theme)]
     bindings, binding_sha = _bindings(str(library / binding_rel))
     longcopy, policy, longcopy_sha, policy_sha = _review(str(library))
     reviewed_fields = longcopy.get(entry['id'], {})
