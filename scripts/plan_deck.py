@@ -1,6 +1,8 @@
 """Global deck selection for the isolated next-generation component library."""
 from __future__ import annotations
-import argparse, json, random, re, unicodedata
+from text_width import visual_width_units
+
+import argparse, json, random, re
 from collections import Counter
 from pathlib import Path
 from library_location import get_library
@@ -351,8 +353,8 @@ def eligible(e, p, request, taxonomy):
             title_field=next((x for x in fields if x.get('semantic_path') in aliases),None)
             if title_field:
                 lines=p['title'].split('\n')
-                units=lambda line:sum(2 if unicodedata.east_asian_width(ch) in ('W','F') else 1 for ch in line)
-                if len(p['title'])>title_field.get('max_chars',9999) or len(lines)>title_field.get('max_lines',1) or any(units(line)>title_field.get('max_width_units',100) for line in lines):
+
+                if len(p['title'])>title_field.get('max_chars',9999) or len(lines)>title_field.get('max_lines',1) or any(visual_width_units(line)>title_field.get('max_width_units',100) for line in lines):
                     reasons.append('title_over_verified_width')
     if need.get('item_count') is not None:
         rules_path=e.get('layout_rules')
@@ -379,8 +381,8 @@ def eligible(e, p, request, taxonomy):
                     if not isinstance(value,str) or not value.strip():
                         reasons.append('missing_directory_field');break
                     lines=value.split('\n')
-                    width=lambda line:sum(2 if unicodedata.east_asian_width(ch) in ('W','F') else 1 for ch in line)
-                    if len(value)>limit.get('max_chars',9999) or len(lines)>limit.get('max_lines',9999) or any(width(line)>limit.get('max_width_units',9999) for line in lines):
+
+                    if len(value)>limit.get('max_chars',9999) or len(lines)>limit.get('max_lines',9999) or any(visual_width_units(line)>limit.get('max_width_units',9999) for line in lines):
                         reasons.append('directory_text_over_capacity');break
                 if any(reason in reasons for reason in ('missing_directory_field','directory_text_over_capacity')):break
     if e.get('role')=='data-chart' and not p.get('data_source'):reasons.append('data_source_missing')

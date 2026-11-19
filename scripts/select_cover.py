@@ -1,6 +1,8 @@
 """Rank original cover combinations; preserve color and review boundaries."""
 from __future__ import annotations
-import argparse,json,unicodedata
+from text_width import visual_width_units
+
+import argparse,json
 from pathlib import Path
 from library_location import get_library
 
@@ -29,8 +31,8 @@ def select(library:Path,request:dict):
             bindings=json.loads((library/c['bindings']).read_text(encoding='utf-8'))['fields']
             title_field=next((x for x in bindings if x.get('semantic_path')=='cover.title'),None)
             if title and title_field:
-                units=lambda line:sum(2 if unicodedata.east_asian_width(ch) in 'WF' else 1 for ch in line)
-                if any(units(line)>title_field.get('max_width_units',100) for line in title.split('\n')) or len(title.split('\n'))>title_field.get('max_lines',1):
+
+                if any(visual_width_units(line)>title_field.get('max_width_units',100) for line in title.split('\n')) or len(title.split('\n'))>title_field.get('max_lines',1):
                     reasons.append('title_over_verified_width')
         elif len(title)>28:reasons.append('long_title_needs_manual_fit_check')
         if reasons:evaluated.append({'id':c['id'],'excluded_reasons':reasons});continue

@@ -4,7 +4,9 @@ from normalize_fonts import normalize
 from font_profile import resolve as resolve_font_profile
 from pathlib import Path
 from copy import deepcopy
-import argparse,json,math,unicodedata,re,subprocess
+from text_width import visual_width_units
+
+import argparse,json,math,re,subprocess
 from pptx import Presentation
 from pptx.chart.data import CategoryChartData
 from pptx.oxml.xmlchemy import OxmlElement
@@ -23,8 +25,6 @@ def walk(ss):
     for s in ss:
         yield s
         if s.shape_type==6:yield from walk(s.shapes)
-def visual_width_units(text):
-    return sum(2 if unicodedata.east_asian_width(char) in ('W','F') else 1 for char in text)
 def set_text(sh,text):
     tf=sh.text_frame;p0=deepcopy(tf.paragraphs[0]._p)
     for c in list(tf._txBody):

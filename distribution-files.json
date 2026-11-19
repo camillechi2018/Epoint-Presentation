@@ -221,6 +221,7 @@
     "scripts/select_closing.py",
     "scripts/select_cover.py",
     "scripts/select_layout.py",
-    "scripts/structure_content.py"
+    "scripts/structure_content.py",
+    "scripts/text_width.py"
   ]
 }
