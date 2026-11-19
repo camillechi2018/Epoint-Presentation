@@ -4,7 +4,7 @@ from normalize_fonts import normalize
 from font_profile import resolve as resolve_font_profile
 from pathlib import Path
 from copy import deepcopy
-from text_width import visual_width_units
+from text_width import directory_text_over_capacity, visual_width_units
 
 import argparse,json,math,re,subprocess
 from pptx import Presentation
@@ -669,8 +669,7 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
             if not isinstance(item,dict) or any(not isinstance(item.get(k),str) or not item[k].strip() for k in extra_needed):
                 raise ValueError('目录项缺少必需标题或副标题')
             for key in extra_needed:
-                limit=field_limits[item_fields[-1][key]];value=item[key];lines=value.split('\n')
-                if len(value)>limit.get('max_chars',9999) or len(lines)>limit.get('max_lines',9999) or any(visual_width_units(line)>limit.get('max_width_units',9999) for line in lines):
+                if directory_text_over_capacity(item[key], field_limits[item_fields[-1][key]]):
                     raise ValueError('新增目录项超出来源组件容量：'+key)
         for field,value in rules.get('directory_heading_fields',{}).items():
             texts.setdefault(field,value)

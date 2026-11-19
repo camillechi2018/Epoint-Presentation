@@ -1,6 +1,8 @@
 """Lossless mappings from generic body data to verified template fields."""
 from __future__ import annotations
 
+from relation_match import supports_input_structure
+
 
 def classify_trial_failure(message: str) -> str:
     if any(word in message for word in ('缺少字段', '缺少必需', '须提供', '需要提供')):
@@ -26,15 +28,7 @@ def adapt_structural_fields(entry, content, page_title=None, diagnostics=False):
     if content.get('texts'):
         return packed(dict(content), None)
     structure = contract.get('structure_type')
-    allowed = {'cards': {'parallel-points', 'framework', 'summary'},
-               'bullets': {'parallel-points', 'summary'},
-               'process': {'process', 'ordered-steps'},
-               'comparison': {'comparison'},
-               'hierarchy': {'hierarchy', 'framework'},
-               'cycle': {'cycle'}, 'timeline': {'timeline'},
-               'milestone_timeline': {'timeline'}, 'schedule': {'schedule'},
-               'single_focus': {'single-focus'}}
-    if content.get('structure_type') != structure and structure not in allowed.get(content.get('type'), set()):
+    if content.get('structure_type') != structure and not supports_input_structure(content.get('type'), structure):
         return packed(dict(content), None)
     required_paths = contract.get('required_binding_paths', [])
     optional_paths = contract.get('optional_binding_paths', [])

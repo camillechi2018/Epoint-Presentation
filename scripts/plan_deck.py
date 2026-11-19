@@ -1,12 +1,12 @@
 """Global deck selection for the isolated next-generation component library."""
 from __future__ import annotations
-from text_width import visual_width_units
+from text_width import directory_text_over_capacity, visual_width_units
 
 import argparse, json, random, re
 from collections import Counter
 from pathlib import Path
 from library_location import get_library
-from relation_match import canonical, load_taxonomy, match_relation, match_role
+from relation_match import canonical, load_taxonomy, match_relation, match_role, supports_input_structure
 from fallback_rules import fallback_type, fallback_catalog
 from content_adapters import adapt_for_layout
 from capacity_preflight import preflight
@@ -230,22 +230,8 @@ def matches_structural_discovery(entry, page, taxonomy, root=None):
     declared = content.get('structure_type')
     if declared and declared != structure:
         return False
-    if not declared:
-        # These are structural relations, not original deck business labels.
-        compatible = {
-            'cards': {'parallel-points', 'framework', 'summary'},
-            'bullets': {'parallel-points', 'summary'},
-            'process': {'process', 'ordered-steps'},
-            'comparison': {'comparison'},
-            'hierarchy': {'hierarchy', 'framework'},
-            'cycle': {'cycle'},
-            'timeline': {'timeline'},
-            'milestone_timeline': {'timeline'},
-            'schedule': {'schedule'},
-            'single_focus': {'single-focus'},
-        }
-        if structure not in compatible.get(content.get('type'), set()):
-            return False
+    if not declared and not supports_input_structure(content.get('type'), structure):
+        return False
     items = content.get('items')
     if isinstance(items, list):
         actual_count = len(items)
@@ -380,9 +366,7 @@ def eligible(e, p, request, taxonomy):
                     limit=field_limits.get(field,{})
                     if not isinstance(value,str) or not value.strip():
                         reasons.append('missing_directory_field');break
-                    lines=value.split('\n')
-
-                    if len(value)>limit.get('max_chars',9999) or len(lines)>limit.get('max_lines',9999) or any(visual_width_units(line)>limit.get('max_width_units',9999) for line in lines):
+                    if directory_text_over_capacity(value, limit):
                         reasons.append('directory_text_over_capacity');break
                 if any(reason in reasons for reason in ('missing_directory_field','directory_text_over_capacity')):break
     if e.get('role')=='data-chart' and not p.get('data_source'):reasons.append('data_source_missing')

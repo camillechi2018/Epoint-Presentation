@@ -9,6 +9,23 @@ BODY_ROLES = frozenset({'body', 'content', 'framework', 'process', 'timeline', '
                         'summary', 'schedule', 'data-chart', 'data-table',
                         'progress', 'parallel', 'cycle'})
 
+_STRUCTURES_BY_INPUT_TYPE = {
+    'cards': {'parallel-points', 'framework', 'summary'},
+    'bullets': {'parallel-points', 'summary'},
+    'process': {'process', 'ordered-steps'},
+    'comparison': {'comparison'},
+    'hierarchy': {'hierarchy', 'framework'},
+    'cycle': {'cycle'},
+    'timeline': {'timeline'},
+    'milestone_timeline': {'timeline'},
+    'schedule': {'schedule'},
+    'single_focus': {'single-focus'},
+}
+
+
+def supports_input_structure(input_type, structure):
+    return structure in _STRUCTURES_BY_INPUT_TYPE.get(input_type, set())
+
 
 def load_taxonomy(root: Path, catalog: dict) -> dict:
     path = root / catalog.get('relation_taxonomy', 'relation-taxonomy.json')
