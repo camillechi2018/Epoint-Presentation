@@ -6,7 +6,7 @@
 
 组件的静态 PPTX、长文案、变项数、动效、HTML、扩展色系各有独立验收边界。`semantic-review.json` 与 `review/` 保存专项证据；不能因为某组件曾在代表样张中通过短文案测试，就推断其他能力已开放。
 
-`knowledge-base.json` 唯一指向 GitHub 现有仓库的 `main` 分支。每次任务固定一次 Git commit；用 `scripts/library_location.py` 拉取后记录 commit，后续脚本传同一 checkout 的 `--library`。远端不可用、manifest 校验失败时停止，禁止回退旧版知识库。
+`knowledge-base.json` 唯一指向 GitHub 现有仓库的 `main` 分支。每次任务固定一次 Git commit；用 `scripts/library_location.py` 拉取后记录 commit，后续脚本传同一 checkout 的 `--library`。远端不可用时先复验完整缓存，必要时复验内置最小包。无法验证任何合格来源时停止完整出稿；记录错误和实际使用的提交。
 
 来源 PPTX 保留原始母版，便于追溯与再次提取。填充器把选中页面、版式和母版中的主题色引用固化到单页组件；知识库 `themes/*.json` 中的中性色令牌与 Skill 本地 `brand-baseline.json` 对齐。装配与最终保存后检查组件颜色独立性。这个操作只固定原生配色，不等于已验收任意跨色系换色。
 
@@ -18,3 +18,8 @@
 
 填充输入只使用本次用户材料；图表必须提供类别、系列、数值、单位、时间和出处。模板示例文本和数据不得作为项目事实。未明确字段语义的页仅用于人工指定、审阅，自动规划不得选择。
 
+## 长文案与组件专项证据
+
+在当前知识库 `review/body-longcopy-capacity.json` 中按组件 ID 和 `semantic_path` 读取逐字段的 `recommended_max_cjk_chars`、`registered_min_max_chars` 与 `use_for_planning_cjk_chars`。内容规划以 `use_for_planning_cjk_chars` 为参考，实际填充仍须通过 `bindings.json` 的字符数、行数、行宽及 PowerPoint 边界验收。长正文自动选稿还须检查该组件的 `long_copy_review_status=长文案已验收`；`视觉复核未通过`、填充失败和标题溢出状态不可用于长正文自动选稿。参考值由蓝红科技版本逐字段测量，蓝红共用较小值；适用于中文单段自动换行。短标签与标题不能当作正文槽，`preparation_methods` 含 `source_fallback` 的组件还需正常填充路径复核。**结构复用新增的短文案跨业务试填只验证新字段映射，不会重置该组件既有的长文案验收；报告中分别记录结构映射验收、逐字段长文案验收和整稿视觉复核。**每次从固定知识库 commit 读取，不在 Skill 中复制组件数值。
+
+需要修整版源页时按 `ready_source_by_theme` 取用；普通正文的字重按组件 `normal_body_weight` 执行，标题、指标和刻意强调文字不套用。目录重排、步骤次序、日期连续性、图表合计、百分比联动、Logo 替换与背景覆盖依各组件的规则和脚本检查；不得把某一页的例外复制给整套稿。新增或修订普通组件只更新知识库的目录、绑定、规则和审阅证据；若引入脚本尚不支持的新形状、图表、动效或输出格式，需先扩展执行器并通过专项验收。

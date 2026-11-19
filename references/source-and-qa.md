@@ -9,3 +9,7 @@
 文字边界脚本对旋转文本单独计数：PowerPoint 返回的是旋转后的轴向包围框，不能直接与未旋转文本框的宽高比较。报告中的 `rotated_text_skipped_count` 必须用实际渲染图逐个目视核对，不得把脚本的 0 溢出解释为已自动验证这些旋转标签。
 
 新模板知识库在现有仓库的 `main` 分支发布；旧版知识库已迁至独立仓库 `EpointPresentation-PPT-legacy-kb`，旧 Skill 继续读取其 `main`。每次发布核对来源 SHA-256、知识库 manifest、分支 commit 和两条 Skill 的取库配置。
+
+## 逐页来源验收
+
+完整稿必须使用逐页来源验收。四类结构页的填充输入带 `library_commit`，组装清单逐页登记 `role`、`layout_id` 和填充报告的 `source_stamp`；仅当所有页面都复用原稿时设置 `require_template_source: true`，混合自由编排正文时保持按角色验收，四类结构页仍强制核对来源。由所选组装后端核对输入、来源主题及组件颜色独立性，再以同一份清单运行 `audit_deck.py --plan <清单> --input <成稿> --out <报告>`，检查最终文件的逐页来源。**最终保存的 PPTX**还须运行 `scripts/audit_component_color_independence.py --input <成稿> --report <报告>`，确保页面、版式和母版没有可见的主题色引用；即使 WPS 等软件重绑母版，也不能重新出现橙、黄、绿。`audit_theme_integrity.py` 仍可用于诊断母版引用差异，但固化后的组件以颜色独立检查及 PowerPoint 渲染为交付门槛。原生图表样式若含 `phClr` 占位符，须单页目视复核。视觉验收还需对照实际原稿预览。用户要求整套同色时，可在保留模板结构与品牌标志的前提下调整已核对的强调色。
