@@ -7,7 +7,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from content_adapters import adapt_for_layout
-from fill_layout import visual_width_units
+from text_width import visual_width_units
 
 
 @lru_cache(maxsize=8)

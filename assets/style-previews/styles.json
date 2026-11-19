@@ -27,7 +27,7 @@
       "description": "深蓝科技，适合技术方案和产品展示",
       "theme": "deep-blue-tech",
       "style_family": "deep-blue-tech",
-      "preview": "tech.png",
+      "preview": "../minimal-template-pack/source-previews/tech/P006.png",
       "preview_source": "source-previews/tech/P006.png"
     }
   ]

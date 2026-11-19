@@ -71,7 +71,7 @@
     {
       "role": "cover",
       "layout_id": "supp-cover-red-06",
-      "preview": "cover-supp-cover-red-06.png",
+      "preview": "../../minimal-template-pack/source-previews/red-supplement/P006.png",
       "source_preview": "source-previews/red-supplement/P006.png",
       "status": "verified_draft",
       "sha256": "b7fd23f7973900b7d5b7e6a9c869939c50166076f3ff2f5624877f546d766e27",
@@ -80,7 +80,7 @@
     {
       "role": "directory",
       "layout_id": "supp-directory-04-red-variant",
-      "preview": "directory-supp-directory-04-red-variant.png",
+      "preview": "../../minimal-template-pack/source-previews/red-supplement/P011.png",
       "source_preview": "source-previews/red-supplement/P011.png",
       "status": "verified_draft",
       "sha256": "f46eb551aa2bcb6d52b07c70788c2e6758cdcbe8362c77efed57f5e80ce693ae",
@@ -89,7 +89,7 @@
     {
       "role": "section",
       "layout_id": "supp-section-red-13",
-      "preview": "section-supp-section-red-13.png",
+      "preview": "../../minimal-template-pack/source-previews/red-supplement/P013.png",
       "source_preview": "source-previews/red-supplement/P013.png",
       "status": "verified_draft",
       "sha256": "afe946371b8af31e0a7f7e6ca0f1a6ac066454ec38a2b0dcf9b9797020b05fa9",
@@ -125,7 +125,7 @@
     {
       "role": "closing",
       "layout_id": "supp-closing-red-19",
-      "preview": "closing-supp-closing-red-19.png",
+      "preview": "../../minimal-template-pack/source-previews/red-supplement/P019.png",
       "source_preview": "source-previews/red-supplement/P019.png",
       "status": "verified_draft",
       "sha256": "09fa18de53a8ffede905ff3af6b030d83b4b0aca42364619aef8a34c10f25c0e",

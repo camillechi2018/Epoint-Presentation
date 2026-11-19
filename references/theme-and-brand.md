@@ -1,6 +1,6 @@
 # 主题变量与品牌
 
-新绘页面的最低品牌变量在 Skill `assets/brand/brand-baseline.json`，精确配色由 `assets/brand/brand-palette-lock.json` 锁定，蓝／红／深蓝三套基础色系、黑白灰中性色与字体角色可离线读取。`audit_brand_palette_source.py --library <知识库目录> --report <报告>` 验证锁定色确实来自对应模板的主题、可编辑对象或科技风来源页渲染图，并核对知识库中性色。知识库 `themes/` 保存原稿主题槽、语义色、中性色、对象绑定和主题专属图片，是模板复用的来源。Skill 本地快照不证明旧模板的全部对象已可一键换色。不得把所有相同 RGB 全局替换：同色可能承担标题、背景、数据强调或 Logo 的不同职责。渐变各色标、透明度、角度和明暗变换需逐对象保留。
+新绘页面的最低品牌变量在 Skill `assets/brand/brand-baseline.json`，精确配色由 `assets/brand/brand-palette-lock.json` 锁定，蓝／红／深蓝三套基础色系、黑白灰中性色与字体角色可离线读取。知识库 `themes/` 保存原稿主题槽、语义色、中性色、对象绑定和主题专属图片，是模板复用的来源。Skill 本地快照不证明旧模板的全部对象已可一键换色。不得把所有相同 RGB 全局替换：同色可能承担标题、背景、数据强调或 Logo 的不同职责。渐变各色标、透明度、角度和明暗变换需逐对象保留。
 
 新绘页面按所选主题的语义颜色生成；如蓝色系使用 `themes.blue` 的画布、主色、辅色、文字色和边框色。黑、白、浅灰、中灰、深灰及深底次要文字只用 `themes.<选定主题>.neutral`，不得由模型自由生成近似灰、橙、黄、绿或透明白作新装饰。新绘 PPTX 使用 `audit_new_drawn_palette.py` 检查实际页面 RGB 是否全部来自配色锁；离线出稿器内置此门禁。知识库原始 `color_slots` 可能包含模板历史色或科技页的橙绿槽位，不代表它们可以在新绘页面使用；新绘只认所选主题的锁定角色。来源组件中的显式色、渐变、图表或图片保留原视觉并注明来源；新增非品牌色需先增补变量并审核，不能临时写 RGB。验收要看成稿实际颜色及图形来源；只检查主题 JSON 或 Logo 不能证明整稿已按主题换色。
 
@@ -17,3 +17,9 @@ SVG 保留原件，PPTX 默认用兼容 PNG 实体；如嵌入 SVG，必须有 P
 科技风专属 `color-inventory-tech.json` 已按 85 个来源页逐对象记录颜色引用、渐变、图片、SVG 和原生图表。清单状态为 `inventory_only_no_recolor_claim`；对象角色仍为 `unmapped_pending_review`，因此不能据此提供跨色系换色。下一步逐对象确认语义角色，并分别验证原生形状、渐变、SVG、图表和封面栅格背景。
 
 `deep-blue-tech` 使用独立的 `themes/new-template-deep-blue-tech.json` 和 `typography/deep-blue-tech.json`。颜色槽与字体角色是首轮提炼，PPTX 中的显式色、渐变、图表和 SVG 仍须逐对象映射和渲染审核。与蓝红简约版相同，可编辑中文展示、标题和正文按任务 `font_profile` 分配中西文字体；字号、字重和行距仍按信息层级设置并复查换行。Logo 原色锁定，不受主题换色影响。调用时显式传入 `style_family=deep-blue-tech`，避免与旧三源混排。
+
+## 源稿标识与颜色
+
+默认添加独立 Logo。原 20 张封面默认保留源稿股票代码 `688232`；其中含 Slogan 的 P03、P04、P14、P15、P16、P20 保留完整“成为行业数字化领航者”。科技风源稿没有股票代码或该 Slogan，不得从旧封面规则自动复制。科技风已有源 Logo 的页保留原件，缺失页按背景补白色／彩色 Logo。红色来源模板中已为黑白灰单色的组内 Logo 必须保留原图片及组变换，不能按子图的组内尺寸重新插入；若确需换图，先验证最终渲染的实际尺寸。Logo 审计必须同时检查图片存在和可见尺寸，封面与封底需目视复核。Logo、股票代码和 Slogan 在动效中保持静态。
+
+先固定 `blue`、`red` 或 `deep-blue-tech`，新绘页面的全部 RGB 只能取自 `assets/brand/brand-baseline.json` 与 `assets/brand/brand-palette-lock.json` 相同主题下已登记的角色；不得由模型另造 RGB、灰阶、透明白或暗色文字，也不得从封面图片临时抽色。绿系实验主题不进入常规出稿。蓝色内容页浅底使用 `F6F9FF`；来源封面的 `E7E6E6` 不作为蓝色内容页通用灰底。新绘 PPTX 用 `scripts/audit_new_drawn_palette.py --input <PPTX> --theme <主题> --report <报告>` 拦截锁外颜色或擅改变量，内置离线出稿器自动执行。复用原稿时，`fill_layout.py` 先对照知识库来源页核验全部 12 个主题色槽，再将所选单页及其版式、母版、原生图表的主题色引用固化到组件对象中；原始来源 PPTX 保留作对照。模板里原有的显式色、渐变及非 Logo 图片保留来源视觉，不能因此开放给新绘页面任意取用。PPTX 格式仍保留主题部件，但可见组件不得依赖母版颜色槽。红色来源页的彩色 Logo 在原锚点替换为黑／白资产，整稿运行 `audit_logo.py --theme red --require-every-slide` 拦截彩色标识。

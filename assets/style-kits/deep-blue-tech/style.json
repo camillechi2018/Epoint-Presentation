@@ -71,7 +71,7 @@
     {
       "role": "cover",
       "layout_id": "cover-tech-001",
-      "preview": "cover-cover-tech-001.png",
+      "preview": "../../minimal-template-pack/source-previews/tech/P001.png",
       "source_preview": "source-previews/tech/P001.png",
       "status": "verified_draft",
       "sha256": "a5f3184e972066eb2040828c4f972da7c56993adff02b5125768b1be377defba",
@@ -80,7 +80,7 @@
     {
       "role": "directory",
       "layout_id": "directory-tech-006",
-      "preview": "directory-directory-tech-006.png",
+      "preview": "../../minimal-template-pack/source-previews/tech/P006.png",
       "source_preview": "source-previews/tech/P006.png",
       "status": "verified_draft",
       "sha256": "6c18b46690ddd8be52f0744f0fd1b9a93dab4d3297df64ed70a20c34352dd4d7",
@@ -89,7 +89,7 @@
     {
       "role": "section",
       "layout_id": "section-tech-011",
-      "preview": "section-section-tech-011.png",
+      "preview": "../../minimal-template-pack/source-previews/tech/P011.png",
       "source_preview": "source-previews/tech/P011.png",
       "status": "verified_draft",
       "sha256": "64630a25336e8cb2975f7c080451bd765338e2520bb204ce6c69ea0428406f64",
@@ -125,7 +125,7 @@
     {
       "role": "closing",
       "layout_id": "closing-tech-082",
-      "preview": "closing-closing-tech-082.png",
+      "preview": "../../minimal-template-pack/source-previews/tech/P082.png",
       "source_preview": "source-previews/tech/P082.png",
       "status": "verified_draft",
       "sha256": "20dfc609c992d1bb58d2891514ffcdfb8aca15ea4f3b7c16b8dece40bfad4c32",

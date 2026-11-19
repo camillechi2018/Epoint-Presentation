@@ -2,9 +2,9 @@
 
 把材料整理成符合新点品牌风格、可继续编辑的企业演示文稿。先选 **蓝色系、红色系或科技风格**，再由 Agent 梳理内容与信息关系，优先试用知识库组件；正文不适配时使用技能内的排版规则，仍保持同一套色彩、字体和 Logo。
 
-**当前版本：1.0.33。** [查看技能入口](SKILL.md) · [查看 v1.0.33 发布版](https://github.com/camillechi2018/Epoint-Presentation/releases/tag/v1.0.33) · [查看完整模板知识库](https://github.com/camillechi2018/Epoint-Presentation-KnowledgeBase)
+**当前源码候选版本：1.0.34-rc.2。** [查看技能入口](SKILL.md) · [查看 v1.0.33 发布版](https://github.com/camillechi2018/Epoint-Presentation/releases/tag/v1.0.33) · [查看完整模板知识库](https://github.com/camillechi2018/Epoint-Presentation-KnowledgeBase)
 
-**配套知识库：v1.0.3。** [下载固定知识库快照](https://github.com/camillechi2018/Epoint-Presentation-KnowledgeBase/releases/tag/v1.0.3)。默认配置仍从知识库 `main` 获取更新；需要复现本次配套版本或离线部署时，使用该标签或发布页 ZIP，并通过本地知识库目录参数指定。技能安装包与完整知识库分开分发，普通用户不需要访问私有维护仓库。当前 README 补充了配套版本说明，已发布的技能 v1.0.33 安装包和标签保持不变。
+**配套知识库：v1.0.3。** [下载固定知识库快照](https://github.com/camillechi2018/Epoint-Presentation-KnowledgeBase/releases/tag/v1.0.3)。默认配置仍从知识库 `main` 获取更新；需要复现本次配套版本或离线部署时，使用该标签或发布页 ZIP，并通过本地知识库目录参数指定。技能安装包与完整知识库分开分发，普通用户不需要访问私有维护仓库。稳定版见上方 v1.0.33 发布链接。
 
 统一入口默认按系统选择组装方式：Windows 使用 PowerPoint，macOS/Linux 使用 Python 原生组装。来源与内容审计保持一致，生成、预览和 PowerPoint 验收分别记录。v1.0.33 完成技能与私有维护工具拆分；Mac 三色各 20 页完整材料生成及内容保真实测通过，后续应用、逐页视觉与 DSL 项目由项目负责人接受为本次发布豁免，未作为已实测结果。该发布决定不改变每份成稿的验收规则。
 
@@ -12,8 +12,8 @@
 
 | 页面 | 蓝色系 · 蓝白简约 | 红色系 · 红白简约 | 科技风格 · 深蓝科技 |
 | --- | --- | --- | --- |
-| 封面 | ![蓝色系 P001 封面样张](assets/style-previews/blue-cover-P001.png) | ![红色系封面样张](assets/style-kits/red/cover-supp-cover-red-06.png) | ![科技风格封面样张](assets/style-kits/deep-blue-tech/cover-cover-tech-001.png) |
-| 目录 | ![蓝色系目录预览](assets/style-previews/blue.png) | ![红色系目录预览](assets/style-previews/red.png) | ![科技风格目录预览](assets/style-previews/tech.png) |
+| 封面 | ![蓝色系 P001 封面样张](assets/minimal-template-pack/source-previews/cover/P001.png) | ![红色系封面样张](assets/minimal-template-pack/source-previews/red-supplement/P006.png) | ![科技风格封面样张](assets/minimal-template-pack/source-previews/tech/P001.png) |
+| 目录 | ![蓝色系目录预览](assets/style-previews/blue.png) | ![红色系目录预览](assets/style-previews/red.png) | ![科技风格目录预览](assets/minimal-template-pack/source-previews/tech/P006.png) |
 | 正文 | ![蓝色系流程正文样张](assets/style-kits/blue/process-content-blue-060.png) | ![红色系对比正文样张](assets/style-kits/red/comparison-content-blue-133.png) | ![科技风格并列正文样张](assets/style-kits/deep-blue-tech/parallel-content-tech-021.png) |
 
 图片取自技能包内的模板样张，文字是演示内容，实际出稿会按用户材料替换。预览用于选择整稿视觉方向，不表示最终一定使用图中的页面。实际封面、目录、章节页和封底从适配的知识库模板或已校验的本地最小包中选择。
@@ -100,7 +100,7 @@ sh ./install.sh
 
 材料入口直接读取 `.xlsx`、`.xls`、`.docx`、`.txt`、`.md`、`.pptx` 和 `.html`，安装后通过 `scripts/run.py --read-material` 使用。PDF 和 PNG/JPEG 的文字由当前 Agent 平台提取或 OCR，再以统一 JSON 交给材料入口；没有可用平台工具时明确报告，技能不会猜写。旧 PPT/HTML 仅作为内容来源，不自动复用原页面设计。[查看多格式材料接入方法](references/material-ingestion.md)。
 
-开发自检使用 Python 标准库 `unittest`，例如 `python -m unittest tests.test_read_material`；隔离运行环境只安装出稿依赖，不包含 `pytest`。在 Windows 的 Git Bash 中调用 Windows Python 时，输入与输出路径使用 Windows Python 能识别的绝对路径；临时目录由 Python `tempfile` 取得，避免把 Bash 的 `/tmp` 当成 Windows 路径。
+在 Windows 的 Git Bash 中调用 Windows Python 时，输入与输出路径使用 Windows Python 能识别的绝对路径；临时目录由 Python `tempfile` 取得，避免把 Bash 的 `/tmp` 当成 Windows 路径。
 
 然后在支持技能的 Agent 中附上材料，例如：
 
@@ -186,8 +186,7 @@ Epoint-Presentation/
 │   └── minimal-template-pack/  离线结构页最小包
 ├── references/              按任务读取的细则
 ├── scripts/                 选版、填充、组装及审计工具
-├── install.ps1 / install.sh 跨系统运行环境安装入口
-└── tests/                   局部回归测试
+└── install.ps1 / install.sh 跨系统运行环境安装入口
 ```
 
 完整模板、组件目录和专项验收记录位于[独立知识库仓库](https://github.com/camillechi2018/Epoint-Presentation-KnowledgeBase)，不随本技能仓库重复分发。历史本地备份 `assets/minimal-template-pack.previous/` 不进入 Git 仓库。
@@ -200,8 +199,7 @@ Epoint-Presentation/
 
 本仓库保留出稿、安装、诊断和审计工具。知识库建设、批次整理、历史修复和发布资源制作已迁入私有维护仓库 `camillechi2018/Epoint-Presentation-Maintenance`，普通用户无需访问该仓库。现有 `scripts/run.py`、独立审计入口、Office worker 和本地最小包继续保留。
 
-`distribution-files.json` 是安装压缩包的明确文件清单。维护发布器从固定 Git 提交读取文件，不打包开发测试、维护工具和本地缓存；最终包附 `skill-package-manifest.json`，记录来源提交及逐文件 SHA-256。源码仓库仍保留运行回归测试。
+`distribution-files.json` 是安装压缩包的明确文件清单。维护发布器从固定 Git 提交读取文件，不打包开发测试、维护工具和本地缓存；最终包附 `skill-package-manifest.json`，记录来源提交及逐文件 SHA-256。回归测试、原稿颜色盘点与清单重建工具由维护仓库管理。
 
-完整知识库集成测试通过环境变量 `EPOINT_TEST_LIBRARY` 指定目录，不使用开发者个人路径。未提供完整知识库时，相关测试可能报错或明确跳过，不能当作发布验收通过。例如先设置该环境变量，再运行 `python -m unittest discover -s tests -v`；同时记录实际知识库提交及跳过原因。
 
 本轮工具分离不修改正文适配行为；macOS 实机、真实 PowerPoint 整稿和人工视觉验收仍需按目标环境完成，候选安装包不等于正式版本签收。
