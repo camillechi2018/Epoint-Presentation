@@ -21,6 +21,19 @@ from layout_safety import apply_constraints
 from logo_brand import add_logo, load_config, settings as logo_settings
 from materialize_component_colors import freeze as materialize_component_colors
 NS={'a':'http://schemas.openxmlformats.org/drawingml/2006/main'}
+
+_VARIABLE_COUNT_MODES = (
+    'repeatable',
+    'tech_schedule_rows',
+    'tech_grid_2x3',
+    'tech_six_pillars',
+    'tech_process_columns',
+    'process_terminal',
+    'directory_grid_3x2',
+    'directory_reflow',
+)
+
+
 def walk(ss):
     for s in ss:
         yield s
@@ -635,7 +648,9 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
     item_count=data.get('item_count')
     if item_count is not None and rules.get('cardinality_mode')=='fixed' and item_count not in rules.get('supported_counts',[]):
         raise ValueError('固定项数组件不支持该项数；请重新选版')
-    if item_count is not None and rules.get('cardinality_mode') in ('repeatable','tech_schedule_rows','tech_grid_2x3','tech_six_pillars','tech_process_columns','process_terminal','directory_grid_3x2','directory_reflow') and rules.get('validation_status')!='verified' and item_count not in rules.get('verified_counts',[]) and not internal:
+    if (item_count is not None and rules.get('cardinality_mode') in _VARIABLE_COUNT_MODES
+            and rules.get('validation_status') != 'verified'
+            and item_count not in rules.get('verified_counts', []) and not internal):
         raise ValueError('该数量变化尚处原型；内部结构测试需传 --internal-draft')
     bindings=binding_data['fields'];texts=dict(data.get('texts',{}));known={x['field'] for x in bindings}
     semantic_aliases={x['semantic_path']:x['field'] for x in bindings if x.get('semantic_path')}
@@ -775,7 +790,7 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
     if theme=='red' and logo_options['appearance']=='color':
         raise ValueError('红色风格只允许黑、白单色 Logo；不能指定彩色 Logo')
     removed_ids=set()
-    if rules.get('cardinality_mode') in ('repeatable','tech_schedule_rows','tech_grid_2x3','tech_six_pillars','tech_process_columns','process_terminal','directory_grid_3x2','directory_reflow') and item_count is not None:
+    if rules.get('cardinality_mode') in _VARIABLE_COUNT_MODES and item_count is not None:
         if type(item_count) is not int or item_count not in rules['supported_counts']:raise ValueError('项数不在支持范围')
         if rules.get('cardinality_mode') in ('tech_six_pillars','process_terminal'):
             selected=set(rules['source_indices_by_count'][str(item_count)])

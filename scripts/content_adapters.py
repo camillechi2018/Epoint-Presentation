@@ -4,6 +4,10 @@ from __future__ import annotations
 from relation_match import supports_input_structure
 
 
+def _has_text(value):
+    return isinstance(value, str) and bool(value.strip())
+
+
 def classify_trial_failure(message: str) -> str:
     if any(word in message for word in ('缺少字段', '缺少必需', '须提供', '需要提供')):
         return 'MISSING_REQUIRED_FIELD'
@@ -44,9 +48,6 @@ def adapt_structural_fields(entry, content, page_title=None, diagnostics=False):
         if match:
             roots.add(match[1])
     texts, indices, missing = {}, set(), []
-
-    def present(value):
-        return isinstance(value, str) and bool(value.strip())
 
     def nested(source, parts):
         """Resolve declared paths, including nested list slots such as tasks[0].body."""
@@ -121,7 +122,7 @@ def adapt_structural_fields(entry, content, page_title=None, diagnostics=False):
                             value = items[index].get('heading')
                         if value is None and path.endswith('.body'):
                             value = items[index].get('description') or items[index].get('text')
-        if not present(value):
+        if not _has_text(value):
             if path in required_paths:
                 missing.append(path)
         else:
@@ -227,17 +228,15 @@ def _adapt_for_layout_impl(layout_id: str, content: dict, page_title: str | None
     if layout_id in ('content-blue-133', 'content-blue-230') and not content.get('texts'):
         items = content.get('items')
         title = content.get('title') or page_title
-        def present(value):
-            return isinstance(value, str) and bool(value.strip())
         expected = 3 if layout_id.endswith('133') else 5
         kind = 'problem_action_pairs' if expected == 3 else 'phase_goal_activity_output'
         keys = (('problem_title', 'problem_body', 'action_title', 'action_body')
                 if expected == 3 else ('title', 'goal', 'activity', 'output'))
         extras = ('axis_top', 'axis_bottom', 'problem_label', 'action_label') if expected == 3 else ()
-        if (content.get('type') != kind or not present(title)
+        if (content.get('type') != kind or not _has_text(title)
                 or not isinstance(items, list) or len(items) != expected
-                or not all(present(content.get(key)) for key in extras)
-                or not all(isinstance(item, dict) and all(present(item.get(key)) for key in keys)
+                or not all(_has_text(content.get(key)) for key in extras)
+                or not all(isinstance(item, dict) and all(_has_text(item.get(key)) for key in keys)
                            for item in items)):
             return dict(content), None
         texts = {'page.title': title}
@@ -269,13 +268,11 @@ def _adapt_for_layout_impl(layout_id: str, content: dict, page_title: str | None
     if layout_id == 'content-tech-021' and not content.get('texts'):
         items = content.get('items')
         title = content.get('title') or page_title
-        def nonempty(value):
-            return isinstance(value, str) and bool(value.strip())
-        if (content.get('type') != 'framework' or not nonempty(title)
-                or not all(nonempty(content.get(k)) for k in ('summary', 'unit'))
+        if (content.get('type') != 'framework' or not _has_text(title)
+                or not all(_has_text(content.get(k)) for k in ('summary', 'unit'))
                 or not isinstance(items, list) or len(items) != 3
                 or not all(isinstance(x, dict) and all(
-                    nonempty(x.get(k)) for k in ('title', 'subtitle', 'body')) for x in items)):
+                    _has_text(x.get(k)) for k in ('title', 'subtitle', 'body')) for x in items)):
             return dict(content), None
         texts = {'heading': title, 'summary': content['summary'],
                  'center.count': '3', 'center.unit': content['unit']}
@@ -294,14 +291,12 @@ def _adapt_for_layout_impl(layout_id: str, content: dict, page_title: str | None
         title = content.get('title') or page_title
         if not isinstance(title, str) or not title.strip() or not isinstance(items, list):
             return dict(content), None
-        def nonempty(value):
-            return isinstance(value, str) and bool(value.strip())
         if layout_id == 'content-blue-180':
             if (content.get('type') != 'stage_matrix' or content.get('order') != 'left_to_right'
                     or len(items) != 4 or not all(
-                        isinstance(item, dict) and nonempty(item.get('title')) and nonempty(item.get('label'))
+                        isinstance(item, dict) and _has_text(item.get('title')) and _has_text(item.get('label'))
                         and isinstance(item.get('highlights'), list) and len(item['highlights']) == 2
-                        and all(isinstance(h, dict) and nonempty(h.get('title')) and nonempty(h.get('body'))
+                        and all(isinstance(h, dict) and _has_text(h.get('title')) and _has_text(h.get('body'))
                                 for h in item['highlights']) for item in items)):
                 return dict(content), None
             texts = {'page.title': title}
@@ -316,7 +311,7 @@ def _adapt_for_layout_impl(layout_id: str, content: dict, page_title: str | None
             if (content.get('type') != 'monthly_timeline' or content.get('order') != 'chronological'
                     or len(items) != 6 or not all(
                         isinstance(item, dict) and item.get('month') == months[i]
-                        and all(nonempty(item.get(k)) for k in ('title', 'body'))
+                        and all(_has_text(item.get(k)) for k in ('title', 'body'))
                         for i, item in enumerate(items))):
                 return dict(content), None
             texts = {'page.title': title}
@@ -326,9 +321,9 @@ def _adapt_for_layout_impl(layout_id: str, content: dict, page_title: str | None
         elif layout_id == 'content-blue-207':
             quarters = ('第一季度', '第二季度', '第三季度', '第四季度')
             if (content.get('type') != 'quarter_cycle' or content.get('order') != 'clockwise'
-                    or len(items) != 4 or not nonempty(content.get('center_title'))
+                    or len(items) != 4 or not _has_text(content.get('center_title'))
                     or not all(isinstance(item, dict) and item.get('quarter') == quarters[i]
-                               and all(nonempty(item.get(k)) for k in ('title', 'body'))
+                               and all(_has_text(item.get(k)) for k in ('title', 'body'))
                                for i, item in enumerate(items))):
                 return dict(content), None
             texts = {'page.title': title, 'center.title': content['center_title']}
@@ -340,7 +335,7 @@ def _adapt_for_layout_impl(layout_id: str, content: dict, page_title: str | None
             import re
             if (content.get('type') != 'monthly_roadmap' or content.get('order') != 'chronological'
                     or len(items) != 6 or not all(isinstance(item, dict)
-                        and all(nonempty(item.get(k)) for k in ('date', 'title', 'body'))
+                        and all(_has_text(item.get(k)) for k in ('date', 'title', 'body'))
                         for item in items)):
                 return dict(content), None
             # Native month slots are seven characters wide; October-December overflow.
@@ -357,9 +352,9 @@ def _adapt_for_layout_impl(layout_id: str, content: dict, page_title: str | None
                               f'months[{i}].body': item['body']})
         elif layout_id == 'content-blue-240':
             if (content.get('type') != 'serpentine_process' or content.get('order') != 'serpentine'
-                    or len(items) != 6 or not nonempty(content.get('center_title'))
+                    or len(items) != 6 or not _has_text(content.get('center_title'))
                     or not all(isinstance(item, dict)
-                               and all(nonempty(item.get(k)) for k in ('title', 'goal', 'body'))
+                               and all(_has_text(item.get(k)) for k in ('title', 'goal', 'body'))
                                for item in items)):
                 return dict(content), None
             texts = {'page.title': title, 'center.title': content['center_title']}
@@ -369,10 +364,10 @@ def _adapt_for_layout_impl(layout_id: str, content: dict, page_title: str | None
                               f'steps[{i}].body': item['body']})
         else:
             if (content.get('type') != 'two_phase_plan' or content.get('order') != 'left_to_right'
-                    or len(items) != 2 or not nonempty(content.get('summary'))
-                    or not all(isinstance(item, dict) and nonempty(item.get('title'))
+                    or len(items) != 2 or not _has_text(content.get('summary'))
+                    or not all(isinstance(item, dict) and _has_text(item.get('title'))
                                and isinstance(item.get('issues'), list) and len(item['issues']) == 5
-                               and all(nonempty(issue) for issue in item['issues']) for item in items)):
+                               and all(_has_text(issue) for issue in item['issues']) for item in items)):
                 return dict(content), None
             texts = {'heading': title, 'summary': content['summary']}
             for side, item in zip(('left', 'right'), items):
@@ -388,14 +383,12 @@ def _adapt_for_layout_impl(layout_id: str, content: dict, page_title: str | None
                      'schedule-tech-069', 'content-tech-016') and not content.get('texts'):
         items = content.get('items')
         title = content.get('title') or page_title
-        def nonempty(value):
-            return isinstance(value, str) and bool(value.strip())
-        if not nonempty(title) or not isinstance(items, list):
+        if not _has_text(title) or not isinstance(items, list):
             return dict(content), None
         if layout_id == 'content-blue-261':
             if (content.get('type') != 'cycle' or content.get('order') != 'clockwise'
-                    or len(items) != 6 or not nonempty(content.get('center_title'))
-                    or not all(isinstance(x, dict) and all(nonempty(x.get(k)) for k in ('title', 'body')) for x in items)):
+                    or len(items) != 6 or not _has_text(content.get('center_title'))
+                    or not all(isinstance(x, dict) and all(_has_text(x.get(k)) for k in ('title', 'body')) for x in items)):
                 return dict(content), None
             center = content['center_title']
             if ('\n' not in center and 3 <= len(center) <= 4
@@ -407,15 +400,15 @@ def _adapt_for_layout_impl(layout_id: str, content: dict, page_title: str | None
         elif layout_id == 'content-blue-266':
             if (content.get('type') != 'process' or content.get('order') != 'serpentine'
                     or len(items) != 6 or not all(isinstance(x, dict)
-                    and all(nonempty(x.get(k)) for k in ('title', 'body')) for x in items)):
+                    and all(_has_text(x.get(k)) for k in ('title', 'body')) for x in items)):
                 return dict(content), None
             texts = {'page.title': title}
             for i, item in enumerate(items):
                 texts.update({f'steps[{i}].heading': item['title'], f'steps[{i}].body': item['body']})
         elif layout_id == 'content-tech-018':
             if (content.get('type') != 'hierarchy' or content.get('order') != 'bottom_to_top'
-                    or len(items) != 3 or not all(isinstance(x, dict) and nonempty(x.get('body')) for x in items)
-                    or not all(nonempty(content.get(k)) for k in ('summary', 'left_support', 'right_support'))):
+                    or len(items) != 3 or not all(isinstance(x, dict) and _has_text(x.get('body')) for x in items)
+                    or not all(_has_text(content.get(k)) for k in ('summary', 'left_support', 'right_support'))):
                 return dict(content), None
             texts = {'heading': title, 'summary': content['summary'],
                      'left_support': content['left_support'], 'right_support': content['right_support']}
@@ -425,11 +418,11 @@ def _adapt_for_layout_impl(layout_id: str, content: dict, page_title: str | None
             import re
             labels = content.get('column_labels')
             if (content.get('type') != 'schedule' or content.get('order') != 'chronological'
-                    or len(items) != 6 or not nonempty(content.get('summary'))
+                    or len(items) != 6 or not _has_text(content.get('summary'))
                     or not isinstance(labels, dict)
-                    or not all(nonempty(labels.get(k)) for k in ('time', 'activity', 'owner'))
+                    or not all(_has_text(labels.get(k)) for k in ('time', 'activity', 'owner'))
                     or not all(isinstance(x, dict)
-                    and all(nonempty(x.get(k)) for k in ('time', 'activity', 'owner')) for x in items)):
+                    and all(_has_text(x.get(k)) for k in ('time', 'activity', 'owner')) for x in items)):
                 return dict(content), None
             ranges = [re.fullmatch(r'(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})', x['time'].strip()) for x in items]
             if any(x is None for x in ranges):
@@ -447,9 +440,9 @@ def _adapt_for_layout_impl(layout_id: str, content: dict, page_title: str | None
                     texts[f'row_{i}.{key}'] = item[key]
         else:
             if (content.get('type') != 'framework' or len(items) != 5
-                    or not all(nonempty(content.get(k)) for k in ('summary', 'unit'))
+                    or not all(_has_text(content.get(k)) for k in ('summary', 'unit'))
                     or not all(isinstance(x, dict)
-                    and all(nonempty(x.get(k)) for k in ('title', 'body')) for x in items)):
+                    and all(_has_text(x.get(k)) for k in ('title', 'body')) for x in items)):
                 return dict(content), None
             texts = {'heading': title, 'summary': content['summary'],
                      'center.count': '5', 'center.unit': content['unit']}
