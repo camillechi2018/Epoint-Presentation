@@ -565,6 +565,36 @@ def apply_page_background_role(slide,rules,theme,slide_width,slide_height,allow_
     tree=slide.shapes._spTree
     tree.remove(canvas._element);tree.insert(2,canvas._element)
     return {'theme':theme,'role':role,'rgb':color,'native_canvas_shape':canvas.name,'reused_native_canvas':bool(existing)}
+def validate_text_field(binding, value):
+    field = binding['field']
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError('字段必须为非空文字 ' + field)
+    if len(value) > binding['max_chars']:
+        raise ValueError('超出容量，请拆页或精简：' + field)
+    if binding.get('allowed_values') is not None and value not in binding['allowed_values']:
+        raise ValueError('字段当前仅支持指定值：' + field)
+    lines = value.split('\n')
+    max_lines = binding.get('max_lines')
+    if max_lines is not None and len(lines) > max_lines:
+        raise ValueError('字段超过允许行数：' + field)
+    max_width = binding.get('max_width_units')
+    if max_width is not None and any(visual_width_units(line) > max_width for line in lines):
+        raise ValueError('字段超出视觉宽度，请精简或换版：' + field)
+
+
+def write_text_fields(shapes, bindings, texts, logo_enabled):
+    # Clear template copy first. Multiple bindings can refer to the same shape.
+    locked_roles = ('brand_locked', 'decoration_locked', 'source_decorative_locked')
+    for binding in bindings:
+        shape_id = binding['shape_id']
+        if binding.get('semantic_role') not in locked_roles and shape_id in shapes:
+            set_text(shapes[shape_id], '')
+    for binding in bindings:
+        field = binding['field']
+        if field in texts and not (logo_enabled and field == 'brand'):
+            set_text(shapes[binding['shape_id']], texts[field])
+
+
 def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=None,no_logo=False):
     lib=Path(lib).resolve();out=Path(out).resolve();content=Path(content).resolve()
     cat=json.loads((lib/'catalog.json').read_text(encoding='utf-8-sig'));m=next((x for x in cat['layouts'] if x['id']==layout),None)
@@ -774,19 +804,10 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
         raise ValueError('原生装饰字段不可替换')
     if any(b['field'] in texts for b in bindings if b['shape_id'] in removed_ids):raise ValueError('输入包含已删除分项的字段')
     if required_fields-set(texts) and not internal:raise ValueError('缺少字段 '+str(required_fields-set(texts)))
-    for b in bindings:
-        if logo_enabled and b['field']=='brand':continue
-        if b['field'] in texts:
-            v=texts[b['field']]
-            if not isinstance(v,str) or not v.strip():raise ValueError('字段必须为非空文字 '+b['field'])
-            if len(v)>b['max_chars']:raise ValueError('超出容量，请拆页或精简：'+b['field'])
-            if b.get('allowed_values') is not None and v not in b['allowed_values']:
-                raise ValueError('字段当前仅支持指定值：'+b['field'])
-            lines=v.split('\n')
-            if b.get('max_lines') is not None and len(lines)>b['max_lines']:
-                raise ValueError('字段超过允许行数：'+b['field'])
-            if b.get('max_width_units') is not None and any(visual_width_units(line)>b['max_width_units'] for line in lines):
-                raise ValueError('字段超出视觉宽度，请精简或换版：'+b['field'])
+    for binding in bindings:
+        field = binding['field']
+        if field in texts and not (logo_enabled and field == 'brand'):
+            validate_text_field(binding, texts[field])
     ordered_dates=rules.get('ordered_date_fields')
     if ordered_dates:
         def month_value(alias):
@@ -1005,10 +1026,7 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
         if logo_enabled:logo_shape.name='brand:logo:source'
         else:logo_shape._element.getparent().remove(logo_shape._element)
     lookup={x.shape_id:x for x in walk(s.shapes)}
-    for b in bindings:
-        if b.get('semantic_role') not in ('brand_locked','decoration_locked','source_decorative_locked') and b['shape_id'] in lookup:set_text(lookup[b['shape_id']],'')
-    for b in bindings:
-        if b['field'] in texts and not (logo_enabled and b['field']=='brand'):set_text(lookup[b['shape_id']],texts[b['field']])
+    write_text_fields(lookup, bindings, texts, logo_enabled)
     for fit in rules.get('text_box_expand_pt',[]):
         shape=lookup.get(fit['shape_id'])
         if shape is None or not shape.has_text_frame:raise ValueError('文字框扩展对象缺失')
