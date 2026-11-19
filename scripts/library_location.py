@@ -8,7 +8,7 @@ import time
 import re
 
 from distribution import verify_manifest
-from managed_library_cache import online as managed_online, cached as managed_cached
+from managed_library_cache import online_snapshot, cached as managed_cached
 
 SKILL = Path(__file__).resolve().parents[1]
 
@@ -86,7 +86,7 @@ def verified_full_cache(cfg, marker):
 
 
 def git_library(cfg):
-    return managed_online(cfg, _git, validate_manifest)
+    return online_snapshot(cfg, _git, validate_manifest)[0]
 
 
 def validate_manifest(root, cfg):
@@ -116,9 +116,7 @@ def resolve_library(override=None, *, allow_verified_cache=True, cache_only=Fals
     try:
         if cache_only:
             raise RuntimeError('offline_cache_only')
-        root = git_library(cfg)
-        validate_manifest(root, cfg)
-        commit = _git(['rev-parse', 'HEAD'], root)
+        root, commit = online_snapshot(cfg, _git, validate_manifest)
         # Full snapshots already provide offline access. Never regenerate the bundled
         # minimum package or write last-good state into an installation directory.
         return root, 'remote_template', commit, None

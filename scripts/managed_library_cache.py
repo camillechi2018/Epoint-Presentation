@@ -64,6 +64,11 @@ def cached(cfg, git, validate):
 
 
 def online(cfg, git, validate):
+    """Compatibility entry point for callers requesting only a directory."""
+    return online_snapshot(cfg, git, validate)[0]
+
+
+def online_snapshot(cfg, git, validate):
     paths = library_paths(cfg)
     url = cfg.get('git_url', '')
     branch = cfg.get('git_branch', 'main')
@@ -80,7 +85,10 @@ def online(cfg, git, validate):
         root = source_root(checkout, cfg)
         old = None
         try:
-            old_root, old_commit, _ = cached(cfg, git, validate)
+            old_root, old_commit, recovery = cached(cfg, git, validate)
+            if old_commit == commit and recovery is None:
+                # The current marker and this exact snapshot were verified inside this lock.
+                return old_root, old_commit
             old = make_record(cfg, old_root, old_commit)
         except (OSError, RuntimeError, ValueError):
             pass
@@ -113,7 +121,7 @@ def online(cfg, git, validate):
             except (OSError, RuntimeError, ValueError):
                 pass
         atomic_json(paths['marker'], record)
-        return root
+        return root, commit
 
 
 def make_record(cfg, root, commit):
