@@ -579,6 +579,19 @@ def add_tech_content_header(slide, layout: dict):
     slide.shapes._spTree.insert_element_before(element, "p:extLst")
 
 
+def add_content_title(slide, value, profile, layout, theme, *, dark=False, tech_header=False):
+    spec = layout["tech_content_header"] if tech_header else layout["content_header"]
+    ink = theme["neutral"]["white"] if (dark or tech_header) else theme[spec["title_color_role"]]
+    title = text_box(slide, value, *spec["title_box_inches"], spec["title_size_pt"],
+                     ink, profile["typography"]["heading"], bold=not tech_header,
+                     align=PP_ALIGN.CENTER if tech_header else PP_ALIGN.LEFT)
+    title.name = "brand:content-title"
+    if not tech_header:
+        x1, y1, length, _ = spec["rule_inches"]
+        rule = connector(slide, x1, y1, x1 + length, y1, theme["primary"], spec["rule_width_pt"])
+        rule.name = "brand:content-rule"
+
+
 def base_slide(pres: Presentation, profile: dict, layout: dict, theme: dict, index: int,
                *, dark=False, header=None):
     slide = pres.slides.add_slide(pres.slide_layouts[6])
@@ -601,16 +614,7 @@ def base_slide(pres: Presentation, profile: dict, layout: dict, theme: dict, ind
         tech_header = False
     add_logo(slide, layout, theme, dark=dark, content_header=bool(header), tech_header=tech_header)
     if header:
-        spec = layout["tech_content_header"] if tech_header else layout["content_header"]
-        ink = theme["neutral"]["white"] if (dark or tech_header) else theme[spec["title_color_role"]]
-        title = text_box(slide, header, *spec["title_box_inches"], spec["title_size_pt"],
-                         ink, profile["typography"]["heading"], bold=not tech_header,
-                         align=PP_ALIGN.CENTER if tech_header else PP_ALIGN.LEFT)
-        title.name = "brand:content-title"
-        if not tech_header:
-            x1, y1, length, _ = spec["rule_inches"]
-            rule = connector(slide, x1, y1, x1 + length, y1, theme["primary"], spec["rule_width_pt"])
-            rule.name = "brand:content-rule"
+        add_content_title(slide, header, profile, layout, theme, dark=dark, tech_header=tech_header)
         text_box(slide, f"{index:02d}", 12.15, 7.0, 0.5, 0.28, 10,
                  theme["muted"] if not dark else theme["neutral"]["on_dark_muted"], profile["typography"]["latin_numeric"], align=PP_ALIGN.RIGHT)
     return slide

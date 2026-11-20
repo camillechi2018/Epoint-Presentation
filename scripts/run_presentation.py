@@ -264,7 +264,8 @@ def execute_plan(request, plan, report, output: Path):
                             'content_adapter': None})
                         continue
                 capacity_check = capacity_preflight(Path(report['library_path']), entry, data,
-                                            page.get('title'), report['theme'])
+                                            page.get('title'), report['theme'],
+                                            body_header_pilot=request.get('body_header_pilot') is True)
                 if capacity_check['hard_issues']:
                     choice['trial_results'].append({
                         'layout_id': candidate_id, 'status': 'rejected',
@@ -280,8 +281,29 @@ def execute_plan(request, plan, report, output: Path):
                     candidate_content_path = work / f'P{index:03d}-{candidate_id}-content.json'
                     candidate_content_path.write_text(json.dumps(candidate_data, ensure_ascii=False, indent=2), encoding='utf-8')
                 try:
-                    filled = fill(Path(report['library_path']), candidate_id, candidate_content_path, page_out,
-                                  allow_draft=request.get('asset_policy', 'verified_draft') != 'approved_only')
+                    library = Path(report['library_path'])
+                    fill_options = {'allow_draft': request.get('asset_policy', 'verified_draft') != 'approved_only'}
+                    if 'body_header_title' in capacity_check:
+                        fill_options['body_header_title'] = capacity_check['body_header_title']
+                    try:
+                        filled = fill(library, candidate_id, candidate_content_path, page_out, **fill_options)
+                    except ValueError as exc:
+                        if 'body_header_title' not in fill_options or not str(exc).startswith('BODY_HEADER_'):
+                            raise
+                        choice['trial_results'].append({'layout_id': candidate_id, 'status': 'rejected',
+                                                        'reason_code': 'BODY_HEADER_REPLACEMENT_REJECTED',
+                                                        'reason': safe_message(exc)})
+                        legacy_capacity = capacity_preflight(library, entry, data, page.get('title'), report['theme'])
+                        if legacy_capacity['hard_issues']:
+                            choice['trial_results'].append({'layout_id': candidate_id, 'status': 'rejected',
+                                                            'reason_code': 'TEXT_OVER_CAPACITY',
+                                                            'capacity_preflight': legacy_capacity})
+                            continue
+                        fill_options.pop('body_header_title')
+                        capacity_check = legacy_capacity
+                        filled = fill(library, candidate_id, candidate_content_path, page_out, **fill_options)
+                    if filled.get('body_header'):
+                        choice['body_header'] = filled['body_header']
                     choice['layout_id'] = candidate_id
                     choice['trial_results'].append({'layout_id': candidate_id, 'status': 'filled',
                                                     'visual_qa': 'not_run', 'content_adapter': adapter,

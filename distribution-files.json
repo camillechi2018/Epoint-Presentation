@@ -164,6 +164,7 @@
     "scripts/audit_new_drawn_palette.py",
     "scripts/audit_text_fit.ps1",
     "scripts/audit_theme_integrity.py",
+    "scripts/body_header.py",
     "scripts/brand_palette.py",
     "scripts/calibrate_renderer.py",
     "scripts/capacity_preflight.py",
