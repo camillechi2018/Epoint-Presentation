@@ -29,6 +29,7 @@ from materialize_component_colors import freeze_uniform_deck
 from normalize_fonts import normalize
 from font_profile import resolve as resolve_font_profile
 from fallback_rules import fallback_type, fallback_catalog
+from relation_match import STRUCTURAL_ROLE_ORDER
 from free_composition import render_free_page
 
 
@@ -1401,7 +1402,7 @@ def render(plan: dict, output: Path):
     auto_added = []
     if plan.get("complete_deck", True):
         raise ValueError("完整演示稿的封面、目录、章节页和封底必须来自知识库；离线出稿仅支持 complete_deck:false 的内容页")
-    if any(not isinstance(page, dict) or page.get("type") in ("cover", "directory", "section", "closing") for page in pages):
+    if any(not isinstance(page, dict) or page.get("type") in STRUCTURAL_ROLE_ORDER for page in pages):
         raise ValueError("离线出稿仅支持内容页；封面、目录、章节页和封底必须来自知识库")
     pres = Presentation()
     pres.slide_width = Inches(layout["canvas"]["width_inches"])

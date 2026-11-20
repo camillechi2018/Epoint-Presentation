@@ -4,7 +4,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-STRUCTURAL_ROLES = frozenset({'cover', 'directory', 'section', 'closing'})
+STRUCTURAL_ROLE_ORDER = ('cover', 'directory', 'section', 'closing')
+STRUCTURAL_ROLES = frozenset(STRUCTURAL_ROLE_ORDER)
 BODY_ROLES = frozenset({'body', 'content', 'framework', 'process', 'timeline', 'comparison',
                         'summary', 'schedule', 'data-chart', 'data-table',
                         'progress', 'parallel', 'cycle'})

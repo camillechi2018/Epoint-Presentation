@@ -19,6 +19,9 @@ from font_profile import probe as probe_font_profile
 from office_runtime import probe as probe_office, assemble as assemble_office
 from delivery_status import assess as assess_delivery, exit_code as delivery_exit_code
 from assembly_backend import BACKENDS, select_backend
+from relation_match import STRUCTURAL_ROLE_ORDER as STRUCTURAL
+
+
 def _load_workflow():
     # Environment inspection and library preflight must not require rendering packages.
     global resolve, adapt_for_layout, classify_trial_failure, structural_mapping_issue
@@ -41,8 +44,6 @@ STYLES = {
     'red': 'legacy-blue-red',
     'deep-blue-tech': 'deep-blue-tech',
 }
-STRUCTURAL = ('cover', 'directory', 'section', 'closing')
-
 
 def error_code(exc):
     value = str(exc).casefold()
@@ -331,7 +332,7 @@ def execute_plan(request, plan, report, output: Path):
                     guided['variant'] = 'columns'
                 elif count == 6:
                     guided['variant'] = 'stat_rows' if not used_guided_variants.get(('cards', 'stat_rows')) else 'grid'
-            if guided['type'] in ('cover', 'directory', 'section', 'closing'):
+            if guided['type'] in STRUCTURAL:
                 raise ValueError('结构页不得由离线正文绘制器替代')
             try:
                 validate_page(guided, index)

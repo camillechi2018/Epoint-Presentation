@@ -13,6 +13,7 @@ from collections import Counter
 from pathlib import Path
 
 from library_location import binding_path_key
+from relation_match import STRUCTURAL_ROLE_ORDER
 from fill_layout import fill
 from plan_deck import resolve
 from content_adapters import (adapt_for_layout, adapt_structural_fields,
@@ -51,7 +52,7 @@ def audit(library: Path, request_path: Path, work: Path, trial: bool) -> dict:
     pages = []
     counters = Counter()
     for index, (source, choice) in enumerate(zip(request['pages'], plan['pages']), 1):
-        is_body = source.get('role') not in ('cover', 'directory', 'section', 'closing')
+        is_body = source.get('role') not in STRUCTURAL_ROLE_ORDER
         if not is_body:
             continue
         counters['body_pages'] += 1

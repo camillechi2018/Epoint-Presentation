@@ -9,8 +9,10 @@ import copy
 import json
 from pathlib import Path
 
+from relation_match import STRUCTURAL_ROLES
+
 PARALLEL = {'parallel-points', 'summary', 'framework'}
-STRUCTURAL = {'cover', 'directory', 'section', 'closing'}
+STRUCTURAL = set(STRUCTURAL_ROLES)
 
 
 def prepare(request):

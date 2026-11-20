@@ -14,8 +14,8 @@ from lxml import etree as ET
 from pptx import Presentation
 
 from distribution import verify_manifest
+from relation_match import STRUCTURAL_ROLE_ORDER as STRUCTURAL
 
-STRUCTURAL = ('cover', 'directory', 'section', 'closing')
 REL = 'http://schemas.openxmlformats.org/package/2006/relationships'
 
 

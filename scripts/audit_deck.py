@@ -4,6 +4,8 @@ from pathlib import Path
 from pptx import Presentation
 from pptx.util import Inches, Pt
 
+from relation_match import STRUCTURAL_ROLES
+
 SKILL=Path(__file__).resolve().parents[1]
 
 def audit(plan_path,pptx_path):
@@ -14,8 +16,7 @@ def audit(plan_path,pptx_path):
     if not isinstance(pages,list) or not pages:raise ValueError('验收清单须提供页面')
     require_templates=plan.get('require_template_source',False)
     commit=plan.get('library_commit','')
-    mandatory_roles={'cover','directory','section','closing'}
-    has_mandatory=any(isinstance(x,dict) and x.get('role') in mandatory_roles for x in pages)
+    has_mandatory=any(isinstance(x,dict) and x.get('role') in STRUCTURAL_ROLES for x in pages)
     if (require_templates or has_mandatory) and (not isinstance(commit,str) or not re.fullmatch(r'[0-9a-f]{40}',commit)):
         raise ValueError('必用知识库页面的来源验收须提供完整 library_commit')
     def add(level,slide,code,detail):issues.append({'severity':level,'slide':slide,'code':code,'detail':detail})
@@ -50,9 +51,9 @@ def audit(plan_path,pptx_path):
                         or any(abs(value-Inches(target))>1000 for value,target in zip(bounds,item['box_inches']))):
                         add('P0',n,'new_drawn_atmosphere','新绘正文弥散层颜色、透明度、柔边或位置偏移')
                         break
-        if info.get('role') in mandatory_roles and info.get('selection_mode') != 'source_template':
+        if info.get('role') in STRUCTURAL_ROLES and info.get('selection_mode') != 'source_template':
             add('P0',n,'structural_source','结构页必须使用知识库模板')
-        if require_templates or info.get('role') in mandatory_roles:
+        if require_templates or info.get('role') in STRUCTURAL_ROLES:
             actual=slide._element.cSld.get('name','')
             expected=info.get('source_stamp')
             prefix=f"epoint:{info.get('layout_id')}:{plan.get('theme')}:"

@@ -6,7 +6,8 @@ import argparse, json, random, re
 from collections import Counter
 from pathlib import Path
 from library_location import binding_path_key, get_library
-from relation_match import canonical, load_taxonomy, match_relation, match_role, supports_input_structure
+from relation_match import (STRUCTURAL_ROLE_ORDER, canonical, load_taxonomy,
+                            match_relation, match_role, supports_input_structure)
 from fallback_rules import fallback_type, fallback_catalog
 from content_adapters import adapt_for_layout
 from capacity_preflight import preflight
@@ -15,7 +16,7 @@ from capacity_preflight import preflight
 def semantic_fit(page, entry):
     """Small deterministic bonus from curated layout labels, never a hard gate."""
     label=entry.get('search_label','')
-    if not label or entry.get('role') in ('cover','directory','section','closing'):
+    if not label or entry.get('role') in STRUCTURAL_ROLE_ORDER:
         return 0
     query=' '.join(str(page.get(key,'')) for key in ('purpose','title'))
     def terms(value):
@@ -43,7 +44,7 @@ def normalize_body_request(page):
     """Recover a generic relation and count from structured body content."""
     page = dict(page)
     notes = []
-    if page.get('role') not in ('cover', 'directory', 'section', 'closing'):
+    if page.get('role') not in STRUCTURAL_ROLE_ORDER:
         if page.get('layout_id') in NO_TEMPLATE_MARKERS:
             page.pop('layout_id')
             notes.append('removed_legacy_no_template_marker')
@@ -203,7 +204,7 @@ def matches_structural_discovery(entry, page, taxonomy, root=None):
         return False
     if entry.get('matching_activation') != 'structure_ready':
         return matches_structural_contract(entry, page, taxonomy)
-    if page.get('role') in ('cover', 'directory', 'section', 'closing'):
+    if page.get('role') in STRUCTURAL_ROLE_ORDER:
         return False
     if not structural_relation_compatible(entry, page):
         return False
@@ -270,7 +271,7 @@ def matches_structural_relation(entry, page, taxonomy):
     # contract may soften the source-business relation gate.
     if (entry.get('matching_activation') != 'pilot_verified'
             or (entry.get('matching_contract') or {}).get('policy') != 'structural'
-            or page.get('role') in ('cover', 'directory', 'section', 'closing')):
+            or page.get('role') in STRUCTURAL_ROLE_ORDER):
         return False
     requested = canonical(page.get('matching_relation') or page.get('information_relation'), taxonomy)
     if requested is None:
@@ -330,7 +331,7 @@ def eligible(e, p, request, taxonomy):
         elif e.get('title_pressure_status')=='tested_short_copy_only':
             rules=json.loads((request['_root']/e['layout_rules']).read_text(encoding='utf-8'))
             if title_chars>rules.get('title_pressure_test',{}).get('safe_title_chars',0):reasons.append('title_over_capacity')
-        if isinstance(p.get('title'),str) and e.get('role') in ('cover','directory','section','closing'):
+        if isinstance(p.get('title'),str) and e.get('role') in STRUCTURAL_ROLE_ORDER:
             binding_rel = e.get(binding_path_key(e, theme))
             fields=json.loads((request['_root']/binding_rel).read_text(encoding='utf-8'))['fields']
             aliases={'cover':('cover.title',),'closing':('closing.title',),
@@ -407,7 +408,7 @@ def resolve(library,request):
             if not candidates:
                 raise ValueError(f'第{index}页无法沿用整稿章节版式 {section_layout_id}；请调整章节文案或为全部章节重选同一版式。')
         if not candidates:
-            if p.get('role') in ('cover','directory','section','closing'):
+            if p.get('role') in STRUCTURAL_ROLE_ORDER:
                 raise ValueError(f'第{index}页结构页没有合格版式；排除原因：{dict(rejected)}。')
             content = p.get('content') if isinstance(p.get('content'), dict) else {}
             inferred = fallback_type(content) if content else None
