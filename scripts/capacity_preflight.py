@@ -8,7 +8,7 @@ from pathlib import Path
 
 from library_location import binding_path_key
 from content_adapters import adapt_for_layout
-from text_width import visual_width_units
+from text_width import binding_text_issues, visual_width_units
 from body_header import checked_title, contract_for
 
 
@@ -118,23 +118,20 @@ def preflight(library: Path, entry: dict, content: dict, page_title: str | None,
         if key is None:
             continue
         value = texts[key]
-        if not isinstance(value, str):
+        if not isinstance(value, str) or (field.get('required') is False and not value.strip()):
             continue
         char_limit = field.get('max_chars')
         line_limit = field.get('max_lines')
         width_limit = field.get('max_width_units')
         lines = value.split('\n')
-        widths = [visual_width_units(line) for line in lines]
-        reasons = []
-        if isinstance(char_limit, int) and len(value) > char_limit:
-            reasons.append('max_chars')
-        if isinstance(line_limit, int) and len(lines) > line_limit:
-            reasons.append('max_lines')
-        if isinstance(width_limit, (int, float)) and max(widths, default=0) > width_limit:
+        widest = max(visual_width_units(line) for line in lines)
+        reasons = binding_text_issues(value, field, width_units=widest)
+        if reasons == ['max_width_units']:
             suggestion = _safe_wrap(value, int(width_limit), line_limit or 1,
                                     char_limit or 9999,
                                     prefer_three=field.get('semantic_role') == 'body')
-            if suggestion and not reasons:
+            if suggestion and not binding_text_issues(suggestion, field):
+                reasons.clear()
                 wrap_suggestions[key] = suggestion
                 if field.get('semantic_role') == 'body':
                     source_lines = suggestion.split('\n')
@@ -142,16 +139,14 @@ def preflight(library: Path, entry: dict, content: dict, page_title: str | None,
                            for line in source_lines[:-1]):
                         advisory.append({'field': semantic or field['field'],
                                          'rule': 'mid_phrase_wrap_review'})
-            else:
-                reasons.append('max_width_units')
         # The pilot's reviewed wrap width improves line breaks without lowering
         # the existing binding limits or changing any supplied words.
         wrap_width = contract.get('preferred_body_wrap_width_units') if contract else None
         if (not reasons and key not in wrap_suggestions and field.get('semantic_role') == 'body'
                 and isinstance(wrap_width, int) and wrap_width > 0
-                and len(lines) == 1 and widths[0] > wrap_width):
+                and len(lines) == 1 and widest > wrap_width):
             suggestion = _safe_wrap(value, wrap_width, min(line_limit or 1, 2), char_limit or 9999)
-            if suggestion:
+            if suggestion and not binding_text_issues(suggestion, field):
                 wrap_suggestions[key] = suggestion
                 advisory.append({'field': semantic or field['field'], 'rule': 'body_header_pilot_wrap'})
         for reason in reasons:
@@ -163,8 +158,8 @@ def preflight(library: Path, entry: dict, content: dict, page_title: str | None,
             if len(value) >= char_limit*near_hard:
                 advisory.append({'field': semantic or field['field'], 'rule': 'near_binding_chars'})
         if isinstance(width_limit, (int, float)) and width_limit > 0:
-            field_margins.append((width_limit-max(widths, default=0))/width_limit)
-            if max(widths, default=0) >= width_limit*near_hard and key not in wrap_suggestions:
+            field_margins.append((width_limit-widest)/width_limit)
+            if widest >= width_limit*near_hard and key not in wrap_suggestions:
                 advisory.append({'field': semantic or field['field'], 'rule': 'near_binding_width'})
         if field_margins:
             margins.append(min(field_margins))
@@ -179,7 +174,7 @@ def preflight(library: Path, entry: dict, content: dict, page_title: str | None,
         details.append({'field': semantic or field['field'], 'role': field.get('semantic_role'),
                         'actual_chars': len(value), 'max_chars': char_limit,
                         'actual_lines': len(lines), 'max_lines': line_limit,
-                        'max_visual_width_units': max(widths, default=0),
+                        'max_visual_width_units': widest,
                         'binding_max_width_units': width_limit,
                         'reviewed_recommended_cjk_chars': recommended})
     rules_rel = entry.get('layout_rules')

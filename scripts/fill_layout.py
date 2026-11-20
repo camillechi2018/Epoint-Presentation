@@ -4,7 +4,7 @@ from normalize_fonts import normalize
 from font_profile import resolve as resolve_font_profile
 from pathlib import Path
 from copy import deepcopy
-from text_width import directory_text_over_capacity, visual_width_units
+from text_width import binding_text_issues, directory_text_over_capacity, visual_width_units
 from body_header import attach_header, checked_title, contract_for, verify_asset
 
 import argparse,json,math,re,subprocess
@@ -579,17 +579,15 @@ def validate_text_field(binding, value):
     field = binding['field']
     if not isinstance(value, str) or not value.strip():
         raise ValueError('字段必须为非空文字 ' + field)
-    if len(value) > binding['max_chars']:
-        raise ValueError('超出容量，请拆页或精简：' + field)
-    if binding.get('allowed_values') is not None and value not in binding['allowed_values']:
-        raise ValueError('字段当前仅支持指定值：' + field)
-    lines = value.split('\n')
-    max_lines = binding.get('max_lines')
-    if max_lines is not None and len(lines) > max_lines:
-        raise ValueError('字段超过允许行数：' + field)
-    max_width = binding.get('max_width_units')
-    if max_width is not None and any(visual_width_units(line) > max_width for line in lines):
-        raise ValueError('字段超出视觉宽度，请精简或换版：' + field)
+    issues = binding_text_issues(value, binding)
+    if issues:
+        messages = {
+            'max_chars': '超出容量，请拆页或精简：',
+            'allowed_values': '字段当前仅支持指定值：',
+            'max_lines': '字段超过允许行数：',
+            'max_width_units': '字段超出视觉宽度，请精简或换版：',
+        }
+        raise ValueError(messages[issues[0]] + field)
 
 
 def write_text_fields(shapes, bindings, texts, logo_enabled):

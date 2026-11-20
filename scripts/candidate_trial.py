@@ -38,10 +38,12 @@ def try_candidate(library, entry, data, page, content_path, trial_path, output,
 
     capacity = preflight(library, entry, data, title, theme, body_header_pilot=body_header_pilot)
     record["capacity_preflight"] = capacity
-    if capacity["hard_issues"]:
-        record["reason_code"] = "TEXT_OVER_CAPACITY"
+    hard_issues = capacity["hard_issues"]
+    if hard_issues:
+        disallowed_values = all(issue["rule"] == "allowed_values" for issue in hard_issues)
+        record["reason_code"] = "TRIAL_REJECTED" if disallowed_values else "TEXT_OVER_CAPACITY"
         if not diagnostics:
-            record["reason"] = "绑定字段容量预检未通过"
+            record["reason"] = "输入包含模板未允许的字段值" if disallowed_values else "绑定字段容量预检未通过"
         return None, record
 
     wrap = capacity["wrap_suggestions"]
