@@ -17,7 +17,7 @@ def frame():
 def contract_for(entry, theme, enabled):
     if (not enabled or theme not in ('blue', 'red', 'deep-blue-tech')
             or entry.get('classification_status') != 'verified'
-            or entry.get('role') not in ('summary', 'body', 'content')):
+            or entry.get('role') in ('cover', 'directory', 'section', 'closing')):
         return None
     contract = entry.get('body_component_contract')
     if not isinstance(contract, dict) or contract.get('version') != 2:
@@ -50,7 +50,7 @@ def frame_spec(contract):
 
 def checked_title(binding, texts, page_title, contract):
     path = binding['semantic_path']
-    if binding['field'] in texts and path in texts:
+    if binding['field'] != path and binding['field'] in texts and path in texts:
         raise ValueError('BODY_HEADER_TITLE_CONFLICT')
     field_title = texts.get(path, texts.get(binding['field']))
     if page_title is not None and field_title is not None and field_title != page_title:
@@ -85,9 +85,9 @@ def attach_header(presentation, slide, contract, theme, title, logo_enabled):
     if any(abs(a - b) > 2 for a, b in zip(dimensions, expected)):
         raise ValueError('BODY_HEADER_CANVAS_MISMATCH')
     tech = contract.get('tech')
-    if tech:
-        anchor = tech_insertion_anchor(slide, tech)
-        add_tech_content_header(slide, layout, before=anchor._element)
+    if tech and not tech.get('omit_art'):
+        parent, index = tech_art_placement(slide, tech)
+        add_tech_content_header(slide, layout, placement=(parent, index))
     profile = read_json(PROFILE)
     palette = profile['themes'][theme]
     add_content_title(slide, title, profile, layout, palette, tech_header=bool(tech))
@@ -101,7 +101,7 @@ def attach_header(presentation, slide, contract, theme, title, logo_enabled):
     return report
 
 
-def tech_insertion_anchor(slide, tech):
+def tech_art_placement(slide, tech):
     from pptx.enum.shapes import MSO_SHAPE_TYPE as Type
 
     def locate(shapes, shape_id, kind):
@@ -110,5 +110,10 @@ def tech_insertion_anchor(slide, tech):
             raise ValueError(f'BODY_HEADER_OBJECT_MISMATCH: {shape_id}')
         return matches[0]
 
+    if 'art_index' in tech:
+        parent = (locate(slide.shapes, tech['root_id'], Type.GROUP)._element
+                  if tech.get('root_id') is not None else slide.shapes._spTree)
+        return parent, tech['art_index']
     root = locate(slide.shapes, tech['root_id'], Type.GROUP)
-    return locate(root.shapes, tech['text_group_id'], Type.GROUP)
+    anchor = locate(root.shapes, tech['text_group_id'], Type.GROUP)._element
+    return anchor.getparent(), anchor.getparent().index(anchor)

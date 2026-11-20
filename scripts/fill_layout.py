@@ -976,6 +976,8 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
     p=Presentation(source);s=select_source_page(p,source_page)
     clear_source_motion(s)
     for shape_id in rules.get('drop_shape_ids',[]):
+        if body_header and shape_id in body_header['removed_shape_ids']:
+            continue
         target=next((shape for shape in walk(s.shapes) if shape.shape_id==shape_id),None)
         if target is None:raise ValueError('需清理的源稿对象不存在：'+str(shape_id))
         target._element.getparent().remove(target._element)
