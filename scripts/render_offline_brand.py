@@ -90,13 +90,13 @@ def text_box(slide, value: str, x: float, y: float, w: float, h: float,
 
 
 def rectangle(slide, x: float, y: float, w: float, h: float, fill: str,
-              border: str | None = None, rounded=False):
+              border: str | None = None, rounded=False, *, corner_adjustment=.12):
     kind = MSO_SHAPE.ROUNDED_RECTANGLE if rounded else MSO_SHAPE.RECTANGLE
     shape = slide.shapes.add_shape(kind, Inches(x), Inches(y), Inches(w), Inches(h))
     color(shape, fill, border)
     if rounded:
         try:
-            shape.adjustments[0] = 0.12
+            shape.adjustments[0] = corner_adjustment
         except (IndexError, ValueError):
             pass
     return shape

@@ -47,7 +47,7 @@
 | 表格＋侧边解读 | `type: data_table`，`variant: side_notes`，`columns`、`rows`、`notes_items:[{title,body}]` 1–4 条，可加 `data_source` | 10 |
 | 表格＋上方口径 | `type: data_table`，`variant: top_notes`，表格字段相同，`notes_items` 1–2 条 | 13 |
 | 关键时限＋处理流程 | `type: deadline_process`，`deadlines:[{label,value,unit,body}]` 2 条，`steps:[{title,body}]` 2–5 步，可加 `takeaway`。在 `body` 保留起算条件和受理对象。 | 19 |
-| 一侧摘要＋一侧明细 | `type: priority_grid`，`variant: summary_split`，`lead:{title,body}`、`support:[{title,body}]` 2–5 条 | 4、6、9、20 |
+| 圆角主题色衬底摘要＋右侧明细 | `type: priority_grid`，`variant: summary_split`，`lead:{title,body}`、`support:[{title,body}]` 2–5 条 | 4、6、9、20 |
 | 无卡片流程 | `type: process`，`variant: open_steps`，`items:[{title,body,stage?,output?}]` 3–5 步，可加 `takeaway` | 8、14 |
 | 嵌套层级＋规则说明 | `type: layered_architecture`，`variant: nested_scope`，`outer:{title}`、`inner:{title,body,children:[{title,body}]}`、`rules:[{title,body}]`。内层包含 2–3 个并列子项，右侧列 2–4 条规则，可加 `note` 和 `principles:[文字]`。 | 12 |
 | 共用刻度区间图 | `type: comparison_chart`，`variant: range_scale`，`scale:{min,max,ticks:[数值]}`、`ranges:[{label,min,max}]` 2–6 行。刻度包含两端并严格递增。上下限相等时画成一个点。可加 `caption`、`highlight:{label,value,unit?,body}` 和 `takeaway`。 | 17 |

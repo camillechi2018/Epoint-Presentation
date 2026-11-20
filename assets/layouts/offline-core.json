@@ -13,12 +13,12 @@
   "logo_anchor": {"top_inches": 0.32, "position": "top_right"},
   "content_header": {
     "source": "蓝红简约知识库正文页页眉；横线起点按标题可见左边缘对齐，适用于技能排版与自由编排",
-    "title_box_inches": [0.487, 0.338, 8.424, 0.505],
+    "title_box_inches": [0.487, 0.288, 8.424, 0.505],
     "title_size_pt": 24,
     "pilot_title_max_width_units": 42,
     "title_color_role": "primary",
     "rule_inches": [0.487, 0.843, 12.246, 0.0],
-    "rule_width_pt": 1.5,
+    "rule_width_pt": 0.5,
     "logo_box_inches": [11.5, 0.44, 1.233, 0.265]
   },
   "tech_content_header": {
@@ -43,7 +43,7 @@
     "blur_pt": 220,
     "circles_by_theme": {
       "blue": [
-        {"box_inches": [-3.9, 1.2, 11.0, 10.0], "color_role": "primary", "opacity": 0.11},
+        {"box_inches": [-3.9, 1.2, 11.0, 10.0], "color_role": "primary", "opacity": 0.09},
         {"box_inches": [6.8, -3.45, 10.0, 9.4], "color_role": "secondary", "opacity": 0.07}
       ],
       "red": [

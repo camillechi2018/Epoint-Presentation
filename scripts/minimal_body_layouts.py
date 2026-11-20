@@ -30,8 +30,8 @@ class Body:
     def rule(self, x, y, right=RIGHT):
         self.rules.append((x, y, right))
 
-    def panel(self, x, y, width, height, fill, *, border=None, name=None):
-        self.panels.append(((x, y, width, height), fill, border, name))
+    def panel(self, x, y, width, height, fill, *, border=None, name=None, rounding=0.0, black_overlay=0.0):
+        self.panels.append(((x, y, width, height), fill, border, name, rounding, black_overlay))
 
     def band(self, value):
         if value is not None:
@@ -40,14 +40,23 @@ class Body:
 
     def draw(self, slide, profile, theme, text_box, rectangle, connector):
         typography = profile["typography"]
-        for geometry, fill, border, name in self.panels:
-            shape = rectangle(slide, *geometry, theme[fill], theme[border] if border else None)
+        for geometry, fill, border, name, rounding, black_overlay in self.panels:
+            target = slide.shapes.add_group_shape() if black_overlay else slide
+            corners = {"rounded": rounding > 0, "corner_adjustment": rounding}
+            shape = rectangle(target, *geometry, theme[fill], theme[border] if border else None,
+                              **corners)
+            if black_overlay:
+                overlay = rectangle(target, *geometry, theme["neutral"]["black"], **corners)
+                alpha = OxmlElement("a:alpha")
+                alpha.set("val", str(round(black_overlay * 100000)))
+                overlay._element.spPr.solidFill.srgbClr.append(alpha)
             if name:
-                shape.name = name
+                (target if black_overlay else shape).name = name
         for x, y, right in self.rules:
             connector(slide, x, y, right, y, theme["border"], .8)
         for value, geometry, size, color, bold in self.text_boxes:
-            text_box(slide, value, *geometry, size, theme[color],
+            ink = theme["neutral"]["white"] if color == "white" else theme[color]
+            text_box(slide, value, *geometry, size, ink,
                      typography["heading" if bold else "body"], bold=bold, valign=MSO_ANCHOR.TOP)
         if self.table:
             _draw_table(slide, self.table, typography, theme)
@@ -107,10 +116,19 @@ def _split_summary(page, body):
     lead = page.get("lead")
     if not isinstance(lead, dict):
         raise ValueError("双栏摘要需要 lead 对象")
-    body.text(lead.get("title"), LEFT, 1.88, 4.40, 1.13, 23, "primary", bold=True)
-    body.text(lead.get("body"), LEFT, 3.16, 4.40, 2.87, 17)
-    _rows(body, _items(page, "support", 2, 5), x=5.43, y=TOP, width=RIGHT - 5.43,
-          height=BOTTOM - TOP, numbered=False)
+    panel_left = LEFT - .25
+    panel_width = 3.5
+    panel_padding = .30
+    text_left = panel_left + panel_padding
+    text_width = panel_width - 2 * panel_padding
+    support_left = panel_left + panel_width + .40
+    detail_left = 7.58
+    body.panel(panel_left, TOP, panel_width, BOTTOM - TOP, "primary",
+               name="body:summary-panel", rounding=.04, black_overlay=.20)
+    body.text(lead.get("title"), text_left, TOP + .40, text_width, 1.13, 23, "white", bold=True)
+    body.text(lead.get("body"), text_left, 3.24, text_width, 2.87, 17, "white")
+    _rows(body, _items(page, "support", 2, 5), x=support_left, y=TOP, width=RIGHT - support_left,
+          height=BOTTOM - TOP, numbered=False, label_width=detail_left - support_left)
 
 
 def _deadline_process(page, body):
