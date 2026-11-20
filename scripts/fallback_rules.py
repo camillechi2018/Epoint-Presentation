@@ -7,6 +7,18 @@ from pathlib import Path
 
 RULES = Path(__file__).resolve().parents[1] / "assets" / "layouts" / "fallback-layouts.json"
 
+MINIMAL_BODY_TYPES = {"rule_list", "deadline_process"}
+MINIMAL_BODY_VARIANTS = {
+    "priority_grid": {"summary_split"},
+    "process": {"open_steps"},
+    "data_table": {"side_notes", "top_notes"},
+}
+
+
+def uses_minimal_body_layout(kind, variant):
+    return isinstance(kind, str) and (kind in MINIMAL_BODY_TYPES or (
+        isinstance(variant, str) and variant in MINIMAL_BODY_VARIANTS.get(kind, ())))
+
 
 def fallback_type(page: dict) -> str:
     if page.get("type"):

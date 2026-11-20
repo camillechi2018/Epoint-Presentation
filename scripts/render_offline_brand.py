@@ -28,7 +28,8 @@ from audit_logo import audit as audit_logo
 from materialize_component_colors import freeze_uniform_deck
 from normalize_fonts import normalize
 from font_profile import resolve as resolve_font_profile
-from fallback_rules import fallback_type, fallback_catalog
+from fallback_rules import MINIMAL_BODY_TYPES, fallback_type, fallback_catalog, uses_minimal_body_layout
+from minimal_body_layouts import compose as compose_minimal_body, verify_header_title
 from relation_match import STRUCTURAL_ROLE_ORDER
 from free_composition import render_free_page
 
@@ -128,6 +129,8 @@ def display_units(value: str) -> int:
 def resolved_variant(page: dict, kind: str) -> str:
     """Keep density and relation variants inside their existing layout IDs."""
     variant = page.get("variant", "auto")
+    if uses_minimal_body_layout(kind, variant):
+        return "" if kind in MINIMAL_BODY_TYPES else variant
     rules = read_json(COMPOSITION_RULES)["body_variants"]
     if kind == "bullets":
         allowed = set(rules["bullets"]["allowed"])
@@ -424,7 +427,7 @@ def validate_page(page: dict, n: int):
     if not isinstance(page, dict):
         raise ValueError(f"第 {n} 页必须是对象")
     kind = fallback_type(page)
-    if kind not in VALID_TYPES:
+    if kind not in VALID_TYPES and kind not in MINIMAL_BODY_TYPES:
         raise ValueError(f"第 {n} 页类型不支持：{kind}")
     title = page.get("title")
     if not isinstance(title, str) or not title.strip():
@@ -432,6 +435,9 @@ def validate_page(page: dict, n: int):
     limit = 38 if kind in {"cover", "closing"} else (42 if kind in fallback_catalog() else 32)
     if display_units(title) > limit:
         raise ValueError(f"第 {n} 页标题超出离线安全容量（{limit} 宽度单位），请拆行或重拟页面结构")
+    if uses_minimal_body_layout(kind, page.get("variant")):
+        compose_minimal_body(page, kind, n)
+        return kind
     if kind == "cover":
         for field, cap in (("subtitle", 80), ("meta", 70)):
             if display_units(str(page.get(field, ""))) > cap:
@@ -1179,7 +1185,12 @@ def render_page(pres, page, index, profile, layout, theme):
     kind = validate_page(page, index)
     head = profile["typography"]["heading"]
     body = profile["typography"]["body"]
-    if kind == "assertion_evidence":
+    if uses_minimal_body_layout(kind, page.get("variant")):
+        header = layout["tech_content_header" if theme is profile["themes"]["deep-blue-tech"] else "content_header"]
+        verify_header_title(page["title"], header, index)
+        slide = base_slide(pres, profile, layout, theme, index, header=page["title"])
+        compose_minimal_body(page, kind, index).draw(slide, profile, theme, text_box, rectangle, connector)
+    elif kind == "assertion_evidence":
         slide = render_assertion_evidence(pres, page, index, profile, layout, theme)
     elif kind == "priority_grid":
         slide = render_priority_grid(pres, page, index, profile, layout, theme)

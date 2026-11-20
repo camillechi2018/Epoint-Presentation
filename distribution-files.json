@@ -185,6 +185,7 @@
     "scripts/logo_brand.py",
     "scripts/managed_library_cache.py",
     "scripts/materialize_component_colors.py",
+    "scripts/minimal_body_layouts.py",
     "scripts/native_deck_backend.py",
     "scripts/normalize_fonts.py",
     "scripts/opc_relationships.py",

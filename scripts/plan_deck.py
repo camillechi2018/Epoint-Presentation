@@ -8,7 +8,7 @@ from pathlib import Path
 from library_location import binding_path_key, get_library
 from relation_match import (STRUCTURAL_ROLE_ORDER, canonical, load_taxonomy,
                             match_relation, match_role, supports_input_structure)
-from fallback_rules import fallback_type, fallback_catalog
+from fallback_rules import fallback_type, fallback_catalog, uses_minimal_body_layout
 from content_adapters import adapt_for_layout
 from capacity_preflight import preflight
 
@@ -399,7 +399,10 @@ def resolve(library,request):
             raise ValueError(f'第{index}页item_count必须是正整数')
         p['needs']=need
         rejected=Counter();candidates=[]
-        for e in catalog['layouts']:
+        minimal_requested = (p.get('role') not in STRUCTURAL_ROLE_ORDER
+                             and not p.get('layout_id')
+                             and uses_minimal_body_layout(content.get('type'), content.get('variant')))
+        for e in ([] if minimal_requested else catalog['layouts']):
             reasons=eligible(e,p,request,taxonomy)
             if reasons: rejected.update(reasons)
             else:candidates.append(e)
@@ -422,7 +425,8 @@ def resolve(library,request):
                            'selection_mode':mode,'selection_label':'自由编排' if wants_free else '技能排版','layout_id':None,
                            'fallback_layout_id':None if wants_free else fallback_id,
                            'candidate_ids':[],'trial_results':[],
-                           'reason_code':'SKILL_LAYOUT_INADEQUATE' if wants_free else 'NO_ELIGIBLE_TEMPLATE',
+                           'reason_code':('SKILL_LAYOUT_INADEQUATE' if wants_free else
+                                          'EXPLICIT_SKILL_LAYOUT' if minimal_requested else 'NO_ELIGIBLE_TEMPLATE'),
                            'layout_assessment':assessment if wants_free else None,
                            'rejected_reasons':dict(rejected),
                            'theme':p.get('theme',request.get('theme')),'candidate_count':0,

@@ -2,7 +2,7 @@
 
 ## 位置与边界
 
-先按知识库目录筛选与试填正文模板。只有无合格候选（`NO_ELIGIBLE_TEMPLATE`），或最多三张候选试填均不合格（`NO_FIT_AFTER_TRIAL`），才使用 Skill 内置的正文排版规则。封面、目录、章节页、封底始终从已校验知识库或最小模板包获取，不能使用此处的自由排版代替。
+默认先按知识库目录筛选与试填正文模板。无合格候选（`NO_ELIGIBLE_TEMPLATE`），或最多三张候选试填均不合格（`NO_FIT_AFTER_TRIAL`）时，使用技能内置的正文排版规则。下文的简约正文版式也可在请求中显式指定。封面、目录、章节页、封底始终从已校验知识库或最小模板包获取。
 
 本规则是知识库的**结构补充**。借鉴花叔 Design 的信息组织方法，用新点锁定主题颜色、字体和 Logo 在 PowerPoint 中重绘为可编辑对象。不开阴影，不使用参考样例里的业务文字或数据。各版式的适用关系和来源见 `assets/layouts/fallback-layouts.json`。
 
@@ -13,7 +13,7 @@
 ## 每页选版顺序
 
 1. 先写本页要让听众得出的**一句结论**，再识别实际关系：连续数值、主次信息、多维证据、问题到结果、上下层级、段落叙事、精确表格、日期里程碑、来源图片或分类数值对比。
-2. 根据真实内容选择下表十三种关系结构；普通文字或基础关系再用 `bullets`、`cards`、`process`、`comparison`、`metrics`。字段不满足安全容量时拆页或换结构；不能生成空数据、空卡片、空图片或编造事实凑版式。
+2. 根据真实内容选择下表的关系结构；普通文字或基础关系再用 `bullets`、`cards`、`process`、`comparison`、`metrics`。字段不满足安全容量时拆页或换结构；不能生成空数据、空卡片、空图片或编造事实凑版式。
 3. 同一份稿件避免连续三页使用同一 `type`。六项卡片首次可用开放式两行分组，再遇到六项则改用边框网格；三项同权短内容使用无衬底三列。只改变构图和层级，不改变原文的项数、事实或关系。若信息确实属于同一关系，优先调整叙事角色和信息拆分，不为了多样性篡改事实。
 4. 在逐页计划记录 `selection_mode=guided_composition`、`reason_code`、`fallback_layout_id`，`library_used=false`。实际组装和验收仍走原流程。
 
@@ -37,7 +37,22 @@
 
 `lead` 和 `lead_support` 不得由模型凭空判定业务优先级。指标数值、单位、时期和来源按材料保留；不要为了大数字样式抽掉必要口径。
 
-## 十三种关系结构与输入
+## 简约正文
+
+按下表填写正文页的 `content`。请求未指定知识库 `layout_id` 时，显式选择这些版式直接进入技能排版，原因记为 `EXPLICIT_SKILL_LAYOUT`。页标题读取请求的标题字段，Logo、画布、字体和配色均由现有主题统一提供。以下形态来自《绩效考核制度宣贯》，正文内容和数据从当前请求填写。
+
+| 版式 | 请求字段 | 参考页 |
+| --- | --- | --- |
+| 无边框条目清单 | `type: rule_list`，`items:[{title,body,condition?}]` 2–6 条，可加底部 `takeaway` | 5、15、16 |
+| 表格＋侧边解读 | `type: data_table`，`variant: side_notes`，`columns`、`rows`、`notes_items:[{title,body}]` 1–4 条，可加 `data_source` | 10 |
+| 表格＋上方口径 | `type: data_table`，`variant: top_notes`，表格字段相同，`notes_items` 1–2 条 | 13 |
+| 关键时限＋处理流程 | `type: deadline_process`，`deadlines:[{label,value,unit,body}]` 2 条，`steps:[{title,body}]` 2–5 步，可加 `takeaway`。在 `body` 保留起算条件和受理对象。 | 19 |
+| 一侧摘要＋一侧明细 | `type: priority_grid`，`variant: summary_split`，`lead:{title,body}`、`support:[{title,body}]` 2–5 条 | 4、6、9、20 |
+| 无卡片流程 | `type: process`，`variant: open_steps`，`items:[{title,body,stage?,output?}]` 3–5 步，可加 `takeaway` | 8、14 |
+
+两个带解读的表格变体使用 PowerPoint 原生表格，支持 2–6 列、1–6 行。正文或单元格超出可用宽高时，精简、换版或拆页。科技主题的居中页眉较窄，长标题应缩短后再出稿。
+
+## 其他关系结构与输入
 
 | type | 内容条件 | 输入字段 | 布局重点 |
 | --- | --- | --- | --- |

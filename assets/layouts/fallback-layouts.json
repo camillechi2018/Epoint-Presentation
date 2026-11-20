@@ -1,10 +1,24 @@
 {
   "schema_version": "1.0",
   "status": "draft_pending_review",
-  "purpose": "正文模板无合格匹配时的品牌内排版结构；不代替封面、目录、章节、封底",
-  "inspiration": "借鉴 huashu-design 的信息结构；仅由本 Skill 使用锁定品牌变量重绘可编辑对象",
+  "purpose": "正文模板无合格匹配或请求显式指定简约版式时使用的品牌内排版结构",
+  "inspiration": "借鉴 huashu-design 和《绩效考核制度宣贯》的信息结构；使用锁定品牌变量重绘为可编辑对象",
   "brand_policy": "只使用 brand-palette-lock.json 和 brand-baseline.json 的所选主题变量、字体及默认 Logo；无阴影",
   "layouts": [
+    {
+      "id": "rule_list",
+      "relation": ["parallel_rules", "ordered_rules"],
+      "required": ["title", "items"],
+      "use_when": "2–6 条规则需要并列或按顺序说明，可另列适用条件和共同提示",
+      "source_example": "绩效考核制度宣贯.pptx 第 5、15、16 页"
+    },
+    {
+      "id": "deadline_process",
+      "relation": ["deadlines_and_steps"],
+      "required": ["title", "deadlines", "steps"],
+      "use_when": "两类事项各有明确时限，需要同时列出编号处理步骤",
+      "source_example": "绩效考核制度宣贯.pptx 第 19 页"
+    },
     {
       "id": "assertion_evidence",
       "relation": ["trend", "change", "data", "proof"],
@@ -16,7 +30,7 @@
     },
     {
       "id": "priority_grid",
-      "variants": ["side", "top"],
+      "variants": ["side", "top", "summary_split"],
       "relation": ["hierarchy", "key_point", "summary"],
       "use_when": "一个最重要的结论或指标，配二至四条支撑信息",
       "required": ["title", "lead", "support"],
@@ -62,7 +76,7 @@
     },
     {
       "id": "data_table",
-      "variants": ["standard", "action_tracker"],
+      "variants": ["standard", "action_tracker", "side_notes", "top_notes"],
       "relation": ["table", "precise_values", "multi_dimension_data"],
       "use_when": "多行多列的精确数据需要逐项保留，图形化会隐藏原始数值",
       "required": ["title", "columns", "rows"],
