@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 import hashlib
 import platform
-import posixpath
 import shutil
 import subprocess
 import tempfile
@@ -17,27 +16,22 @@ from assemble_native import assemble_many
 from audit_component_color_independence import audit as audit_colors
 from audit_fonts import audit as audit_fonts
 from audit_logo import audit as audit_logo
+from audit_theme_integrity import slide_parts
 from delivery_gate import check_finished
 from normalize_fonts import normalize
 from repair_svg_fallbacks import repair as repair_svg
 
 P = 'http://schemas.openxmlformats.org/presentationml/2006/main'
-R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
 
 
 def stamp_source_pages(path: Path, slides: list[dict]) -> None:
     """Use the same final slide-name contract as the PowerPoint assembler."""
     with ZipFile(path) as src:
-        presentation = etree.fromstring(src.read('ppt/presentation.xml'))
-        relations = etree.fromstring(src.read('ppt/_rels/presentation.xml.rels'))
-        targets = {item.get('Id'): posixpath.normpath('ppt/' + item.get('Target'))
-                   for item in relations}
-        slide_parts = {targets[item.get(f'{{{R}}}id')]: number
-                       for number, item in enumerate(presentation.findall(f'.//{{{P}}}sldId'), 1)}
+        slide_numbers = {part: number for number, part in enumerate(slide_parts(src), 1)}
         records = [(item, src.read(item.filename)) for item in src.infolist()]
     with ZipFile(path, 'w') as dst:
         for info, data in records:
-            number = slide_parts.get(info.filename)
+            number = slide_numbers.get(info.filename)
             if number and slides[number - 1].get('source_stamp'):
                 root = etree.fromstring(data)
                 root.find(f'{{{P}}}cSld').set('name', slides[number - 1]['source_stamp'] + ':' + str(number))

@@ -7,9 +7,10 @@ import argparse
 import json
 import posixpath
 from pathlib import Path
-from urllib.parse import unquote
 from zipfile import ZipFile, ZIP_DEFLATED
 from lxml import etree as ET
+
+from opc_relationships import rels_name, resolve_target
 
 REL = 'http://schemas.openxmlformats.org/package/2006/relationships'
 P = 'http://schemas.openxmlformats.org/presentationml/2006/main'
@@ -17,17 +18,8 @@ R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
 CT = 'http://schemas.openxmlformats.org/package/2006/content-types'
 
 
-def rels_name(part):
-    folder, name = posixpath.split(part)
-    return posixpath.join(folder, '_rels', name + '.rels')
-
-
 def resolve(part, target):
-    target = unquote(target)
-    if target.startswith('/'):
-        result = posixpath.normpath(target.lstrip('/'))
-    else:
-        result = posixpath.normpath(posixpath.join(posixpath.dirname(part), target))
+    result = resolve_target(part, target)
     if result.startswith('../') or result == '..':
         raise ValueError('PACKAGE_RELATION_ESCAPES_ROOT')
     return result

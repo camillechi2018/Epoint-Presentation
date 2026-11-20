@@ -1,12 +1,13 @@
 """Verify that each assembled slide still resolves its source theme colors."""
 import argparse
 import json
-import posixpath
 import re
 import sys
 from pathlib import Path
 from xml.etree import ElementTree as ET
 from zipfile import ZipFile
+
+from opc_relationships import rels_name, resolve_target
 
 P = "http://schemas.openxmlformats.org/presentationml/2006/main"
 R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -17,21 +18,17 @@ ROLES = ("dk1", "lt1", "dk2", "lt2", "accent1", "accent2", "accent3",
 
 
 def related(z, part, kind):
-    folder, name = posixpath.split(part)
-    rels = posixpath.join(folder, "_rels", name + ".rels")
-    root = ET.fromstring(z.read(rels))
+    root = ET.fromstring(z.read(rels_name(part)))
     for rel in root.findall(f"{{{REL}}}Relationship"):
         if rel.get("Type", "").endswith("/" + kind):
-            target = rel.get("Target", "")
-            if target.startswith("/"):
-                return target.lstrip("/")
-            return posixpath.normpath(posixpath.join(folder, target))
+            return resolve_target(part, rel.get("Target", ""))
     raise ValueError(f"{part} has no {kind} relationship")
 
 
 def slide_parts(z):
-    root = ET.fromstring(z.read("ppt/presentation.xml"))
-    rels = ET.fromstring(z.read("ppt/_rels/presentation.xml.rels"))
+    presentation = "ppt/presentation.xml"
+    root = ET.fromstring(z.read(presentation))
+    rels = ET.fromstring(z.read(rels_name(presentation)))
     targets = {
         rel.get("Id"): rel.get("Target")
         for rel in rels.findall(f"{{{REL}}}Relationship")
@@ -39,7 +36,7 @@ def slide_parts(z):
     result = []
     for slide in root.findall(f".//{{{P}}}sldId"):
         target = targets[slide.get(f"{{{R}}}id")]
-        result.append(posixpath.normpath(posixpath.join("ppt", target)))
+        result.append(resolve_target(presentation, target))
     return result
 
 

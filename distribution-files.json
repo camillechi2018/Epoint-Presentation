@@ -187,6 +187,7 @@
     "scripts/materialize_component_colors.py",
     "scripts/native_deck_backend.py",
     "scripts/normalize_fonts.py",
+    "scripts/opc_relationships.py",
     "scripts/office_guard.ps1",
     "scripts/office_probe.ps1",
     "scripts/office_runtime.py",

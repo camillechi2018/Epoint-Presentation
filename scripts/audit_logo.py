@@ -4,13 +4,14 @@ from __future__ import annotations
 import argparse
 import io
 import json
-import posixpath
 import re
 from pathlib import Path
 from zipfile import ZipFile
 
 from lxml import etree
 from PIL import Image
+
+from opc_relationships import rels_name, resolve_target
 
 REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 
@@ -26,7 +27,7 @@ def audit(path: Path, require_every_slide: bool = False, theme: str | None = Non
         )
         for number, slide_name in enumerate(slide_names, 1):
             slide = etree.fromstring(archive.read(slide_name))
-            relation_name = posixpath.join("ppt/slides/_rels", posixpath.basename(slide_name) + ".rels")
+            relation_name = rels_name(slide_name)
             relations = {}
             if relation_name in names:
                 relation_root = etree.fromstring(archive.read(relation_name))
@@ -37,7 +38,7 @@ def audit(path: Path, require_every_slide: bool = False, theme: str | None = Non
                 blips = picture.xpath('./*[local-name()="blipFill"]/*[local-name()="blip"]')
                 embed = blips[0].get("{" + REL + "}embed") if blips else None
                 target = relations.get(embed)
-                media = posixpath.normpath(posixpath.join("ppt/slides", target)) if target else None
+                media = resolve_target(slide_name, target) if target else None
                 if not media or media not in names:
                     issues.append({"slide": number, "code": "red_logo_image_missing", "shape": label})
                     return
@@ -74,7 +75,7 @@ def audit(path: Path, require_every_slide: bool = False, theme: str | None = Non
                 blips = picture.xpath('./*[local-name()="blipFill"]/*[local-name()="blip"]')
                 embed = blips[0].get("{" + REL + "}embed") if blips else None
                 target = relations.get(embed)
-                media = posixpath.normpath(posixpath.join("ppt/slides", target)) if target else None
+                media = resolve_target(slide_name, target) if target else None
                 if not embed or not media or media not in names:
                     issues.append({"slide": number, "code": "missing_primary_logo_image", "shape": props[0].get("name")})
                     continue

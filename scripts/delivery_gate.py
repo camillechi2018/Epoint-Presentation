@@ -7,13 +7,13 @@ import posixpath
 import re
 import subprocess
 from pathlib import Path
-from urllib.parse import unquote
 from zipfile import BadZipFile, ZipFile
 
 from lxml import etree as ET
 from pptx import Presentation
 
 from distribution import verify_manifest
+from opc_relationships import resolve_target
 from relation_match import STRUCTURAL_ROLE_ORDER as STRUCTURAL
 
 REL = 'http://schemas.openxmlformats.org/package/2006/relationships'
@@ -161,12 +161,7 @@ def _inspect_package_relations(path):
                 ids.add(rid)
                 if link.get('TargetMode') == 'External':
                     continue
-                target = unquote(link.get('Target', ''))
-                if target.startswith('/'):
-                    target = target.lstrip('/')
-                else:
-                    target = posixpath.join(posixpath.dirname(owner), target)
-                target = posixpath.normpath(target)
+                target = resolve_target(owner, link.get('Target', ''))
                 if target not in parts or target.startswith('../'):
                     raise ValueError('RELATION_TARGET_MISSING: ' + owner + ' -> ' + target)
                 checked += 1
