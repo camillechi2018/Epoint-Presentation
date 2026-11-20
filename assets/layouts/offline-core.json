@@ -26,8 +26,12 @@
     "asset": "assets/layouts/tech-content-header.pptx",
     "title_box_inches": [3.98, 0.46, 5.38, 0.47],
     "title_size_pt": 28,
+    "pilot_title_max_width_units": 26,
+    "pilot_wide_title_box_inches": [1.985, 0.456, 9.363, 0.471],
+    "pilot_wide_title_max_width_units": 44,
     "title_color_role": "white",
     "logo_box_inches": [11.98, 0.20, 0.98, 0.21],
+    "pilot_bottom_logo_box_inches": [12.093, 7.082, 0.976, 0.210],
     "canvas_color_role": "canvas",
     "minimum_body_top_inches": 1.55
   },

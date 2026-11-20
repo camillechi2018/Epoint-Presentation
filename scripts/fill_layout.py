@@ -660,9 +660,9 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
             raise ValueError('BODY_HEADER_CONFIGURATION_UNSUPPORTED')
         verify_source(source, source_rel, source_page, body_header)
         title_binding = header_binding(bindings, body_header)
-        body_header_title = checked_title(title_binding, texts, body_header_title)
+        body_header_title = checked_title(title_binding, texts, body_header_title, body_header)
         texts.pop(title_binding['field'], None)
-        texts.pop('page.title', None)
+        texts.pop(title_binding['semantic_path'], None)
         bindings = [binding for binding in bindings if binding is not title_binding]
     known={x['field'] for x in bindings}
     semantic_aliases={x['semantic_path']:x['field'] for x in bindings if x.get('semantic_path')}

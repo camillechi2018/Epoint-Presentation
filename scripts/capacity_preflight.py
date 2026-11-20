@@ -91,7 +91,8 @@ def preflight(library: Path, entry: dict, content: dict, page_title: str | None,
     if contract:
         try:
             title_field = header_binding(bindings, contract)
-            header['body_header_title'] = checked_title(title_field, texts, page_title)
+            header['body_header_title'] = checked_title(title_field, texts, page_title, contract)
+            header['body_header_binding_path'] = title_field['semantic_path']
         except (ValueError, KeyError, TypeError) as exc:
             hard.append({'field': 'page.title', 'rule': str(exc)})
     margins = []

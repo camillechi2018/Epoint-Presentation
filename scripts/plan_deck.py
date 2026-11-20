@@ -11,7 +11,7 @@ from relation_match import (STRUCTURAL_ROLE_ORDER, canonical, load_taxonomy,
 from fallback_rules import fallback_type, fallback_catalog
 from content_adapters import adapt_for_layout
 from capacity_preflight import preflight
-from body_header import contract_for
+from body_header import contract_for, title_path
 
 
 def semantic_fit(page, entry):
@@ -82,7 +82,7 @@ def count_profile(entry, root):
     return [],source_count
 
 
-def binding_gap(entry, page, root, theme, *, replace_header=False):
+def binding_gap(entry, page, root, theme, *, replaced_title_path=None):
     """Count fields not yet mapped by an explicitly prepared template payload."""
     content = page.get('content') if isinstance(page.get('content'), dict) else {}
     content, _ = adapt_for_layout(entry['id'], content, page.get('title'), entry=entry)
@@ -91,7 +91,7 @@ def binding_gap(entry, page, root, theme, *, replace_header=False):
     fields = json.loads((root / binding_rel).read_text(encoding='utf-8-sig'))['fields']
     provided = set(texts)
     return sum(field.get('required', True) is not False
-               and not (replace_header and field.get('semantic_path') == 'page.title')
+               and not (replaced_title_path and field.get('semantic_path') == replaced_title_path)
                and field['field'] not in provided and field.get('semantic_path') not in provided
                for field in fields if field.get('semantic_role') not in
                ('brand_locked', 'decoration_locked', 'computed_item_count') and field['field'] != 'brand')
@@ -305,8 +305,10 @@ def eligible(e, p, request, taxonomy):
                                    and content.get('logo') is None)
     matching_page = p
     texts = content.get('texts')
-    if replaces_title and isinstance(texts, dict) and 'page.title' not in texts and p.get('title'):
-        matching_page = dict(p, content=dict(content, texts=dict(texts, **{'page.title': p['title']})))
+    if replaces_title and isinstance(texts, dict) and p.get('title'):
+        path = title_path(replaces_title)
+        if path not in texts:
+            matching_page = dict(p, content=dict(content, texts=dict(texts, **{path: p['title']})))
     structural_match = matches_structural_discovery(e, matching_page, taxonomy, request['_root'])
     structural_relation_match = matches_structural_relation(e, matching_page, taxonomy)
     contract = e.get('matching_contract') or {}
@@ -460,7 +462,7 @@ def resolve(library,request):
                                      body_header_pilot=request.get('body_header_pilot') is True
                                      and request.get('format', 'pptx') == 'pptx')
             gap=binding_gap(e,p,root,p.get('theme',request.get('theme')),
-                            replace_header='body_header_title' in capacity_check)
+                            replaced_title_path=capacity_check.get('body_header_binding_path'))
             hard_count=len(capacity_check['hard_issues'])
             warning_count=len(capacity_check['advisory'])
             margin=capacity_check['capacity_margin'] if capacity_check['capacity_margin'] is not None else -1

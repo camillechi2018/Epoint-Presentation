@@ -8,7 +8,11 @@ from pathlib import Path
 from text_width import visual_width_units
 
 SKILL = Path(__file__).resolve().parents[1]
-PILOT_LAYOUTS = frozenset({'content-blue-112', 'content-blue-244'})
+PILOT_LAYOUTS = {
+    'blue': frozenset({'content-blue-112', 'content-blue-244'}),
+    'red': frozenset({'content-blue-112', 'content-blue-244'}),
+    'deep-blue-tech': frozenset({'content-tech-021', 'content-tech-028', 'content-tech-058'}),
+}
 
 
 @lru_cache(maxsize=1)
@@ -17,7 +21,7 @@ def frame():
 
 
 def contract_for(entry, theme, enabled):
-    if (not enabled or entry['id'] not in PILOT_LAYOUTS or theme not in ('blue', 'red')
+    if (not enabled or entry['id'] not in PILOT_LAYOUTS.get(theme, ())
             or entry.get('classification_status') != 'verified'
             or entry.get('role') not in ('summary', 'body', 'content')):
         return None
@@ -30,23 +34,46 @@ def contract_for(entry, theme, enabled):
 
 
 def header_binding(bindings, contract):
-    titles = [b for b in bindings if b.get('semantic_path') == 'page.title']
+    titles = [b for b in bindings if b.get('semantic_path') == title_path(contract)]
     if (len(titles) != 1 or titles[0]['shape_id'] != contract['title_id']
             or sum(b['shape_id'] == contract['title_id'] for b in bindings) != 1):
         raise ValueError('BODY_HEADER_BINDING_MISMATCH')
     return titles[0]
 
 
-def checked_title(binding, texts, page_title):
-    if binding['field'] in texts and 'page.title' in texts:
+def title_path(contract):
+    return 'heading' if 'tech' in contract else 'page.title'
+
+
+def frame_spec(contract):
+    layout = frame()
+    if 'tech' not in contract:
+        return layout, 'content_header'
+    tech = contract['tech']
+    variant, logo = tech['variant'], tech['logo_anchor']
+    if variant not in ('standard', 'wide') or logo not in ('top_right', 'bottom_right'):
+        raise ValueError('BODY_HEADER_VARIANT_UNSUPPORTED')
+    spec = dict(layout['tech_content_header'])
+    if variant == 'wide':
+        spec['title_box_inches'] = spec['pilot_wide_title_box_inches']
+        spec['pilot_title_max_width_units'] = spec['pilot_wide_title_max_width_units']
+    if logo == 'bottom_right':
+        spec['logo_box_inches'] = spec['pilot_bottom_logo_box_inches']
+    return dict(layout, tech_content_header=spec), 'tech_content_header'
+
+
+def checked_title(binding, texts, page_title, contract):
+    path = binding['semantic_path']
+    if binding['field'] in texts and path in texts:
         raise ValueError('BODY_HEADER_TITLE_CONFLICT')
-    field_title = texts.get('page.title', texts.get(binding['field']))
+    field_title = texts.get(path, texts.get(binding['field']))
     if page_title is not None and field_title is not None and field_title != page_title:
         raise ValueError('BODY_HEADER_TITLE_CONFLICT')
     title = page_title if page_title is not None else field_title
     if not isinstance(title, str) or not title.strip():
         raise ValueError('BODY_HEADER_TITLE_REQUIRED')
-    max_units = frame()['content_header']['pilot_title_max_width_units']
+    layout, key = frame_spec(contract)
+    max_units = layout[key]['pilot_title_max_width_units']
     if len(title.splitlines()) != 1 or '\n' in title or '\r' in title or visual_width_units(title) > max_units:
         raise ValueError('BODY_HEADER_TITLE_OVER_CAPACITY')
     return title
@@ -68,12 +95,14 @@ def replace_header(presentation, slide, contract, theme, title, logo_enabled):
     from pptx.util import Inches
     from render_offline_brand import PROFILE, add_content_title, add_logo, read_json
 
-    layout = frame()
+    layout, _ = frame_spec(contract)
     canvas = layout['canvas']
     dimensions = (presentation.slide_width, presentation.slide_height)
     expected = (Inches(canvas['width_inches']), Inches(canvas['height_inches']))
     if any(abs(a - b) > 2 for a, b in zip(dimensions, expected)):
         raise ValueError('BODY_HEADER_CANVAS_MISMATCH')
+    if 'tech' in contract:
+        return replace_tech_header(slide, contract, layout, theme, title, logo_enabled)
     wanted = {contract['title_id']: MSO_SHAPE_TYPE.TEXT_BOX,
               contract['rule_id']: MSO_SHAPE_TYPE.LINE,
               contract['logo_id']: MSO_SHAPE_TYPE.PICTURE}
@@ -102,3 +131,41 @@ def replace_header(presentation, slide, contract, theme, title, logo_enabled):
         add_logo(slide, layout, palette, content_header=True)
     return {'frame_id': 'legacy-blue-red-content-header', 'version': 1,
             'removed_shape_ids': sorted(wanted), 'source_sha256': contract['sha256']}
+
+
+def replace_tech_header(slide, contract, layout, theme, title, logo_enabled):
+    from pptx.enum.shapes import MSO_SHAPE_TYPE as Type
+    from pptx.util import Inches, Pt
+    from render_offline_brand import PROFILE, add_content_title, add_logo, add_tech_content_header, read_json
+
+    def locate(shapes, shape_id, kind):
+        matches = [shape for shape in shapes if shape.shape_id == shape_id and shape.shape_type == kind]
+        if len(matches) != 1:
+            raise ValueError(f'BODY_HEADER_OBJECT_MISMATCH: {shape_id}')
+        return matches[0]
+
+    tech = contract['tech']
+    root = locate(slide.shapes, tech['root_id'], Type.GROUP)
+    art = locate(root.shapes, tech['art_id'], Type.GROUP)
+    text_group = locate(root.shapes, tech['text_group_id'], Type.GROUP)
+    title_shape = locate(text_group.shapes, contract['title_id'], Type.TEXT_BOX)
+    logo = locate(slide.shapes, contract['logo_id'], Type.PICTURE)
+    spec = layout['tech_content_header']
+    # Variants occupy the source title and Logo regions. Preserve the nested
+    # summary, background and drawing order even when the title is replaced.
+    for shape, key in ((title_shape, 'title_box_inches'), (logo, 'logo_box_inches')):
+        actual = (shape.left, shape.top, shape.width, shape.height)
+        if any(abs(a - Inches(b)) > Pt(1.5) for a, b in zip(actual, spec[key])):
+            raise ValueError(f'BODY_HEADER_RESERVED_REGION_MISMATCH: {shape.shape_id}')
+    add_tech_content_header(slide, layout, replacing=art._element)
+    for shape in (title_shape, logo):
+        shape._element.getparent().remove(shape._element)
+    profile = read_json(PROFILE)
+    palette = profile['themes'][theme]
+    add_content_title(slide, title, profile, layout, palette, tech_header=True)
+    if logo_enabled:
+        add_logo(slide, layout, palette, content_header=True, tech_header=True)
+    return {'frame_id': 'deep-blue-tech-content-header', 'version': 1,
+            'title_variant': tech['variant'], 'logo_anchor': tech['logo_anchor'],
+            'removed_shape_ids': sorted((tech['art_id'], contract['title_id'], contract['logo_id'])),
+            'source_sha256': contract['sha256']}
