@@ -10,7 +10,8 @@ from relation_match import (STRUCTURAL_ROLE_ORDER, canonical, load_taxonomy,
                             match_relation, match_role, supports_input_structure)
 from fallback_rules import fallback_type, fallback_catalog, uses_minimal_body_layout
 from content_adapters import adapt_for_layout
-from capacity_preflight import preflight
+from capacity_preflight import missing_binding_paths, preflight, required_input_fields
+from body_header import body_components_enabled, contract_for, title_path
 
 
 def semantic_fit(page, entry):
@@ -81,18 +82,13 @@ def count_profile(entry, root):
     return [],source_count
 
 
-def binding_gap(entry, page, root, theme):
+def binding_gap(entry, page, root, theme, *, binding_rel=None):
     """Count fields not yet mapped by an explicitly prepared template payload."""
     content = page.get('content') if isinstance(page.get('content'), dict) else {}
     content, _ = adapt_for_layout(entry['id'], content, page.get('title'), entry=entry)
-    texts = content.get('texts') if isinstance(content.get('texts'), dict) else {}
-    binding_rel = entry[binding_path_key(entry, theme)]
+    binding_rel = binding_rel or entry[binding_path_key(entry, theme)]
     fields = json.loads((root / binding_rel).read_text(encoding='utf-8-sig'))['fields']
-    provided = set(texts)
-    return sum(field.get('required', True) is not False
-               and field['field'] not in provided and field.get('semantic_path') not in provided
-               for field in fields if field.get('semantic_role') not in
-               ('brand_locked', 'decoration_locked', 'computed_item_count') and field['field'] != 'brand')
+    return len(missing_binding_paths(fields, content))
 
 def content_is_four_cards(page):
     content = page.get('content')
@@ -296,8 +292,18 @@ def eligible(e, p, request, taxonomy):
     if e.get('media_status')=='missing-source-image':reasons.append('missing_source_image')
     if str(e.get('pptx_support','')).startswith('blocked_'):reasons.append('pptx_blocked')
     relation=p.get('matching_relation') or p.get('information_relation')
-    structural_match = matches_structural_discovery(e, p, taxonomy, request['_root'])
-    structural_relation_match = matches_structural_relation(e, p, taxonomy)
+    theme=p.get('theme',request.get('theme'))
+    content=p.get('content') if isinstance(p.get('content'),dict) else {}
+    replaces_title = contract_for(e, theme, body_components_enabled(request)
+                                   and content.get('logo') is None)
+    matching_page = p
+    texts = content.get('texts')
+    if replaces_title and isinstance(texts, dict) and p.get('title'):
+        path = title_path(replaces_title)
+        if path not in texts:
+            matching_page = dict(p, content=dict(content, texts=dict(texts, **{path: p['title']})))
+    structural_match = matches_structural_discovery(e, matching_page, taxonomy, request['_root'])
+    structural_relation_match = matches_structural_relation(e, matching_page, taxonomy)
     contract = e.get('matching_contract') or {}
     if e.get('matching_policy') == 'data_contract':
         payload = p.get('content') if isinstance(p.get('content'), dict) else {}
@@ -318,7 +324,6 @@ def eligible(e, p, request, taxonomy):
         relation_matches = True
     if not relation_matches:reasons.append('relation')
     if not matches_strict_contract(e,p):reasons.append('semantic_invariant')
-    theme=p.get('theme',request.get('theme'))
     if theme and theme not in e.get('themes',[]):reasons.append('theme')
     if p.get('format','pptx') in ('html','both') and e.get('html_support')!='verified':reasons.append('html_unavailable')
     if p.get('motion_required') and e.get('motion_support')!='verified':reasons.append('motion_unavailable')
@@ -328,7 +333,7 @@ def eligible(e, p, request, taxonomy):
     if title_chars is None and isinstance(p.get('title'),str):title_chars=len(p['title'])
     if title_chars is not None:
         if type(title_chars) is not int or title_chars<1:reasons.append('invalid_title_length')
-        elif e.get('title_pressure_status')=='tested_short_copy_only':
+        elif e.get('title_pressure_status')=='tested_short_copy_only' and not replaces_title:
             rules=json.loads((request['_root']/e['layout_rules']).read_text(encoding='utf-8'))
             if title_chars>rules.get('title_pressure_test',{}).get('safe_title_chars',0):reasons.append('title_over_capacity')
         if isinstance(p.get('title'),str) and e.get('role') in STRUCTURAL_ROLE_ORDER:
@@ -450,8 +455,10 @@ def resolve(library,request):
             requested_count=need.get('item_count')
             _,native_count=count_profile(e,root) if requested_count is not None else ([],None)
             count_fit=1 if requested_count is not None and requested_count==native_count else 0
-            gap=binding_gap(e,p,root,p.get('theme',request.get('theme')))
-            capacity_check=preflight(root,e,content,p.get('title'),p.get('theme',request.get('theme')))
+            capacity_check=preflight(root,e,content,p.get('title'),p.get('theme',request.get('theme')),
+                                     body_header_pilot=body_components_enabled(request))
+            gap=binding_gap(e,p,root,p.get('theme',request.get('theme')),
+                            binding_rel=capacity_check['binding_path'])
             hard_count=len(capacity_check['hard_issues'])
             warning_count=len(capacity_check['advisory'])
             margin=capacity_check['capacity_margin'] if capacity_check['capacity_margin'] is not None else -1
@@ -462,7 +469,7 @@ def resolve(library,request):
         candidate_summaries=[]
         for row in scored[:12]:
             candidate=row[12]
-            binding_rel = candidate[binding_path_key(candidate, p.get('theme', request.get('theme')))]
+            binding_rel = row[13]['binding_path']
             binding_fields=json.loads((root/binding_rel).read_text(encoding='utf-8-sig'))['fields']
             candidate_summaries.append({
                 'layout_id':candidate['id'],
@@ -471,7 +478,7 @@ def resolve(library,request):
                 'field_roles':sorted({field.get('semantic_role') for field in binding_fields
                                       if field.get('semantic_role') and field.get('semantic_role')
                                       not in ('brand_locked','decoration_locked')}),
-                'required_field_count':len((candidate.get('matching_contract') or {}).get('required_binding_paths',[])),
+                'required_field_count':len(required_input_fields(binding_fields)),
                 'meaning_policy':(candidate.get('matching_contract') or {}).get('policy',candidate.get('matching_policy')),
                 'capacity':candidate.get('capacity'),
                 'media_status':candidate.get('media_status'),

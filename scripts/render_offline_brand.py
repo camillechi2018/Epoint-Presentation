@@ -565,7 +565,7 @@ def add_content_atmosphere(slide, layout: dict, theme_name: str, theme: dict):
         shape._element.spPr.append(effects)
 
 
-def add_tech_content_header(slide, layout: dict):
+def add_tech_content_header(slide, layout: dict, *, placement=None):
     """Reuse the original editable header group and its embedded images."""
     spec = layout["tech_content_header"]
     asset = (SKILL / spec["asset"]).resolve()
@@ -582,7 +582,30 @@ def add_tech_content_header(slide, layout: dict):
             image_part = source_slide.part.related_part(rid)
             _, new_rid = slide.part.get_or_add_image_part(BytesIO(image_part.blob))
             blip.set(qn("r:embed"), new_rid)
-    slide.shapes._spTree.insert_element_before(element, "p:extLst")
+    if placement is None:
+        slide.shapes._spTree.insert_element_before(element, "p:extLst")
+        return
+    # A source page already has shape IDs. Allocate fresh IDs for the imported
+    # decoration and keep its original position among the source objects.
+    next_id = slide.shapes._next_shape_id
+    for node in element.xpath(".//p:cNvPr"):
+        node.set("id", str(next_id))
+        next_id += 1
+    parent, index = placement
+    parent.insert(index, element)
+
+
+def add_content_title(slide, value, profile, layout, theme, *, dark=False, tech_header=False):
+    spec = layout["tech_content_header"] if tech_header else layout["content_header"]
+    ink = theme["neutral"]["white"] if (dark or tech_header) else theme[spec["title_color_role"]]
+    title = text_box(slide, value, *spec["title_box_inches"], spec["title_size_pt"],
+                     ink, profile["typography"]["heading"], bold=not tech_header,
+                     align=PP_ALIGN.CENTER if tech_header else PP_ALIGN.LEFT)
+    title.name = "brand:content-title"
+    if not tech_header:
+        x1, y1, length, _ = spec["rule_inches"]
+        rule = connector(slide, x1, y1, x1 + length, y1, theme["primary"], spec["rule_width_pt"])
+        rule.name = "brand:content-rule"
 
 
 def base_slide(pres: Presentation, profile: dict, layout: dict, theme: dict, index: int,
@@ -607,16 +630,7 @@ def base_slide(pres: Presentation, profile: dict, layout: dict, theme: dict, ind
         tech_header = False
     add_logo(slide, layout, theme, dark=dark, content_header=bool(header), tech_header=tech_header)
     if header:
-        spec = layout["tech_content_header"] if tech_header else layout["content_header"]
-        ink = theme["neutral"]["white"] if (dark or tech_header) else theme[spec["title_color_role"]]
-        title = text_box(slide, header, *spec["title_box_inches"], spec["title_size_pt"],
-                         ink, profile["typography"]["heading"], bold=not tech_header,
-                         align=PP_ALIGN.CENTER if tech_header else PP_ALIGN.LEFT)
-        title.name = "brand:content-title"
-        if not tech_header:
-            x1, y1, length, _ = spec["rule_inches"]
-            rule = connector(slide, x1, y1, x1 + length, y1, theme["primary"], spec["rule_width_pt"])
-            rule.name = "brand:content-rule"
+        add_content_title(slide, header, profile, layout, theme, dark=dark, tech_header=tech_header)
         text_box(slide, f"{index:02d}", 12.15, 7.0, 0.5, 0.28, 10,
                  theme["muted"] if not dark else theme["neutral"]["on_dark_muted"], profile["typography"]["latin_numeric"], align=PP_ALIGN.RIGHT)
     return slide

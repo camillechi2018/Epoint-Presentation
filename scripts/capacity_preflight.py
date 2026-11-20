@@ -9,6 +9,7 @@ from pathlib import Path
 from library_location import binding_path_key
 from content_adapters import adapt_for_layout
 from text_width import visual_width_units
+from body_header import checked_title, contract_for
 
 
 @lru_cache(maxsize=8)
@@ -33,6 +34,19 @@ def _review(root: str):
 def _bindings(path: str):
     file = Path(path)
     return json.loads(file.read_text(encoding='utf-8-sig'))['fields'], hashlib.sha256(file.read_bytes()).hexdigest()
+
+
+def required_input_fields(fields):
+    reserved = {'brand_locked', 'decoration_locked', 'source_decorative_locked', 'computed_item_count'}
+    return [field for field in fields if field.get('required', True) is not False
+            and field.get('semantic_role') not in reserved and field['field'] != 'brand']
+
+
+def missing_binding_paths(fields, content):
+    texts = content.get('texts')
+    provided = set(texts) if isinstance(texts, dict) else set()
+    return [field.get('semantic_path') or field['field'] for field in required_input_fields(fields)
+            if field['field'] not in provided and field.get('semantic_path') not in provided]
 
 
 def _safe_wrap(value: str, width: int, max_lines: int, max_chars: int,
@@ -74,16 +88,27 @@ def _safe_wrap(value: str, width: int, max_lines: int, max_chars: int,
 
 
 def preflight(library: Path, entry: dict, content: dict, page_title: str | None,
-              theme: str) -> dict:
+              theme: str, *, body_header_pilot=False) -> dict:
     """Return hard binding failures, advisory long-copy pressure and wrap options."""
     library = Path(library).resolve()
     mapped, adapter = adapt_for_layout(entry['id'], content, page_title, entry=entry)
     texts = mapped.get('texts') if isinstance(mapped.get('texts'), dict) else {}
-    binding_rel = entry[binding_path_key(entry, theme)]
+    contract = contract_for(entry, theme, body_header_pilot and content.get('logo') is None)
+    binding_rel = contract['bindings'] if contract else entry[binding_path_key(entry, theme)]
     bindings, binding_sha = _bindings(str(library / binding_rel))
     longcopy, policy, longcopy_sha, policy_sha = _review(str(library))
     reviewed_fields = longcopy.get(entry['id'], {})
     hard, advisory, wrap_suggestions, details = [], [], {}, []
+    header = {}
+    if contract:
+        try:
+            title_field = contract['title_input']
+            if binding_sha != contract['bindings_sha256']:
+                raise ValueError('BODY_HEADER_BINDING_HASH_MISMATCH')
+            header['body_header_title'] = checked_title(title_field, texts, page_title, contract)
+            header['body_header_binding_path'] = title_field['semantic_path']
+        except (ValueError, KeyError, TypeError) as exc:
+            hard.append({'field': 'page.title', 'rule': str(exc)})
     margins = []
     near_hard = policy.get('near_hard_limit_ratio', .85)
     near_reviewed = policy.get('near_recommended_limit_ratio', .9)
@@ -119,6 +144,16 @@ def preflight(library: Path, entry: dict, content: dict, page_title: str | None,
                                          'rule': 'mid_phrase_wrap_review'})
             else:
                 reasons.append('max_width_units')
+        # The pilot's reviewed wrap width improves line breaks without lowering
+        # the existing binding limits or changing any supplied words.
+        wrap_width = contract.get('preferred_body_wrap_width_units') if contract else None
+        if (not reasons and key not in wrap_suggestions and field.get('semantic_role') == 'body'
+                and isinstance(wrap_width, int) and wrap_width > 0
+                and len(lines) == 1 and widths[0] > wrap_width):
+            suggestion = _safe_wrap(value, wrap_width, min(line_limit or 1, 2), char_limit or 9999)
+            if suggestion:
+                wrap_suggestions[key] = suggestion
+                advisory.append({'field': semantic or field['field'], 'rule': 'body_header_pilot_wrap'})
         for reason in reasons:
             hard.append({'field': semantic or field['field'], 'rule': reason,
                          'actual_chars': len(value), 'binding_field': field['field']})
@@ -153,7 +188,7 @@ def preflight(library: Path, entry: dict, content: dict, page_title: str | None,
     rules_sha = hashlib.sha256(rules_file.read_bytes()).hexdigest() if rules_file and rules_file.is_file() else None
     title_pressure = rules.get('title_pressure_test') or {}
     safe_title_chars = title_pressure.get('safe_title_chars')
-    if isinstance(safe_title_chars, int) and page_title and len(page_title) > safe_title_chars:
+    if not contract and isinstance(safe_title_chars, int) and page_title and len(page_title) > safe_title_chars:
         advisory.append({'field': 'page.title', 'rule': 'layout_title_pressure',
                          'actual_chars': len(page_title), 'safe_title_chars': safe_title_chars})
     return {'status': ('hard_overflow' if hard else 'wrap_possible' if wrap_suggestions else
@@ -163,4 +198,5 @@ def preflight(library: Path, entry: dict, content: dict, page_title: str | None,
             'fields': details, 'binding_path': binding_rel, 'binding_sha256': binding_sha,
             'longcopy_sha256': longcopy_sha, 'policy_sha256': policy_sha,
             'layout_rules_sha256': rules_sha,
-            'layout_title_pressure_safe_chars': safe_title_chars}
+            'layout_title_pressure_safe_chars': safe_title_chars if not contract else None,
+            **header}

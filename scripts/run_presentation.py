@@ -20,6 +20,7 @@ from office_runtime import probe as probe_office, assemble as assemble_office
 from delivery_status import assess as assess_delivery, exit_code as delivery_exit_code
 from assembly_backend import BACKENDS, select_backend
 from relation_match import STRUCTURAL_ROLE_ORDER as STRUCTURAL
+from body_header import body_components_enabled
 
 
 def _load_workflow():
@@ -264,7 +265,8 @@ def execute_plan(request, plan, report, output: Path):
                             'content_adapter': None})
                         continue
                 capacity_check = capacity_preflight(Path(report['library_path']), entry, data,
-                                            page.get('title'), report['theme'])
+                                            page.get('title'), report['theme'],
+                                            body_header_pilot=body_components_enabled(request))
                 if capacity_check['hard_issues']:
                     choice['trial_results'].append({
                         'layout_id': candidate_id, 'status': 'rejected',
@@ -280,8 +282,13 @@ def execute_plan(request, plan, report, output: Path):
                     candidate_content_path = work / f'P{index:03d}-{candidate_id}-content.json'
                     candidate_content_path.write_text(json.dumps(candidate_data, ensure_ascii=False, indent=2), encoding='utf-8')
                 try:
-                    filled = fill(Path(report['library_path']), candidate_id, candidate_content_path, page_out,
-                                  allow_draft=request.get('asset_policy', 'verified_draft') != 'approved_only')
+                    library = Path(report['library_path'])
+                    fill_options = {'allow_draft': request.get('asset_policy', 'verified_draft') != 'approved_only'}
+                    if 'body_header_title' in capacity_check:
+                        fill_options['body_header_title'] = capacity_check['body_header_title']
+                    filled = fill(library, candidate_id, candidate_content_path, page_out, **fill_options)
+                    if filled.get('body_header'):
+                        choice['body_header'] = filled['body_header']
                     choice['layout_id'] = candidate_id
                     choice['trial_results'].append({'layout_id': candidate_id, 'status': 'filled',
                                                     'visual_qa': 'not_run', 'content_adapter': adapter,
@@ -380,6 +387,7 @@ def execute_plan(request, plan, report, output: Path):
                             if page.get('role') == 'directory' else None,
                             'selection_mode': choice['selection_mode'], 'selection_label': choice['selection_label'],
                             'source_stamp': stamp,
+                            **({'body_header': choice['body_header']} if choice.get('body_header') else {}),
                             'data_source': page.get('data_source') or content.get('data_source'),
                             'image_sources': page.get('image_sources') or free_images or ([content['image_path']] if content.get('image_path') else None)})
     assembly = {'theme': report['theme'], 'library_commit': report['library_commit'],
