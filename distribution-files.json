@@ -206,6 +206,7 @@
     "scripts/select_cover.py",
     "scripts/select_layout.py",
     "scripts/structure_content.py",
+    "scripts/tech_background.py",
     "scripts/text_width.py"
   ]
 }

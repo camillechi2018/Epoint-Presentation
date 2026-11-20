@@ -24,11 +24,15 @@ def contract_for(entry, theme, enabled):
             or entry.get('role') in ('cover', 'directory', 'section', 'closing')):
         return None
     contract = entry.get('body_component_contract')
-    if not isinstance(contract, dict) or contract.get('version') != 2:
+    if not isinstance(contract, dict) or contract.get('version') not in (2, 3):
         return None
     themes = contract.get('themes')
     value = themes.get(theme) if isinstance(themes, dict) else None
-    return value if isinstance(value, dict) else None
+    if not isinstance(value, dict):
+        return None
+    if contract['version'] == 3 and theme == 'deep-blue-tech' and value.get('background') != 'skill_tech':
+        return None
+    return value
 
 
 def title_path(contract):
@@ -89,6 +93,9 @@ def attach_header(presentation, slide, contract, theme, title, logo_enabled):
     if any(abs(a - b) > 2 for a, b in zip(dimensions, expected)):
         raise ValueError('BODY_HEADER_CANVAS_MISMATCH')
     tech = contract.get('tech')
+    if contract.get('background') == 'skill_tech':
+        from tech_background import apply_tech_background
+        apply_tech_background(slide, layout)
     if tech and not tech.get('omit_art'):
         parent, index = tech_art_placement(slide, tech)
         add_tech_content_header(slide, layout, placement=(parent, index))
@@ -102,6 +109,8 @@ def attach_header(presentation, slide, contract, theme, title, logo_enabled):
               'removed_shape_ids': contract['removed_shape_ids']}
     if tech:
         report.update(title_variant=tech['variant'], logo_anchor=tech['logo_anchor'])
+    if contract.get('background') == 'skill_tech':
+        report.update(version=3, background='skill_tech')
     return report
 
 

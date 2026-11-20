@@ -101,7 +101,12 @@ def assemble_and_check(assembly: dict, manifest: Path, output: Path,
     inputs = [Path(item['path']) for item in assembly['slides']]
     if len(inputs) < 2:
         raise ValueError('AT_LEAST_TWO_SOURCE_SLIDES_REQUIRED')
-    result = assemble_many(inputs, output)
+    background = ()
+    if assembly['theme'] == 'deep-blue-tech':
+        from body_header import frame
+        from tech_background import shared_background_media
+        background = shared_background_media(frame())
+    result = assemble_many(inputs, output, shared_background_media=background)
     stamp_source_pages(output, assembly['slides'])
     normalize(output, output, profile=assembly['font_profile'])
     package = _basic_package_audit(output)

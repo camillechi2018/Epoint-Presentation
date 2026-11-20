@@ -24,7 +24,7 @@
   "tech_content_header": {
     "source": "科技风知识库 content-tech-021 的顶部原生图形组；仅用于技能排版和自由编排正文页",
     "asset": "assets/layouts/tech-content-header.pptx",
-    "title_box_inches": [3.98, 0.46, 5.38, 0.47],
+    "title_box_inches": [3.67, 0.32, 6.00, 0.47],
     "title_size_pt": 28,
     "pilot_title_max_width_units": 26,
     "pilot_wide_title_box_inches": [1.985, 0.456, 9.363, 0.471],

@@ -1,4 +1,4 @@
-"""Restore primary PNG image references lost while PowerPoint merges SVG pictures."""
+"""Restore PNG fallbacks lost while PowerPoint merges SVG artwork."""
 from __future__ import annotations
 
 import argparse
@@ -10,6 +10,9 @@ from pathlib import Path
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 from pptx.oxml.ns import qn
+
+from body_header import frame
+from tech_background import restore_tech_background_fallback
 
 
 def walk(shapes):
@@ -31,6 +34,7 @@ def missing_primary(slide):
 def repair(input_path: Path, manifest_path: Path | None, check: bool = False) -> dict:
     presentation = Presentation(input_path)
     records = []
+    backgrounds = []
     sources = None
     if not check:
         if manifest_path is None:
@@ -70,7 +74,13 @@ def repair(input_path: Path, manifest_path: Path | None, check: bool = False) ->
                 blip.set(qn('r:embed'), rid)
                 record['png_bytes'] = len(blob)
             records.append(record)
-    if sources is not None and records:
+    if sources is not None and plan.get('theme') == 'deep-blue-tech':
+        for index, (page, slide) in enumerate(zip(plan.get('pages', []), presentation.slides), 1):
+            managed = (page.get('selection_mode') in ('guided_composition', 'free_composition')
+                       or page.get('body_header', {}).get('background') == 'skill_tech')
+            if managed and restore_tech_background_fallback(slide, frame()):
+                backgrounds.append(index)
+    if sources is not None and (records or backgrounds):
         temp = input_path.with_name(input_path.stem + f'.media-{uuid.uuid4().hex}.pptx')
         presentation.save(temp)
         # PowerPoint COM can release the destination a moment after Close().
@@ -103,6 +113,7 @@ def repair(input_path: Path, manifest_path: Path | None, check: bool = False) ->
             except Exception as error:
                 broken.append({'slide': index, 'shape_id': shape.shape_id, 'error': str(error)})
     return {'slide_count': len(presentation.slides), 'restored': len(records) if not check else 0,
+            'restored_master_backgrounds': backgrounds,
             'missing_primary': remaining, 'broken_primary': broken,
             'records': records, 'passed': remaining == 0 and not broken}
 

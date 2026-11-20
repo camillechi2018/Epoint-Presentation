@@ -5,6 +5,7 @@ from pptx import Presentation
 from pptx.util import Inches, Pt
 
 from relation_match import STRUCTURAL_ROLES
+from tech_background import uses_shared_tech_background
 
 SKILL=Path(__file__).resolve().parents[1]
 
@@ -28,18 +29,23 @@ def audit(plan_path,pptx_path):
     seen=[]
     for n,slide in enumerate(p.slides,1):
         info=pages[n-1] if n<=len(pages) else {}
+        if info.get('body_header',{}).get('background') == 'skill_tech' and not uses_shared_tech_background(slide,offline_layout):
+            add('P0',n,'body_component_tech_background','知识库纯正文未使用科技风公共背景')
         if info.get('selection_mode') in {'guided_composition','free_composition'}:
             spec=offline_layout['content_atmosphere']
             theme=plan.get('theme')
             tech_header=theme=='deep-blue-tech'
-            expected=[] if tech_header else spec['circles_by_theme'].get(theme)
+            expected=spec['circles_by_theme'].get(theme)
             shapes=list(slide.shapes)
-            if expected is None or len(shapes)<len(expected)+1 or [shape.name for shape in shapes[:len(expected)+1]] != ['brand:canvas']+[f'brand:atmosphere:{i}' for i in range(1,len(expected)+1)]:
+            if tech_header:
+                if not uses_shared_tech_background(slide,offline_layout):
+                    add('P0',n,'new_drawn_tech_background','新绘正文未使用科技风公共背景')
+                if not shapes or shapes[0].shape_type!=6:
+                    add('P0',n,'new_drawn_tech_header','科技风原生标题栏图形组缺失')
+            elif expected is None or len(shapes)<len(expected)+1 or [shape.name for shape in shapes[:len(expected)+1]] != ['brand:canvas']+[f'brand:atmosphere:{i}' for i in range(1,len(expected)+1)]:
                 add('P0',n,'new_drawn_background','新绘正文画布或弥散层缺失、顺序错误')
             elif str(shapes[0].fill.fore_color.rgb) != brand['themes'][theme]['canvas']:
                 add('P0',n,'new_drawn_canvas','新绘正文画布底色与主题变量不一致')
-            elif tech_header and (len(shapes)<2 or shapes[1].shape_type!=6):
-                add('P0',n,'new_drawn_tech_header','科技风原生标题栏图形组缺失')
             else:
                 for shape,item in zip(shapes[1:len(expected)+1],expected):
                     alpha=shape._element.xpath('./p:spPr/a:solidFill/a:srgbClr/a:alpha')

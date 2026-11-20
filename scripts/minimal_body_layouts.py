@@ -18,6 +18,7 @@ LEFT, RIGHT, TOP, BOTTOM = 0.74, 12.59, 1.60, 6.70
 
 @dataclass
 class Body:
+    tech_theme: bool = False
     text_boxes: list = field(default_factory=list)
     rules: list = field(default_factory=list)
     panels: list = field(default_factory=list)
@@ -30,8 +31,9 @@ class Body:
     def rule(self, x, y, right=RIGHT):
         self.rules.append((x, y, right))
 
-    def panel(self, x, y, width, height, fill, *, border=None, name=None, rounding=0.0, black_overlay=0.0):
-        self.panels.append(((x, y, width, height), fill, border, name, rounding, black_overlay))
+    def panel(self, x, y, width, height, fill, *, border=None, name=None, rounding=0.0,
+              black_overlay=0.0, opacity=1.0):
+        self.panels.append(((x, y, width, height), fill, border, name, rounding, black_overlay, opacity))
 
     def band(self, value):
         if value is not None:
@@ -40,16 +42,16 @@ class Body:
 
     def draw(self, slide, profile, theme, text_box, rectangle, connector):
         typography = profile["typography"]
-        for geometry, fill, border, name, rounding, black_overlay in self.panels:
+        for geometry, fill, border, name, rounding, black_overlay, opacity in self.panels:
             target = slide.shapes.add_group_shape() if black_overlay else slide
             corners = {"rounded": rounding > 0, "corner_adjustment": rounding}
             shape = rectangle(target, *geometry, theme[fill], theme[border] if border else None,
                               **corners)
+            if opacity < 1.0:
+                _set_opacity(shape, opacity)
             if black_overlay:
                 overlay = rectangle(target, *geometry, theme["neutral"]["black"], **corners)
-                alpha = OxmlElement("a:alpha")
-                alpha.set("val", str(round(black_overlay * 100000)))
-                overlay._element.spPr.solidFill.srgbClr.append(alpha)
+                _set_opacity(overlay, black_overlay)
             if name:
                 (target if black_overlay else shape).name = name
         for x, y, right in self.rules:
@@ -60,6 +62,12 @@ class Body:
                      typography["heading" if bold else "body"], bold=bold, valign=MSO_ANCHOR.TOP)
         if self.table:
             _draw_table(slide, self.table, typography, theme)
+
+
+def _set_opacity(shape, opacity):
+    alpha = OxmlElement("a:alpha")
+    alpha.set("val", str(round(opacity * 100000)))
+    shape._element.spPr.solidFill.srgbClr.append(alpha)
 
 
 def _check_text(value, width, height, size):
@@ -124,7 +132,9 @@ def _split_summary(page, body):
     support_left = panel_left + panel_width + .40
     detail_left = 7.58
     body.panel(panel_left, TOP, panel_width, BOTTOM - TOP, "primary",
-               name="body:summary-panel", rounding=.04, black_overlay=.20)
+               name="body:summary-panel", rounding=.04,
+               black_overlay=0.0 if body.tech_theme else .20,
+               opacity=.40 if body.tech_theme else 1.0)
     body.text(lead.get("title"), text_left, TOP + .40, text_width, 1.13, 23, "white", bold=True)
     body.text(lead.get("body"), text_left, 3.24, text_width, 2.87, 17, "white")
     _rows(body, _items(page, "support", 2, 5), x=support_left, y=TOP, width=RIGHT - support_left,
@@ -361,8 +371,8 @@ def verify_header_title(title, spec, index):
         raise ValueError(f"第 {index} 页标题超出当前主题的公共页眉容量，请使用更短的页标题") from exc
 
 
-def compose(page, kind, index):
-    body = Body()
+def compose(page, kind, index, *, tech_theme=False):
+    body = Body(tech_theme=tech_theme)
     draw = {
         "rule_list": _rule_list,
         "deadline_process": _deadline_process,

@@ -32,6 +32,7 @@ from fallback_rules import MINIMAL_BODY_TYPES, fallback_type, fallback_catalog, 
 from minimal_body_layouts import compose as compose_minimal_body, verify_header_title
 from relation_match import STRUCTURAL_ROLE_ORDER
 from free_composition import render_free_page
+from tech_background import apply_tech_background, uses_shared_tech_background
 
 
 SKILL = Path(__file__).resolve().parents[1]
@@ -611,23 +612,22 @@ def add_content_title(slide, value, profile, layout, theme, *, dark=False, tech_
 def base_slide(pres: Presentation, profile: dict, layout: dict, theme: dict, index: int,
                *, dark=False, header=None):
     slide = pres.slides.add_slide(pres.slide_layouts[6])
-    background = theme["canvas"] if not dark else theme["closing_canvas"]
-    slide.background.fill.solid()
-    slide.background.fill.fore_color.rgb = rgb(background)
-    if header:
+    tech_header = bool(header) and theme is profile["themes"]["deep-blue-tech"]
+    if tech_header:
+        apply_tech_background(slide, layout)
+        add_tech_content_header(slide, layout)
+    else:
+        background = theme["canvas"] if not dark else theme["closing_canvas"]
+        slide.background.fill.solid()
+        slide.background.fill.fore_color.rgb = rgb(background)
+    if header and not tech_header:
         # PowerPoint may discard a slide background when InsertFromFile clones
         # the source design. A native bottom rectangle preserves the canvas.
         canvas = rectangle(slide, 0, 0, layout["canvas"]["width_inches"],
                            layout["canvas"]["height_inches"], background)
         canvas.name = "brand:canvas"
         theme_name = next(name for name, values in profile["themes"].items() if values is theme)
-        tech_header = theme_name == "deep-blue-tech"
-        if tech_header:
-            add_tech_content_header(slide, layout)
-        else:
-            add_content_atmosphere(slide, layout, theme_name, theme)
-    else:
-        tech_header = False
+        add_content_atmosphere(slide, layout, theme_name, theme)
     add_logo(slide, layout, theme, dark=dark, content_header=bool(header), tech_header=tech_header)
     if header:
         add_content_title(slide, header, profile, layout, theme, dark=dark, tech_header=tech_header)
@@ -1200,10 +1200,12 @@ def render_page(pres, page, index, profile, layout, theme):
     head = profile["typography"]["heading"]
     body = profile["typography"]["body"]
     if uses_minimal_body_layout(kind, page.get("variant")):
-        header = layout["tech_content_header" if theme is profile["themes"]["deep-blue-tech"] else "content_header"]
+        tech_theme = theme is profile["themes"]["deep-blue-tech"]
+        header = layout["tech_content_header" if tech_theme else "content_header"]
         verify_header_title(page["title"], header, index)
         slide = base_slide(pres, profile, layout, theme, index, header=page["title"])
-        compose_minimal_body(page, kind, index).draw(slide, profile, theme, text_box, rectangle, connector)
+        body_layout = compose_minimal_body(page, kind, index, tech_theme=tech_theme)
+        body_layout.draw(slide, profile, theme, text_box, rectangle, connector)
     elif kind == "assertion_evidence":
         slide = render_assertion_evidence(pres, page, index, profile, layout, theme)
     elif kind == "priority_grid":
@@ -1472,13 +1474,16 @@ def render(plan: dict, output: Path):
         tech_header = theme_name == "deep-blue-tech"
         expected_atmosphere = [] if tech_header else atmosphere_spec["circles_by_theme"][theme_name]
         shapes_in_order = list(slide.shapes)
-        if (not shapes_in_order or shapes_in_order[0].name != "brand:canvas"
-            or shapes_in_order[0].fill.fore_color.rgb != rgb(theme["canvas"])
-            or len(atmosphere) != len(expected_atmosphere)
-            or shapes_in_order[1:1+len(atmosphere)] != atmosphere):
+        if tech_header:
+            if not uses_shared_tech_background(slide, layout) or atmosphere:
+                raise RuntimeError(f"第 {n} 页未使用科技风公共背景")
+            if not shapes_in_order or shapes_in_order[0].shape_type != 6:
+                raise RuntimeError(f"第 {n} 页科技风标题栏原生图形组缺失")
+        elif (not shapes_in_order or shapes_in_order[0].name != "brand:canvas"
+              or shapes_in_order[0].fill.fore_color.rgb != rgb(theme["canvas"])
+              or len(atmosphere) != len(expected_atmosphere)
+              or shapes_in_order[1:1+len(atmosphere)] != atmosphere):
             raise RuntimeError(f"第 {n} 页底层弥散形状缺失或层级错误")
-        if tech_header and (len(shapes_in_order) < 2 or shapes_in_order[1].shape_type != 6):
-            raise RuntimeError(f"第 {n} 页科技风标题栏原生图形组缺失")
         for shape, item in zip(atmosphere, expected_atmosphere):
             alpha = shape._element.xpath("./p:spPr/a:solidFill/a:srgbClr/a:alpha")
             soft_edge = shape._element.xpath("./p:spPr/a:effectLst/a:softEdge")

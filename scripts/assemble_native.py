@@ -49,7 +49,11 @@ def one_slide(files):
     return resolve('ppt/presentation.xml', target)
 
 
-def _merge_one(out, source):
+def media_key(path, data):
+    return posixpath.splitext(path)[1].lstrip('.'), data
+
+
+def _merge_one(out, source, shared_media):
     second_slide = one_slide(source)
     source_types = xml(source['[Content_Types].xml'])
     overrides = {x.attrib['PartName'].lstrip('/'): x.attrib['ContentType']
@@ -70,6 +74,11 @@ def _merge_one(out, source):
                 return existing[0]
         if old not in source:
             raise ValueError('SOURCE_RELATION_MISSING: ' + old)
+        key = media_key(old, source[old]) if shared_media and old.startswith('ppt/media/') else None
+        shared = shared_media.get(key)
+        if shared is not None:
+            copied[old] = shared
+            return shared
         folder, name = posixpath.split(old)
         conventional = {'ppt/slides': 'slide', 'ppt/slideLayouts': 'slideLayout',
                         'ppt/slideMasters': 'slideMaster', 'ppt/theme': 'theme'}
@@ -83,6 +92,8 @@ def _merge_one(out, source):
             number += 1
         copied[old] = candidate
         out[candidate] = source[old]
+        if key in shared_media:
+            shared_media[key] = candidate
         if old in overrides:
             ET.SubElement(out_types, '{' + CT + '}Override',
                           {'PartName': '/' + candidate, 'ContentType': overrides[old]})
@@ -186,19 +197,26 @@ def _merge_one(out, source):
     return len(copied), len(masters)
 
 
-def assemble_many(inputs, output):
+def assemble_many(inputs, output, *, shared_background_media=()):
     inputs = tuple(Path(item) for item in inputs)
     if len(inputs) < 2:
         raise ValueError('AT_LEAST_TWO_SOURCE_SLIDES_REQUIRED')
     with ZipFile(inputs[0]) as z:
         out = {name: z.read(name) for name in z.namelist() if not name.endswith('/')}
     one_slide(out)
+    shared = dict.fromkeys(shared_background_media)
+    if shared:
+        for name, data in out.items():
+            if name.startswith('ppt/media/'):
+                key = media_key(name, data)
+                if key in shared:
+                    shared[key] = name
     copied_total = 0
     registered_masters = 0
     for source_path in inputs[1:]:
         with ZipFile(source_path) as z:
             source = {name: z.read(name) for name in z.namelist() if not name.endswith('/')}
-        copied_count, registered_masters = _merge_one(out, source)
+        copied_count, registered_masters = _merge_one(out, source, shared)
         copied_total += copied_count
     with ZipFile(output, 'w', ZIP_DEFLATED) as z:
         for name, data in out.items():
