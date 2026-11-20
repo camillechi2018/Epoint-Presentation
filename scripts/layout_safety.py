@@ -6,9 +6,20 @@ arrows are never guessed or moved automatically. Rendering QA is still required.
 from pathlib import Path
 import argparse,json
 from pptx import Presentation
+from pptx.enum.shapes import MSO_SHAPE_TYPE
 from pptx.enum.text import MSO_AUTO_SIZE
 
 EMU_PER_PT=12700
+
+
+def walk_shapes(shapes):
+    """Yield each shape, then any children in the group's drawing order."""
+    for shape in shapes:
+        yield shape
+        if shape.shape_type == MSO_SHAPE_TYPE.GROUP:
+            yield from walk_shapes(shape.shapes)
+
+
 def world_shapes(shapes,transform=(1.,1.,0.,0.)):
     sx,sy,tx,ty=transform
     for sh in shapes:

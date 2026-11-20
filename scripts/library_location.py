@@ -104,10 +104,6 @@ def verified_full_cache(cfg, marker):
     return root, commit
 
 
-def git_library(cfg):
-    return online_snapshot(cfg, _git, validate_manifest)[0]
-
-
 def validate_manifest(root, cfg):
     """Validate every distributed file before a checkout becomes reusable."""
     root = Path(root).resolve()

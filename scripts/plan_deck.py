@@ -90,14 +90,6 @@ def binding_gap(entry, page, root, theme, *, binding_rel=None):
     fields = json.loads((root / binding_rel).read_text(encoding='utf-8-sig'))['fields']
     return len(missing_binding_paths(fields, content))
 
-def content_is_four_cards(page):
-    content = page.get('content')
-    return (page.get('role') in (None, 'body', 'content', 'summary')
-            and page.get('information_relation') in (None, 'parallel-points', 'summary')
-            and isinstance(content, dict) and content.get('type') == 'cards'
-            and isinstance(content.get('items'), list) and len(content['items']) == 4)
-
-
 STRUCTURAL_RELATION_GROUPS = {
     'parallel-points': {'parallel-points', 'summary', 'framework'},
     'framework': {'parallel-points', 'framework', 'hierarchy', 'summary'},

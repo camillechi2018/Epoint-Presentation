@@ -6,6 +6,7 @@ from pptx import Presentation
 from relation_match import STRUCTURAL_ROLES
 from tech_background import uses_shared_tech_background
 from body_background import blue_red_background_issue
+from layout_safety import walk_shapes
 
 SKILL=Path(__file__).resolve().parents[1]
 
@@ -22,10 +23,6 @@ def audit(plan_path,pptx_path):
         raise ValueError('必用知识库页面的来源验收须提供完整 library_commit')
     def add(level,slide,code,detail):issues.append({'severity':level,'slide':slide,'code':code,'detail':detail})
     if len(p.slides)!=len(pages):add('P0',0,'page_count',f'计划{len(pages)}页，成稿{len(p.slides)}页')
-    def walk(shapes):
-        for sh in shapes:
-            yield sh
-            if sh.shape_type==6:yield from walk(sh.shapes)
     seen=[]
     for n,slide in enumerate(p.slides,1):
         info=pages[n-1] if n<=len(pages) else {}
@@ -52,7 +49,7 @@ def audit(plan_path,pptx_path):
             prefix=f"epoint:{info.get('layout_id')}:{plan.get('theme')}:"
             if not isinstance(expected,str) or not expected.startswith(prefix) or not expected.endswith(f':{commit}') or actual!=f'{expected}:{n}':
                 add('P0',n,'template_source','成稿页的模板、主题、原稿页或知识库版本与清单不一致')
-        texts=[sh.text.strip() for sh in walk(slide.shapes) if sh.has_text_frame and sh.text.strip()]
+        texts=[sh.text.strip() for sh in walk_shapes(slide.shapes) if sh.has_text_frame and sh.text.strip()]
         joined=' '.join(texts)
         if re.search(r'\[.{1,25}\]|单击添加|点击添加|汇报人：WPS|金山办公软件',joined):add('P0',n,'placeholder_or_source_example','发现占位或源模板示例文字')
         if info.get('role')=='data-chart' and not info.get('data_source'):add('P0',n,'chart_source','计划缺少图表数据来源')

@@ -18,7 +18,7 @@ from pptx.util import Pt
 from PIL import Image
 import sys
 sys.path.insert(0,str(Path(__file__).resolve().parent))
-from layout_safety import apply_constraints
+from layout_safety import apply_constraints, walk_shapes as walk
 from logo_brand import add_logo, load_config, settings as logo_settings
 from materialize_component_colors import freeze as materialize_component_colors
 NS={'a':'http://schemas.openxmlformats.org/drawingml/2006/main'}
@@ -35,10 +35,6 @@ _VARIABLE_COUNT_MODES = (
 )
 
 
-def walk(ss):
-    for s in ss:
-        yield s
-        if s.shape_type==6:yield from walk(s.shapes)
 def set_text(sh,text):
     tf=sh.text_frame;p0=deepcopy(tf.paragraphs[0]._p)
     for c in list(tf._txBody):
@@ -1290,24 +1286,22 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
     cardinality_result=apply_cardinality(s,rules,item_count,data.get('items'),theme)
     schedule_result=apply_project_schedule(s,rules,data['tasks']) if rules.get('cardinality_mode')=='project_schedule' else None
     header_result = None
+    replace_source_logo = bool(source_logo_present and logo_enabled and m.get('replace_source_logo'))
     if body_header:
         header_result = attach_header(p, s, body_header, theme, body_header_title, logo_enabled)
         logo_result = {'added': logo_enabled, 'reason': 'skill_body_header', 'visual_qa': 'not_run'}
     elif source_logo_present and m.get('role')=='cover' and not source_logo_shape_id:
         if not logo_enabled:raise ValueError('该源封面内置 Logo；关闭 Logo 需先完成品牌对象拆分验收')
         logo_result={'added':False,'reason':'source_logo_preserved','visual_qa':'not_run'}
-    elif source_logo_present and logo_enabled and m.get('replace_source_logo'):
-        logo_layout=dict(m)
-        if theme=='red' and m.get('red_source_page'):
-            logo_layout['preview']=m.get('red_preview',f"source-previews/red/P{m['red_source_page']:03d}.png")
-        logo_result=add_logo(p,s,logo_layout,lib,logo_config,logo_override,logo_shape,replace_existing=True,theme=theme)
-    elif source_logo_present:
+    elif source_logo_present and not replace_source_logo:
         logo_result={'added':False,'reason':'source_logo_preserved' if logo_enabled else 'source_logo_removed','visual_qa':'not_run'}
     else:
         logo_layout=dict(m)
         if theme=='red' and m.get('red_source_page'):
             logo_layout['preview']=m.get('red_preview',f"source-previews/red/P{m['red_source_page']:03d}.png")
-        logo_result=add_logo(p,s,logo_layout,lib,logo_config,logo_override,brand_slot,theme=theme)
+        anchor = logo_shape if replace_source_logo else brand_slot
+        logo_result=add_logo(p,s,logo_layout,lib,logo_config,logo_override,anchor,
+                             replace_existing=replace_source_logo,theme=theme)
     if source_stamp:
         s._element.cSld.set('name',source_stamp)
     out.parent.mkdir(parents=True,exist_ok=True);p.save(out);font_normalization=normalize(out,out)

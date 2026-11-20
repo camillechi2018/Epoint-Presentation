@@ -12,14 +12,8 @@ from pptx.enum.shapes import MSO_SHAPE_TYPE
 from pptx.oxml.ns import qn
 
 from body_header import frame
+from layout_safety import walk_shapes as walk
 from tech_background import restore_tech_background_fallback
-
-
-def walk(shapes):
-    for shape in shapes:
-        yield shape
-        if shape.shape_type == MSO_SHAPE_TYPE.GROUP:
-            yield from walk(shape.shapes)
 
 
 def missing_primary(slide):
