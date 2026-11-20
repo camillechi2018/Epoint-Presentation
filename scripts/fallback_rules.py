@@ -12,6 +12,8 @@ MINIMAL_BODY_VARIANTS = {
     "priority_grid": {"summary_split"},
     "process": {"open_steps"},
     "data_table": {"side_notes", "top_notes"},
+    "layered_architecture": {"nested_scope"},
+    "comparison_chart": {"range_scale"},
 }
 
 

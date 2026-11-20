@@ -20,7 +20,7 @@ LEFT, RIGHT, TOP, BOTTOM = 0.74, 12.59, 1.60, 6.70
 class Body:
     text_boxes: list = field(default_factory=list)
     rules: list = field(default_factory=list)
-    bands: list = field(default_factory=list)
+    panels: list = field(default_factory=list)
     table: tuple | None = None
 
     def text(self, value, x, y, width, height, size=16, color="text", *, bold=False):
@@ -30,15 +30,20 @@ class Body:
     def rule(self, x, y, right=RIGHT):
         self.rules.append((x, y, right))
 
+    def panel(self, x, y, width, height, fill, *, border=None, name=None):
+        self.panels.append(((x, y, width, height), fill, border, name))
+
     def band(self, value):
         if value is not None:
-            self.bands.append((LEFT, 6.02, RIGHT - LEFT, 0.65))
+            self.panel(LEFT, 6.02, RIGHT - LEFT, .65, "soft")
             self.text(value, LEFT + .18, 6.10, RIGHT - LEFT - .36, .48, 14)
 
     def draw(self, slide, profile, theme, text_box, rectangle, connector):
         typography = profile["typography"]
-        for x, y, width, height in self.bands:
-            rectangle(slide, x, y, width, height, theme["soft"])
+        for geometry, fill, border, name in self.panels:
+            shape = rectangle(slide, *geometry, theme[fill], theme[border] if border else None)
+            if name:
+                shape.name = name
         for x, y, right in self.rules:
             connector(slide, x, y, right, y, theme["border"], .8)
         for value, geometry, size, color, bold in self.text_boxes:
@@ -145,6 +150,115 @@ def _open_steps(page, body):
     body.band(page.get("takeaway"))
 
 
+def _nested_scope(page, body):
+    outer, inner = page.get("outer"), page.get("inner")
+    if not isinstance(outer, dict) or not isinstance(inner, dict):
+        raise ValueError("嵌套层级需要 outer 和 inner 对象")
+    children = _items(inner, "children", 2, 3)
+    rules = _items(page, "rules", 2, 4)
+
+    body.panel(LEFT, TOP, 5.72, 3.67, "surface", border="border")
+    body.text(outer.get("title"), LEFT + .20, TOP + .16, 5.32, .36, 16, "muted", bold=True)
+    body.panel(LEFT + .20, 2.25, 5.32, 2.82, "soft", border="border")
+    body.text(inner.get("title"), LEFT + .40, 2.45, 4.92, .38, 18, "primary", bold=True)
+    body.text(inner.get("body"), LEFT + .40, 2.90, 4.92, .50, 15)
+    gap = .12
+    width = (4.92 - gap * (len(children) - 1)) / len(children)
+    for index, child in enumerate(children):
+        x = LEFT + .40 + index * (width + gap)
+        body.panel(x, 3.55, width, 1.30, "surface", border="border")
+        body.text(child.get("title"), x + .10, 3.68, width - .20, .28, 14, "primary", bold=True)
+        body.text(child.get("body"), x + .10, 4.04, width - .20, .68, 13)
+    if "note" in page:
+        body.text(page["note"], LEFT, 5.44, 5.72, .48, 14, "muted")
+    if "principles" in page:
+        labels = page["principles"]
+        if (not isinstance(labels, list) or not 1 <= len(labels) <= 6
+                or any(not isinstance(label, str) or not label.strip() for label in labels)):
+            raise ValueError("principles 须包含 1–6 项文本")
+        body.text("  ·  ".join(labels), LEFT, 6.06, 5.72, .32, 13, "muted")
+    for index, item in enumerate(rules):
+        y = TOP + index * 1.24
+        body.text(item.get("title"), 6.91, y, 5.62, .35, 16, "primary", bold=True)
+        body.text(item.get("body"), 6.91, y + .43, 5.62, .75, 15)
+        if index < len(rules) - 1:
+            body.rule(6.91, y + 1.20)
+
+
+def _finite_number(value):
+    if type(value) not in (int, float):
+        return False
+    try:
+        return math.isfinite(value)
+    except OverflowError:
+        return False
+
+
+def _range_scale(page, body):
+    scale = page.get("scale")
+    if not isinstance(scale, dict):
+        raise ValueError("区间图需要 scale 对象")
+    start, end, ticks = scale.get("min"), scale.get("max"), scale.get("ticks")
+    if (not _finite_number(start) or not _finite_number(end) or start >= end
+            or not _finite_number(end - start)):
+        raise ValueError("刻度必须提供有限数值，且最小值小于最大值")
+    if (not isinstance(ticks, list) or not 2 <= len(ticks) <= 6
+            or any(not _finite_number(tick) for tick in ticks)
+            or ticks[0] != start or ticks[-1] != end
+            or any(a >= b for a, b in zip(ticks, ticks[1:]))):
+        raise ValueError("刻度需要 2–6 个递增的点，包含最小值和最大值")
+    rows = _items(page, "ranges", 2, 6)
+    highlight = page.get("highlight")
+    if highlight is not None and not isinstance(highlight, dict):
+        raise ValueError("highlight 须为对象")
+    chart_x = LEFT + 1.16
+    chart_width = 5.75 if highlight is not None else 8.74
+    data_x = chart_x + chart_width + .18
+
+    def position(value):
+        return chart_x + chart_width * ((value - start) / (end - start))
+
+    y = 1.75
+    for index, item in enumerate(rows):
+        low, high = item.get("min"), item.get("max")
+        if not _finite_number(low) or not _finite_number(high) or not start <= low <= high <= end:
+            raise ValueError(f"第 {index + 1} 行区间上下限无效或超出刻度")
+        body.text(item.get("label"), LEFT, y + .02, .98, .32, 15, bold=True)
+        body.panel(chart_x, y + .16, chart_width, .075, "border")
+        if low == high:
+            body.panel(position(low) - .04, y + .10, .08, .20, "primary", name="body:range-point")
+            label = str(low)
+        else:
+            body.panel(position(low), y + .13, position(high) - position(low),
+                       .14, "primary", name="body:range-interval")
+            label = f"{low} – {high}"
+        body.text(label, data_x, y + .03, 1.65, .30, 13, "muted")
+        y += .52
+    body.rule(chart_x, y + .04, chart_x + chart_width)
+    for index, tick in enumerate(ticks):
+        x = position(tick)
+        if index and x - position(ticks[index - 1]) < .78:
+            raise ValueError("刻度标签间距不足，请减少刻度")
+        body.panel(x - .006, y + .04, .012, .08, "border")
+        body.text(str(tick), x - .30, y + .17, .66, .25, 11, "muted")
+    if "caption" in page:
+        body.text(page["caption"], LEFT, y + .47, chart_width + 1.16, .27, 12, "muted")
+    if highlight is not None:
+        value = highlight.get("value")
+        if not _finite_number(value):
+            raise ValueError("摘要指标需要有限数值")
+        body.panel(9.61, TOP, 2.98, 3.87, "soft")
+        body.text(highlight.get("label"), 9.81, 1.92, 2.54, .35, 15, "muted", bold=True)
+        unit = highlight.get("unit", "")
+        if not isinstance(unit, str):
+            raise ValueError("摘要指标单位须为文本")
+        body.text(f"{value} {unit}".rstrip(), 9.81, 2.49, 2.54, .66, 34, "primary", bold=True)
+        body.text(highlight.get("body"), 9.81, 3.48, 2.54, 1.57, 15)
+    if "takeaway" in page:
+        body.panel(LEFT, 5.86, RIGHT - LEFT, .80, "soft")
+        body.text(page["takeaway"], LEFT + .18, 5.93, RIGHT - LEFT - .36, .67, 13)
+
+
 def _noted_table(page, body):
     side = page["variant"] == "side_notes"
     notes = _items(page, "notes_items", 1, 4 if side else 2)
@@ -238,6 +352,8 @@ def compose(page, kind, index):
         "open_steps": _open_steps,
         "side_notes": _noted_table,
         "top_notes": _noted_table,
+        "nested_scope": _nested_scope,
+        "range_scale": _range_scale,
     }[kind if kind in MINIMAL_BODY_TYPES else page["variant"]]
     try:
         draw(page, body)

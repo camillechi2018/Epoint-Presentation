@@ -58,6 +58,7 @@
     },
     {
       "id": "layered_architecture",
+      "variants": ["nested_scope"],
       "relation": ["architecture", "hierarchy", "layered_system"],
       "use_when": "材料确有从上到下的层级、承载或依赖关系",
       "required": ["title", "layers"],
@@ -106,6 +107,7 @@
     },
     {
       "id": "comparison_chart",
+      "variants": ["range_scale"],
       "relation": ["comparison_data", "bar_chart", "category_difference"],
       "use_when": "至少两个对象或时期需要按同一口径比较数值",
       "required": ["title", "categories", "series", "data_source"],

@@ -49,8 +49,12 @@
 | 关键时限＋处理流程 | `type: deadline_process`，`deadlines:[{label,value,unit,body}]` 2 条，`steps:[{title,body}]` 2–5 步，可加 `takeaway`。在 `body` 保留起算条件和受理对象。 | 19 |
 | 一侧摘要＋一侧明细 | `type: priority_grid`，`variant: summary_split`，`lead:{title,body}`、`support:[{title,body}]` 2–5 条 | 4、6、9、20 |
 | 无卡片流程 | `type: process`，`variant: open_steps`，`items:[{title,body,stage?,output?}]` 3–5 步，可加 `takeaway` | 8、14 |
+| 嵌套层级＋规则说明 | `type: layered_architecture`，`variant: nested_scope`，`outer:{title}`、`inner:{title,body,children:[{title,body}]}`、`rules:[{title,body}]`。内层包含 2–3 个并列子项，右侧列 2–4 条规则，可加 `note` 和 `principles:[文字]`。 | 12 |
+| 共用刻度区间图 | `type: comparison_chart`，`variant: range_scale`，`scale:{min,max,ticks:[数值]}`、`ranges:[{label,min,max}]` 2–6 行。刻度包含两端并严格递增。上下限相等时画成一个点。可加 `caption`、`highlight:{label,value,unit?,body}` 和 `takeaway`。 | 17 |
 
 两个带解读的表格变体使用 PowerPoint 原生表格，支持 2–6 列、1–6 行。正文或单元格超出可用宽高时，精简、换版或拆页。科技主题的居中页眉较窄，长标题应缩短后再出稿。
+
+区间图使用同一刻度把源数据的上下限转换为 PowerPoint 可编辑原生形状，保留每组的端点标签。数据变更时使用新请求重新生成，以同步图形位置与数值。
 
 ## 其他关系结构与输入
 

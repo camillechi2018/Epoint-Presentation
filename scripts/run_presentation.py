@@ -349,7 +349,7 @@ def execute_plan(request, plan, report, output: Path):
                                     'pages': [guided]}, page_out)
                 stamp = None
                 choice['fallback_layout_id'] = guided['type']
-                choice['variant'] = resolved_variant(guided, guided['type']) if guided['type'] in ('bullets', 'cards', 'process', 'priority_grid', 'milestone_timeline', 'metrics', 'comparison', 'data_table', 'image_case') else None
+                choice['variant'] = resolved_variant(guided, guided['type']) or None
                 used_guided_variants[(guided['type'], choice['variant'])] = used_guided_variants.get((guided['type'], choice['variant']), 0) + 1
                 choice['trial_results'].append({'status': 'guided_drawn', 'library_used': False,
                                                 'fallback_layout_id': guided['type'],
