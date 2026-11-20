@@ -559,7 +559,7 @@ def add_content_atmosphere(slide, layout: dict, theme_name: str, theme: dict):
         shape._element.spPr.append(effects)
 
 
-def add_tech_content_header(slide, layout: dict, *, replacing=None):
+def add_tech_content_header(slide, layout: dict, *, before=None):
     """Reuse the original editable header group and its embedded images."""
     spec = layout["tech_content_header"]
     asset = (SKILL / spec["asset"]).resolve()
@@ -576,7 +576,7 @@ def add_tech_content_header(slide, layout: dict, *, replacing=None):
             image_part = source_slide.part.related_part(rid)
             _, new_rid = slide.part.get_or_add_image_part(BytesIO(image_part.blob))
             blip.set(qn("r:embed"), new_rid)
-    if replacing is None:
+    if before is None:
         slide.shapes._spTree.insert_element_before(element, "p:extLst")
         return
     # A source page already has shape IDs. Allocate fresh IDs for the imported
@@ -585,7 +585,7 @@ def add_tech_content_header(slide, layout: dict, *, replacing=None):
     for node in element.xpath(".//p:cNvPr"):
         node.set("id", str(next_id))
         next_id += 1
-    replacing.getparent().replace(replacing, element)
+    before.addprevious(element)
 
 
 def add_content_title(slide, value, profile, layout, theme, *, dark=False, tech_header=False):

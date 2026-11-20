@@ -15,6 +15,7 @@ from pptx import Presentation
 from distribution import verify_manifest
 from opc_relationships import resolve_target
 from relation_match import STRUCTURAL_ROLE_ORDER as STRUCTURAL
+from body_header import contract_for
 
 REL = 'http://schemas.openxmlformats.org/package/2006/relationships'
 
@@ -110,6 +111,15 @@ def check_prefilled(assembly, library):
             if theme not in entry.get('themes', []):
                 raise ValueError('SOURCE_THEME_MISMATCH')
             source, source_page = _source(entry, theme)
+            body_header = page.get('body_header')
+            if body_header:
+                contract = contract_for(entry, theme, True)
+                if (page.get('role') in STRUCTURAL or not contract
+                        or body_header.get('asset') != contract['asset']
+                        or body_header.get('asset_sha256') != contract['sha256']
+                        or manifest['files'].get(contract['asset']) != contract['sha256']):
+                    raise ValueError('SOURCE_STAMP_NOT_CATALOG_BOUND')
+                source, source_page = contract['asset'], 1
             expected = f'epoint:{layout}:{theme}:{source}:{source_page}:{commit}'
             if page.get('source_stamp') != expected or slide.get('source_stamp') != expected or presentation.slides[0]._element.cSld.get('name') != expected:
                 raise ValueError('SOURCE_STAMP_NOT_CATALOG_BOUND')

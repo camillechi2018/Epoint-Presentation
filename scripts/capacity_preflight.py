@@ -9,7 +9,7 @@ from pathlib import Path
 from library_location import binding_path_key
 from content_adapters import adapt_for_layout
 from text_width import visual_width_units
-from body_header import checked_title, contract_for, header_binding
+from body_header import checked_title, contract_for
 
 
 @lru_cache(maxsize=8)
@@ -80,17 +80,18 @@ def preflight(library: Path, entry: dict, content: dict, page_title: str | None,
     library = Path(library).resolve()
     mapped, adapter = adapt_for_layout(entry['id'], content, page_title, entry=entry)
     texts = mapped.get('texts') if isinstance(mapped.get('texts'), dict) else {}
-    binding_rel = entry[binding_path_key(entry, theme)]
+    contract = contract_for(entry, theme, body_header_pilot and content.get('logo') is None)
+    binding_rel = contract['bindings'] if contract else entry[binding_path_key(entry, theme)]
     bindings, binding_sha = _bindings(str(library / binding_rel))
     longcopy, policy, longcopy_sha, policy_sha = _review(str(library))
     reviewed_fields = longcopy.get(entry['id'], {})
     hard, advisory, wrap_suggestions, details = [], [], {}, []
     header = {}
-    title_field = None
-    contract = contract_for(entry, theme, body_header_pilot and content.get('logo') is None)
     if contract:
         try:
-            title_field = header_binding(bindings, contract)
+            title_field = contract['title_input']
+            if binding_sha != contract['bindings_sha256']:
+                raise ValueError('BODY_HEADER_BINDING_HASH_MISMATCH')
             header['body_header_title'] = checked_title(title_field, texts, page_title, contract)
             header['body_header_binding_path'] = title_field['semantic_path']
         except (ValueError, KeyError, TypeError) as exc:
@@ -99,8 +100,6 @@ def preflight(library: Path, entry: dict, content: dict, page_title: str | None,
     near_hard = policy.get('near_hard_limit_ratio', .85)
     near_reviewed = policy.get('near_recommended_limit_ratio', .9)
     for field in bindings:
-        if field is title_field:
-            continue
         semantic = field.get('semantic_path')
         key = semantic if semantic in texts else field['field'] if field['field'] in texts else None
         if key is None:

@@ -300,7 +300,7 @@ def eligible(e, p, request, taxonomy):
     relation=p.get('matching_relation') or p.get('information_relation')
     theme=p.get('theme',request.get('theme'))
     content=p.get('content') if isinstance(p.get('content'),dict) else {}
-    replaces_title = contract_for(e, theme, request.get('body_header_pilot') is True
+    replaces_title = contract_for(e, theme, request.get('body_header_pilot', True) is True
                                    and request.get('format', 'pptx') == 'pptx'
                                    and content.get('logo') is None)
     matching_page = p
@@ -459,7 +459,7 @@ def resolve(library,request):
             _,native_count=count_profile(e,root) if requested_count is not None else ([],None)
             count_fit=1 if requested_count is not None and requested_count==native_count else 0
             capacity_check=preflight(root,e,content,p.get('title'),p.get('theme',request.get('theme')),
-                                     body_header_pilot=request.get('body_header_pilot') is True
+                                     body_header_pilot=request.get('body_header_pilot', True) is True
                                      and request.get('format', 'pptx') == 'pptx')
             gap=binding_gap(e,p,root,p.get('theme',request.get('theme')),
                             replaced_title_path=capacity_check.get('body_header_binding_path'))

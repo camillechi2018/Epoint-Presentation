@@ -1,18 +1,12 @@
-"""Opt-in title, rule and logo replacement for verified source pages."""
+"""Assemble public headers on pre-extracted editable body components."""
 import hashlib
 import json
-import math
 from functools import lru_cache
 from pathlib import Path
 
 from text_width import visual_width_units
 
 SKILL = Path(__file__).resolve().parents[1]
-PILOT_LAYOUTS = {
-    'blue': frozenset({'content-blue-112', 'content-blue-244'}),
-    'red': frozenset({'content-blue-112', 'content-blue-244'}),
-    'deep-blue-tech': frozenset({'content-tech-021', 'content-tech-028', 'content-tech-058'}),
-}
 
 
 @lru_cache(maxsize=1)
@@ -21,28 +15,20 @@ def frame():
 
 
 def contract_for(entry, theme, enabled):
-    if (not enabled or entry['id'] not in PILOT_LAYOUTS.get(theme, ())
+    if (not enabled or theme not in ('blue', 'red', 'deep-blue-tech')
             or entry.get('classification_status') != 'verified'
             or entry.get('role') not in ('summary', 'body', 'content')):
         return None
     contract = entry.get('body_component_contract')
-    if not isinstance(contract, dict) or contract.get('version') != 1:
+    if not isinstance(contract, dict) or contract.get('version') != 2:
         return None
     themes = contract.get('themes')
     value = themes.get(theme) if isinstance(themes, dict) else None
     return value if isinstance(value, dict) else None
 
 
-def header_binding(bindings, contract):
-    titles = [b for b in bindings if b.get('semantic_path') == title_path(contract)]
-    if (len(titles) != 1 or titles[0]['shape_id'] != contract['title_id']
-            or sum(b['shape_id'] == contract['title_id'] for b in bindings) != 1):
-        raise ValueError('BODY_HEADER_BINDING_MISMATCH')
-    return titles[0]
-
-
 def title_path(contract):
-    return 'heading' if 'tech' in contract else 'page.title'
+    return contract['title_input']['semantic_path']
 
 
 def frame_spec(contract):
@@ -79,21 +65,18 @@ def checked_title(binding, texts, page_title, contract):
     return title
 
 
-def verify_source(source, relative, page, contract):
-    if relative != contract['source'] or page != contract['page']:
-        raise ValueError('BODY_HEADER_SOURCE_MISMATCH')
+def verify_asset(path, expected_sha):
     digest = hashlib.sha256()
-    with source.open('rb') as stream:
+    with path.open('rb') as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b''):
             digest.update(chunk)
-    if digest.hexdigest() != contract['sha256']:
-        raise ValueError('BODY_HEADER_SOURCE_MISMATCH')
+    if digest.hexdigest() != expected_sha:
+        raise ValueError('BODY_HEADER_ASSET_HASH_MISMATCH')
 
 
-def replace_header(presentation, slide, contract, theme, title, logo_enabled):
-    from pptx.enum.shapes import MSO_SHAPE_TYPE
+def attach_header(presentation, slide, contract, theme, title, logo_enabled):
     from pptx.util import Inches
-    from render_offline_brand import PROFILE, add_content_title, add_logo, read_json
+    from render_offline_brand import PROFILE, add_content_title, add_logo, add_tech_content_header, read_json
 
     layout, _ = frame_spec(contract)
     canvas = layout['canvas']
@@ -101,42 +84,25 @@ def replace_header(presentation, slide, contract, theme, title, logo_enabled):
     expected = (Inches(canvas['width_inches']), Inches(canvas['height_inches']))
     if any(abs(a - b) > 2 for a, b in zip(dimensions, expected)):
         raise ValueError('BODY_HEADER_CANVAS_MISMATCH')
-    if 'tech' in contract:
-        return replace_tech_header(slide, contract, layout, theme, title, logo_enabled)
-    wanted = {contract['title_id']: MSO_SHAPE_TYPE.TEXT_BOX,
-              contract['rule_id']: MSO_SHAPE_TYPE.LINE,
-              contract['logo_id']: MSO_SHAPE_TYPE.PICTURE}
-    original = [shape for shape in slide.shapes if shape.shape_id in wanted]
-    if len(wanted) != 3 or len(original) != 3 or any(
-            shape.shape_type != wanted[shape.shape_id] for shape in original):
-        raise ValueError('BODY_HEADER_OBJECT_MISMATCH')
-    spec = layout['content_header']
-    top_limit = Inches(max(spec['title_box_inches'][1] + spec['title_box_inches'][3],
-                           spec['logo_box_inches'][1] + spec['logo_box_inches'][3],
-                           spec['rule_inches'][1] + spec['rule_width_pt'] / 144))
-    for shape in slide.shapes:
-        if shape.shape_id in wanted or shape.shape_id in contract.get('nonvisual_ids', ()):
-            continue
-        angle = math.radians(shape.rotation)
-        half_height = (abs(math.sin(angle)) * shape.width + abs(math.cos(angle)) * shape.height) / 2
-        if shape.top + shape.height / 2 - half_height < top_limit:
-            raise ValueError(f'BODY_HEADER_BODY_COLLISION: {shape.shape_id}')
-    for shape in original:
-        element = shape._element
-        element.getparent().remove(element)
+    tech = contract.get('tech')
+    if tech:
+        anchor = tech_insertion_anchor(slide, tech)
+        add_tech_content_header(slide, layout, before=anchor._element)
     profile = read_json(PROFILE)
     palette = profile['themes'][theme]
-    add_content_title(slide, title, profile, layout, palette)
+    add_content_title(slide, title, profile, layout, palette, tech_header=bool(tech))
     if logo_enabled:
-        add_logo(slide, layout, palette, content_header=True)
-    return {'frame_id': 'legacy-blue-red-content-header', 'version': 1,
-            'removed_shape_ids': sorted(wanted), 'source_sha256': contract['sha256']}
+        add_logo(slide, layout, palette, content_header=True, tech_header=bool(tech))
+    report = {'frame_id': 'deep-blue-tech-content-header' if tech else 'legacy-blue-red-content-header',
+              'version': 2, 'asset': contract['asset'], 'asset_sha256': contract['sha256'],
+              'removed_shape_ids': contract['removed_shape_ids']}
+    if tech:
+        report.update(title_variant=tech['variant'], logo_anchor=tech['logo_anchor'])
+    return report
 
 
-def replace_tech_header(slide, contract, layout, theme, title, logo_enabled):
+def tech_insertion_anchor(slide, tech):
     from pptx.enum.shapes import MSO_SHAPE_TYPE as Type
-    from pptx.util import Inches, Pt
-    from render_offline_brand import PROFILE, add_content_title, add_logo, add_tech_content_header, read_json
 
     def locate(shapes, shape_id, kind):
         matches = [shape for shape in shapes if shape.shape_id == shape_id and shape.shape_type == kind]
@@ -144,28 +110,5 @@ def replace_tech_header(slide, contract, layout, theme, title, logo_enabled):
             raise ValueError(f'BODY_HEADER_OBJECT_MISMATCH: {shape_id}')
         return matches[0]
 
-    tech = contract['tech']
     root = locate(slide.shapes, tech['root_id'], Type.GROUP)
-    art = locate(root.shapes, tech['art_id'], Type.GROUP)
-    text_group = locate(root.shapes, tech['text_group_id'], Type.GROUP)
-    title_shape = locate(text_group.shapes, contract['title_id'], Type.TEXT_BOX)
-    logo = locate(slide.shapes, contract['logo_id'], Type.PICTURE)
-    spec = layout['tech_content_header']
-    # Variants occupy the source title and Logo regions. Preserve the nested
-    # summary, background and drawing order even when the title is replaced.
-    for shape, key in ((title_shape, 'title_box_inches'), (logo, 'logo_box_inches')):
-        actual = (shape.left, shape.top, shape.width, shape.height)
-        if any(abs(a - Inches(b)) > Pt(1.5) for a, b in zip(actual, spec[key])):
-            raise ValueError(f'BODY_HEADER_RESERVED_REGION_MISMATCH: {shape.shape_id}')
-    add_tech_content_header(slide, layout, replacing=art._element)
-    for shape in (title_shape, logo):
-        shape._element.getparent().remove(shape._element)
-    profile = read_json(PROFILE)
-    palette = profile['themes'][theme]
-    add_content_title(slide, title, profile, layout, palette, tech_header=True)
-    if logo_enabled:
-        add_logo(slide, layout, palette, content_header=True, tech_header=True)
-    return {'frame_id': 'deep-blue-tech-content-header', 'version': 1,
-            'title_variant': tech['variant'], 'logo_anchor': tech['logo_anchor'],
-            'removed_shape_ids': sorted((tech['art_id'], contract['title_id'], contract['logo_id'])),
-            'source_sha256': contract['sha256']}
+    return locate(root.shapes, tech['text_group_id'], Type.GROUP)

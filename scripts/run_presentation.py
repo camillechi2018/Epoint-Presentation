@@ -265,7 +265,7 @@ def execute_plan(request, plan, report, output: Path):
                         continue
                 capacity_check = capacity_preflight(Path(report['library_path']), entry, data,
                                             page.get('title'), report['theme'],
-                                            body_header_pilot=request.get('body_header_pilot') is True)
+                                            body_header_pilot=request.get('body_header_pilot', True) is True)
                 if capacity_check['hard_issues']:
                     choice['trial_results'].append({
                         'layout_id': candidate_id, 'status': 'rejected',
@@ -285,23 +285,7 @@ def execute_plan(request, plan, report, output: Path):
                     fill_options = {'allow_draft': request.get('asset_policy', 'verified_draft') != 'approved_only'}
                     if 'body_header_title' in capacity_check:
                         fill_options['body_header_title'] = capacity_check['body_header_title']
-                    try:
-                        filled = fill(library, candidate_id, candidate_content_path, page_out, **fill_options)
-                    except ValueError as exc:
-                        if 'body_header_title' not in fill_options or not str(exc).startswith('BODY_HEADER_'):
-                            raise
-                        choice['trial_results'].append({'layout_id': candidate_id, 'status': 'rejected',
-                                                        'reason_code': 'BODY_HEADER_REPLACEMENT_REJECTED',
-                                                        'reason': safe_message(exc)})
-                        legacy_capacity = capacity_preflight(library, entry, data, page.get('title'), report['theme'])
-                        if legacy_capacity['hard_issues']:
-                            choice['trial_results'].append({'layout_id': candidate_id, 'status': 'rejected',
-                                                            'reason_code': 'TEXT_OVER_CAPACITY',
-                                                            'capacity_preflight': legacy_capacity})
-                            continue
-                        fill_options.pop('body_header_title')
-                        capacity_check = legacy_capacity
-                        filled = fill(library, candidate_id, candidate_content_path, page_out, **fill_options)
+                    filled = fill(library, candidate_id, candidate_content_path, page_out, **fill_options)
                     if filled.get('body_header'):
                         choice['body_header'] = filled['body_header']
                     choice['layout_id'] = candidate_id
@@ -402,6 +386,7 @@ def execute_plan(request, plan, report, output: Path):
                             if page.get('role') == 'directory' else None,
                             'selection_mode': choice['selection_mode'], 'selection_label': choice['selection_label'],
                             'source_stamp': stamp,
+                            **({'body_header': choice['body_header']} if choice.get('body_header') else {}),
                             'data_source': page.get('data_source') or content.get('data_source'),
                             'image_sources': page.get('image_sources') or free_images or ([content['image_path']] if content.get('image_path') else None)})
     assembly = {'theme': report['theme'], 'library_commit': report['library_commit'],

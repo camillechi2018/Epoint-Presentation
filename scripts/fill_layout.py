@@ -5,7 +5,7 @@ from font_profile import resolve as resolve_font_profile
 from pathlib import Path
 from copy import deepcopy
 from text_width import directory_text_over_capacity, visual_width_units
-from body_header import checked_title, contract_for, header_binding, replace_header, verify_source
+from body_header import attach_header, checked_title, contract_for, verify_asset
 
 import argparse,json,math,re,subprocess
 from pptx import Presentation
@@ -623,6 +623,13 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
     if ready_source:
         source_rel=ready_source
         source_page=1
+    constraint_file=(lib/source_rel).parent/'constraints.json'
+    body_header = contract_for(m, theme, body_header_title is not None)
+    if body_header_title is not None:
+        if not body_header or logo_config is not None or data.get('logo') is not None:
+            raise ValueError('BODY_HEADER_CONFIGURATION_UNSUPPORTED')
+        source_rel = body_header['asset']
+        source_page = 1
     commit=data.get('library_commit')
     source_stamp=None
     if commit is not None:
@@ -639,8 +646,14 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
     source=(lib/source_rel).resolve()
     if not source.is_relative_to(lib):raise ValueError('源文件越出库根目录')
     if out==source or out.is_relative_to(lib/'layouts') or out.is_relative_to(lib/'diagrams') or out.is_relative_to(lib/'master'):raise ValueError('输出不能覆盖模板库资产')
-    binding_rel = m[binding_path_key(m, theme)]
-    binding_data=json.loads((lib/binding_rel).read_text(encoding='utf-8-sig'))
+    binding_rel = body_header['bindings'] if body_header else m[binding_path_key(m, theme)]
+    binding_path = (lib/binding_rel).resolve()
+    if not binding_path.is_relative_to(lib):
+        raise ValueError('绑定文件越出库根目录')
+    if body_header:
+        verify_asset(source, body_header['sha256'])
+        verify_asset(binding_path, body_header['bindings_sha256'])
+    binding_data=json.loads(binding_path.read_text(encoding='utf-8-sig'))
     if m.get('collection')=='new-template-content' and not internal:
         safe_media={'brand_logo_locked','source_decorative_locked','source_visual_locked','cover_visual_layer'}
         unreviewed=[x for x in binding_data.get('objects',{}).get('images',[]) if x.get('semantic_role') not in safe_media]
@@ -654,16 +667,13 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
             and item_count not in rules.get('verified_counts', []) and not internal):
         raise ValueError('该数量变化尚处原型；内部结构测试需传 --internal-draft')
     bindings=binding_data['fields'];texts=dict(data.get('texts',{}))
-    body_header = contract_for(m, theme, body_header_title is not None)
-    if body_header_title is not None:
-        if not body_header or logo_config is not None or data.get('logo') is not None:
-            raise ValueError('BODY_HEADER_CONFIGURATION_UNSUPPORTED')
-        verify_source(source, source_rel, source_page, body_header)
-        title_binding = header_binding(bindings, body_header)
+    if body_header:
+        title_binding = body_header['title_input']
         body_header_title = checked_title(title_binding, texts, body_header_title, body_header)
         texts.pop(title_binding['field'], None)
         texts.pop(title_binding['semantic_path'], None)
-        bindings = [binding for binding in bindings if binding is not title_binding]
+        if any(b['field'] == title_binding['field'] for b in bindings):
+            raise ValueError('BODY_HEADER_BINDING_CONTAINS_TITLE')
     known={x['field'] for x in bindings}
     semantic_aliases={x['semantic_path']:x['field'] for x in bindings if x.get('semantic_path')}
     for alias,field in semantic_aliases.items():
@@ -1272,7 +1282,6 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
         track=shapes.get(item['track_shape_id']);bar=shapes.get(item['bar_shape_id'])
         if track is None or bar is None:raise ValueError('达标率进度条形状缺失')
         bar.width=round(track.width*rate/100)
-    constraint_file=source.parent/'constraints.json'
     layout_changes=apply_constraints(p,json.loads(constraint_file.read_text(encoding='utf-8'))) if constraint_file.is_file() else []
     body_text_result=apply_body_text_presentation(s,rules,bindings)
     normal_body_weight_result=apply_normal_body_weight(s,rules,bindings)
@@ -1282,9 +1291,7 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
     schedule_result=apply_project_schedule(s,rules,data['tasks']) if rules.get('cardinality_mode')=='project_schedule' else None
     header_result = None
     if body_header:
-        if source_logo_shape_id != body_header['logo_id']:
-            raise ValueError('BODY_HEADER_LOGO_MISMATCH')
-        header_result = replace_header(p, s, body_header, theme, body_header_title, logo_enabled)
+        header_result = attach_header(p, s, body_header, theme, body_header_title, logo_enabled)
         logo_result = {'added': logo_enabled, 'reason': 'skill_body_header', 'visual_qa': 'not_run'}
     elif source_logo_present and m.get('role')=='cover' and not source_logo_shape_id:
         if not logo_enabled:raise ValueError('该源封面内置 Logo；关闭 Logo 需先完成品牌对象拆分验收')
