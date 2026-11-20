@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "version": "1.0.34-rc.2",
+  "version": "1.0.34",
   "files": [
     ".gitattributes",
     "LICENSE",
