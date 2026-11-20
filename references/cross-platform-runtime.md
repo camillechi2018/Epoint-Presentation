@@ -78,7 +78,9 @@ S2 代表性签收另覆盖四图表与表格混合包、含 PNG/SVG/WDP 和嵌�
 
 完整出稿请求可设置 `font_profile` 为 `windows`、`macos` 或 `linux`。省略时按当前系统选择；整个任务的填充、技能新绘、组装归一、字体审计和报告使用同一配置。当前配置为 Windows 微软雅黑／Arial、macOS 苹方／Helvetica Neue、Linux Noto Sans CJK SC／Noto Sans。缺少字体时完整出稿阻断并指出缺失字体，不静默回退。不同系统原生字体须分别生成和验收 PPTX，不能期待同一文件自动切换字体。源知识库不改写；仅处理任务副本。对已通过 Windows 字体容量验收的组件，换字体后仍须复核窄槽、表格及接近容量上限的文案。
 
-`scripts/font_profile.py --profile <配置> --out <诊断.json>` 只检查字体资源。`scripts/calibrate_renderer.py --profile <配置> --fixture <已知正常样本.pptx> --out-dir <目录>` 先复制样本、归一与审计字体，再用本机 PowerPoint 或 Linux LibreOffice 导出逐页图，并记录源文件哈希、渲染应用版本、页数、用时和失败页。每次可重复指定 `--fixture`。报告的 `rendered_pending_visual_review` 只代表导出完成；需打开生成的 PNG 做文字边界、缺字、重叠、Logo、背景、图表及透明素材的人工检查。LibreOffice 的图形效果结果不能替代 PowerPoint 的打开或渲染结论，Quick Look 只能作预览。
+用 `scripts/font_profile.py --profile <配置> --out <诊断.json>` 检查字体资源。在 Windows 上可运行 `scripts/run.py --doctor --goal assemble --office-smoke --out <诊断.json>`，验证 PowerPoint 能保存、重新打开并导出。
+
+使用已知正常的 PPTX 排查宿主或字体配置时，按[维护仓库的渲染校准说明](https://github.com/camillechi2018/Epoint-Presentation-Maintenance#宿主校准与专项诊断)运行样本校准工具。按导出图核对文字边界、缺字、重叠、Logo、背景、图表和透明素材。需要验收 PowerPoint 效果时，用 PowerPoint 实际打开和导出。
 
 Linux 任务副本中，LibreOffice 不能正确显示的可编辑文字渐变会转换成其最亮可见色标的纯色；转换次数写入 `font_normalization.gradient_text_fallbacks`。此适配只处理 Linux 输出，不修改知识库原稿，也不改变 Windows/Mac 文件。其视觉颜色仍须与目标应用逐页复核；渐变效果本身不会在 Linux 版本中保留。
 
