@@ -131,6 +131,16 @@ def preflight(library: Path, entry: dict, content: dict, page_title: str | None,
                                          'rule': 'mid_phrase_wrap_review'})
             else:
                 reasons.append('max_width_units')
+        # The pilot's reviewed wrap width improves line breaks without lowering
+        # the existing binding limits or changing any supplied words.
+        wrap_width = contract.get('preferred_body_wrap_width_units') if contract else None
+        if (not reasons and key not in wrap_suggestions and field.get('semantic_role') == 'body'
+                and isinstance(wrap_width, int) and wrap_width > 0
+                and len(lines) == 1 and widths[0] > wrap_width):
+            suggestion = _safe_wrap(value, wrap_width, min(line_limit or 1, 2), char_limit or 9999)
+            if suggestion:
+                wrap_suggestions[key] = suggestion
+                advisory.append({'field': semantic or field['field'], 'rule': 'body_header_pilot_wrap'})
         for reason in reasons:
             hard.append({'field': semantic or field['field'], 'rule': reason,
                          'actual_chars': len(value), 'binding_field': field['field']})
