@@ -25,15 +25,11 @@ from body_header import body_components_enabled
 
 def _load_workflow():
     # Environment inspection and library preflight must not require rendering packages.
-    global resolve, adapt_for_layout, classify_trial_failure, structural_mapping_issue
-    global field_source_evidence, capacity_preflight, fill, render_guided_page
+    global resolve, load_catalog, try_candidate, render_guided_page
     global resolved_variant, validate_page, fallback_type, audit_deck
     global check_structure, check_directory_section_count, directory_item_count, check_prefilled, check_finished
-    from plan_deck import resolve
-    from content_adapters import (adapt_for_layout, classify_trial_failure,
-                                  structural_mapping_issue, field_source_evidence)
-    from capacity_preflight import preflight as capacity_preflight
-    from fill_layout import fill
+    from plan_deck import load as load_catalog, resolve
+    from candidate_trial import try_candidate
     from render_offline_brand import render as render_guided_page, resolved_variant, validate_page
     from fallback_rules import fallback_type
     from audit_deck import audit as audit_deck
@@ -201,7 +197,7 @@ def _skill_version():
     return match.group(1) if match else 'unknown'
 
 
-def execute_plan(request, plan, report, output: Path):
+def execute_plan(request, plan, report, output: Path, *, catalog=None):
     _load_workflow()
     """Fill each planned page, assemble it and audit mandatory source pages."""
     if not report['can_make_complete_deck'] or request.get('format', 'pptx') != 'pptx':
@@ -230,6 +226,9 @@ def execute_plan(request, plan, report, output: Path):
             raise RuntimeError(report['office_smoke_test']['error_code'] + ': Office smoke test failed')
     used_guided_variants = {}
     locked_section_layout_id = None
+    entries = {entry['id']: entry for entry in catalog['layouts']} if catalog is not None else None
+    body_enabled = body_components_enabled(request)
+    allow_draft = request.get('asset_policy', 'verified_draft') != 'approved_only'
     for index, (page, choice) in enumerate(zip(pages, plan['pages']), 1):
         content = page.get('content')
         if not isinstance(content, dict):
@@ -238,6 +237,9 @@ def execute_plan(request, plan, report, output: Path):
         if page_out.exists():
             raise FileExistsError(f'中间文件已存在：{page_out}')
         if choice['selection_mode'] == 'source_template':
+            library = Path(report['library_path'])
+            if entries is None:
+                entries = {entry['id']: entry for entry in load_catalog(library)['layouts']}
             data = dict(content)
             data['theme'] = report['theme']
             data['library_commit'] = report['library_commit']
@@ -251,65 +253,22 @@ def execute_plan(request, plan, report, output: Path):
                 candidate_ids = [locked_section_layout_id]
                 choice['candidate_ids'] = candidate_ids
             for candidate_id in candidate_ids:
-                catalog = json.loads((Path(report['library_path']) / 'catalog.json').read_text(encoding='utf-8-sig'))
-                entry = next(e for e in catalog['layouts'] if e['id'] == candidate_id)
-                candidate_data, adapter = adapt_for_layout(candidate_id, data, page.get('title'), entry=entry)
-                if not adapter and entry.get('matching_activation') in ('structure_ready', 'pilot_verified'):
-                    issue = structural_mapping_issue(entry, data, page.get('title'))
-                    if issue:
-                        choice['trial_results'].append({
-                            'layout_id': candidate_id, 'status': 'rejected',
-                            'reason': '结构字段未完成真实内容映射',
-                            'reason_code': issue['reason_code'],
-                            'unmapped_semantic_paths': issue['paths'],
-                            'content_adapter': None})
-                        continue
-                capacity_check = capacity_preflight(Path(report['library_path']), entry, data,
-                                            page.get('title'), report['theme'],
-                                            body_header_pilot=body_components_enabled(request))
-                if capacity_check['hard_issues']:
-                    choice['trial_results'].append({
-                        'layout_id': candidate_id, 'status': 'rejected',
-                        'reason': '绑定字段容量预检未通过', 'reason_code': 'TEXT_OVER_CAPACITY',
-                        'capacity_preflight': capacity_check, 'content_adapter': adapter})
-                    continue
-                wrap_applied = capacity_check['wrap_suggestions']
-                if wrap_applied and isinstance(candidate_data.get('texts'), dict):
-                    candidate_data = dict(candidate_data)
-                    candidate_data['texts'] = dict(candidate_data['texts'], **wrap_applied)
-                candidate_content_path = content_path
-                if adapter or wrap_applied:
-                    candidate_content_path = work / f'P{index:03d}-{candidate_id}-content.json'
-                    candidate_content_path.write_text(json.dumps(candidate_data, ensure_ascii=False, indent=2), encoding='utf-8')
-                try:
-                    library = Path(report['library_path'])
-                    fill_options = {'allow_draft': request.get('asset_policy', 'verified_draft') != 'approved_only'}
-                    if 'body_header_title' in capacity_check:
-                        fill_options['body_header_title'] = capacity_check['body_header_title']
-                    filled = fill(library, candidate_id, candidate_content_path, page_out, **fill_options)
+                trial_path = work / f'P{index:03d}-{candidate_id}-content.json'
+                filled, trial = try_candidate(
+                    library, entries[candidate_id], data, page, content_path, trial_path, page_out,
+                    allow_draft=allow_draft, body_header_pilot=body_enabled)
+                if 'detail' in trial:
+                    trial['reason'] = safe_message(trial.pop('detail'))
+                    for partial in (page_out, page_out.with_suffix('.qa.json'), page_out.with_suffix('.colors.json')):
+                        partial.unlink(missing_ok=True)
+                choice['trial_results'].append(trial)
+                if filled is not None:
                     if filled.get('body_header'):
                         choice['body_header'] = filled['body_header']
                     choice['layout_id'] = candidate_id
-                    choice['trial_results'].append({'layout_id': candidate_id, 'status': 'filled',
-                                                    'visual_qa': 'not_run', 'content_adapter': adapter,
-                                                    'capacity_preflight': capacity_check,
-                                                    'wrap_applied': wrap_applied,
-                                                    'field_source_evidence': field_source_evidence(
-                                                        dict(content, source_refs=page.get('source_refs', [])),
-                                                        candidate_data) if adapter else {}})
                     if page.get('role') == 'section' and locked_section_layout_id is None:
                         locked_section_layout_id = candidate_id
                     break
-                except (ValueError, KeyError, FileNotFoundError) as exc:
-                    choice['trial_results'].append({'layout_id': candidate_id, 'status': 'rejected',
-                                                    'reason': safe_message(exc),
-                                                    'reason_code': classify_trial_failure(str(exc)),
-                                                    'capacity_preflight': capacity_check,
-                                                    'wrap_applied': wrap_applied,
-                                                    'content_adapter': adapter})
-                    for partial in (page_out, page_out.with_suffix('.qa.json'),
-                                    page_out.with_suffix('.colors.json')):
-                        partial.unlink(missing_ok=True)
             if filled is None:
                 if page.get('role') in STRUCTURAL:
                     raise ValueError(f'第 {index} 页结构模板试填均失败：{choice["trial_results"]}')
@@ -498,7 +457,9 @@ def main():
             plan_request = dict(request)
             plan_request['allow_draft'] = request.get('asset_policy', 'verified_draft') != 'approved_only'
             plan_request['allow_provisional'] = request.get('asset_policy') == 'provisional_manual'
-            plan = resolve(Path(report['library_path']), plan_request)
+            library = Path(report['library_path'])
+            catalog = load_catalog(library)
+            plan = resolve(library, plan_request, catalog=catalog)
             plan['library_commit'] = report['library_commit']
             plan['library_source'] = report['library_source']
             plan['complete_deck'] = request.get('complete_deck', True)
@@ -507,7 +468,7 @@ def main():
                 previous_profile = os.environ.get('EPOINT_FONT_PROFILE')
                 os.environ['EPOINT_FONT_PROFILE'] = font_check['profile']['id']
                 try:
-                    report['execution'] = execute_plan(request, plan, report, args.execute_out)
+                    report['execution'] = execute_plan(request, plan, report, args.execute_out, catalog=catalog)
                 finally:
                     if previous_profile is None:
                         os.environ.pop('EPOINT_FONT_PROFILE', None)

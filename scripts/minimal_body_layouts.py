@@ -10,6 +10,7 @@ from pptx.oxml.xmlchemy import OxmlElement
 from pptx.util import Inches, Pt
 
 from fallback_rules import MINIMAL_BODY_TYPES
+from body_header import title_fits_frame
 from text_width import visual_width_units
 
 
@@ -364,11 +365,8 @@ def _draw_table(slide, spec, typography, theme):
 
 
 def verify_header_title(title, spec, index):
-    _, _, width, height = spec["title_box_inches"]
-    try:
-        _check_text(title, width, height, spec["title_size_pt"])
-    except ValueError as exc:
-        raise ValueError(f"第 {index} 页标题超出当前主题的公共页眉容量，请使用更短的页标题") from exc
+    if not title_fits_frame(title, spec):
+        raise ValueError(f"第 {index} 页标题超出当前主题的公共页眉容量，请使用更短的页标题")
 
 
 def compose(page, kind, index, *, tech_theme=False):

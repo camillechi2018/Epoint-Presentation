@@ -20,6 +20,18 @@ def binding_path_key(entry, theme):
     return 'bindings'
 
 
+def layout_source(entry, theme, *, body_contract=None):
+    """Return the source path and one-based page for a catalog entry."""
+    if body_contract is not None:
+        return body_contract['asset'], 1
+    ready = entry.get('ready_source_by_theme', {}).get(theme)
+    if ready:
+        return ready, 1
+    if theme == 'red':
+        return entry.get('red_source') or entry['source'], entry.get('red_source_page') or entry['source_page']
+    return entry['source'], entry['source_page']
+
+
 def config():
     return json.loads((SKILL / 'knowledge-base.json').read_text(encoding='utf-8-sig'))
 

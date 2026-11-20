@@ -56,6 +56,12 @@ def frame_spec(contract):
     return dict(layout, tech_content_header=spec), 'tech_content_header'
 
 
+def title_fits_frame(title, spec):
+    return (isinstance(title, str) and bool(title.strip())
+            and len(title.splitlines()) == 1 and '\n' not in title and '\r' not in title
+            and visual_width_units(title) <= spec['pilot_title_max_width_units'])
+
+
 def checked_title(binding, texts, page_title, contract):
     path = binding['semantic_path']
     if binding['field'] != path and binding['field'] in texts and path in texts:
@@ -67,8 +73,7 @@ def checked_title(binding, texts, page_title, contract):
     if not isinstance(title, str) or not title.strip():
         raise ValueError('BODY_HEADER_TITLE_REQUIRED')
     layout, key = frame_spec(contract)
-    max_units = layout[key]['pilot_title_max_width_units']
-    if len(title.splitlines()) != 1 or '\n' in title or '\r' in title or visual_width_units(title) > max_units:
+    if not title_fits_frame(title, layout[key]):
         raise ValueError('BODY_HEADER_TITLE_OVER_CAPACITY')
     return title
 

@@ -1,5 +1,5 @@
 """Fill one editable template; fail before writing on missing facts or capacity errors."""
-from library_location import binding_path_key, get_library
+from library_location import binding_path_key, get_library, layout_source
 from normalize_fonts import normalize
 from font_profile import resolve as resolve_font_profile
 from pathlib import Path
@@ -609,27 +609,25 @@ def write_text_fields(shapes, bindings, texts, logo_enabled):
             set_text(shapes[binding['shape_id']], texts[field])
 
 
-def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=None,no_logo=False,*,body_header_title=None):
+def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=None,no_logo=False,
+         *,body_header_title=None,catalog_entry=None):
     lib=Path(lib).resolve();out=Path(out).resolve();content=Path(content).resolve()
-    cat=json.loads((lib/'catalog.json').read_text(encoding='utf-8-sig'));m=next((x for x in cat['layouts'] if x['id']==layout),None)
-    if m is None:raise ValueError('未知组件 '+layout)
+    m=catalog_entry
+    if m is None:
+        cat=json.loads((lib/'catalog.json').read_text(encoding='utf-8-sig'))
+        m=next((x for x in cat['layouts'] if x['id']==layout),None)
+    if m is None or m['id']!=layout:raise ValueError('未知组件 '+layout)
     if m['status']!='approved' and not allow_draft:raise ValueError('组件尚未批准；内部使用必须显式 --allow-draft')
     data=json.loads(content.read_text(encoding='utf-8-sig'))
     theme=data.get('theme','blue')
     if theme not in m.get('themes',[]):raise ValueError('该组件不支持所选主题：'+str(theme))
-    source_rel=m.get('red_source') if theme=='red' and m.get('red_source') else m['source']
-    source_page=m.get('red_source_page') if theme=='red' and m.get('red_source_page') else m['source_page']
-    ready_source=m.get('ready_source_by_theme',{}).get(theme)
-    if ready_source:
-        source_rel=ready_source
-        source_page=1
+    source_rel, source_page = layout_source(m, theme)
     constraint_file=(lib/source_rel).parent/'constraints.json'
     body_header = contract_for(m, theme, body_header_title is not None)
     if body_header_title is not None:
         if not body_header or logo_config is not None or data.get('logo') is not None:
             raise ValueError('BODY_HEADER_CONFIGURATION_UNSUPPORTED')
-        source_rel = body_header['asset']
-        source_page = 1
+        source_rel, source_page = layout_source(m, theme, body_contract=body_header)
     commit=data.get('library_commit')
     source_stamp=None
     if commit is not None:

@@ -14,17 +14,8 @@ from pathlib import Path
 
 from body_header import body_components_enabled
 from relation_match import STRUCTURAL_ROLE_ORDER
-from fill_layout import fill
-from plan_deck import resolve
-from content_adapters import (adapt_for_layout, adapt_structural_fields,
-                              classify_trial_failure, structural_mapping_issue,
-                              field_source_evidence)
-from capacity_preflight import missing_binding_paths, preflight
-
-
-def unmapped_binding_paths(library: Path, binding: str, content: dict) -> list[str]:
-    fields = json.loads((library / binding).read_text(encoding='utf-8-sig'))['fields']
-    return sorted(set(missing_binding_paths(fields, content)))
+from candidate_trial import try_candidate
+from plan_deck import load, resolve
 
 
 def library_commit(library: Path) -> str:
@@ -39,7 +30,10 @@ def audit(library: Path, request_path: Path, work: Path, trial: bool) -> dict:
     planning_request = dict(request)
     planning_request['allow_draft'] = request.get('asset_policy', 'verified_draft') != 'approved_only'
     planning_request['allow_provisional'] = request.get('asset_policy') == 'provisional_manual'
-    plan = resolve(library, planning_request)
+    catalog = load(library)
+    entries = {entry['id']: entry for entry in catalog['layouts']}
+    commit = library_commit(library)
+    plan = resolve(library, planning_request, catalog=catalog)
     body_enabled = body_components_enabled(request)
     pages = []
     counters = Counter()
@@ -62,7 +56,7 @@ def audit(library: Path, request_path: Path, work: Path, trial: bool) -> dict:
         if trial and candidate_ids:
             content = dict(source.get('content') or {})
             content['theme'] = request['theme']
-            content['library_commit'] = library_commit(library)
+            content['library_commit'] = commit
             if 'items' not in content and isinstance(source.get('items'), list):
                 content['items'] = source['items']
             work.mkdir(parents=True, exist_ok=True)
@@ -70,80 +64,25 @@ def audit(library: Path, request_path: Path, work: Path, trial: bool) -> dict:
             content_path.write_text(json.dumps(content, ensure_ascii=False), encoding='utf-8')
             for order, layout_id in enumerate(candidate_ids, 1):
                 output = work / f'P{index:03d}-trial-{order}.pptx'
-                catalog = json.loads((library / 'catalog.json').read_text(encoding='utf-8-sig'))
-                entry = next(e for e in catalog['layouts'] if e['id'] == layout_id)
-                candidate_content, adapter = adapt_for_layout(layout_id, content, source.get('title'), entry=entry)
-                if not adapter and entry.get('matching_activation') in ('structure_ready', 'pilot_verified'):
-                    issue = structural_mapping_issue(entry, content, source.get('title'))
-                    if issue:
-                        partial_capacity = None
-                        if entry.get('matching_activation') == 'structure_ready':
-                            partial, _, _ = adapt_structural_fields(
-                                entry, content, source.get('title'), diagnostics=True)
-                            if isinstance(partial.get('texts'), dict) and partial['texts']:
-                                partial_capacity = preflight(
-                                    library, entry, partial, source.get('title'), request['theme'],
-                                    body_header_pilot=body_enabled)
-                        counters[issue['reason_code']] += 1
-                        row['trials'].append({
-                            'layout_id': layout_id, 'status': 'rejected',
-                            'reason_code': issue['reason_code'],
-                            'unmapped_semantic_paths': issue['paths'],
-                            'partial_capacity_hard_issues': (
-                                partial_capacity['hard_issues'] if partial_capacity else []),
-                            'content_adapter': None})
-                        continue
-                capacity_check = preflight(library, entry, content, source.get('title'), request['theme'],
-                                           body_header_pilot=body_enabled)
-                if capacity_check['hard_issues']:
-                    counters['TEXT_OVER_CAPACITY'] += 1
-                    row['trials'].append({'layout_id': layout_id, 'status': 'rejected',
-                                          'reason_code': 'TEXT_OVER_CAPACITY',
-                                          'capacity_preflight': capacity_check,
-                                          'content_adapter': adapter})
-                    continue
-                wrap_applied = capacity_check['wrap_suggestions']
-                if wrap_applied and isinstance(candidate_content.get('texts'), dict):
-                    candidate_content = dict(candidate_content)
-                    candidate_content['texts'] = dict(candidate_content['texts'], **wrap_applied)
-                trial_content_path = content_path
-                if adapter or wrap_applied:
-                    trial_content_path = work / f'P{index:03d}-trial-{order}-content.json'
-                    trial_content_path.write_text(json.dumps(candidate_content, ensure_ascii=False), encoding='utf-8')
-                try:
-                    options = {'allow_draft': planning_request['allow_draft']}
-                    if 'body_header_title' in capacity_check:
-                        options['body_header_title'] = capacity_check['body_header_title']
-                    result = fill(library, layout_id, trial_content_path, output, **options)
-                    row['trials'].append({'layout_id': layout_id, 'status': 'filled',
-                                          **({'body_header': result['body_header']} if result.get('body_header') else {}),
-                                          'visual_qa': 'not_run', 'content_adapter': adapter,
-                                          'capacity_preflight': capacity_check,
-                                          'wrap_applied': wrap_applied,
-                                          'field_source_evidence': field_source_evidence(
-                                              dict(content, source_refs=source.get('source_refs', [])),
-                                              candidate_content) if adapter else {}})
+                trial_path = work / f'P{index:03d}-trial-{order}-content.json'
+                filled, record = try_candidate(
+                    library, entries[layout_id], content, source, content_path, trial_path, output,
+                    allow_draft=planning_request['allow_draft'], body_header_pilot=body_enabled,
+                    diagnostics=True)
+                if 'detail' in record:
+                    record['detail'] = record['detail'][:300]
+                row['trials'].append(record)
+                if filled is not None:
                     row['source_template_used'] = True
                     counters['trial_filled_pages'] += 1
                     break
-                except (ValueError, KeyError, FileNotFoundError) as exc:
-                    code = classify_trial_failure(str(exc))
-                    counters[code] += 1
-                    rejection = {'layout_id': layout_id, 'status': 'rejected',
-                                 'reason_code': code, 'detail': str(exc)[:300],
-                                 'capacity_preflight': capacity_check,
-                                 'wrap_applied': wrap_applied,
-                                 'content_adapter': adapter}
-                    if code == 'MISSING_REQUIRED_FIELD':
-                        rejection['unmapped_semantic_paths'] = unmapped_binding_paths(
-                            library, capacity_check['binding_path'], candidate_content)
-                    row['trials'].append(rejection)
+                counters[record['reason_code']] += 1
             if not row['source_template_used']:
                 counters['no_fit_after_trial_pages'] += 1
         pages.append(row)
     total = counters['body_pages']
     return {'request': str(request_path), 'library': str(library),
-            'library_commit': library_commit(library),
+            'library_commit': commit,
             'trial_enabled': trial, 'metrics': {
                 'body_pages': total,
                 'template_attempt_rate': counters['template_attempted'] / total if total else 0,

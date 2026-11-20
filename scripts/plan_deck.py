@@ -378,8 +378,11 @@ def eligible(e, p, request, taxonomy):
     if e.get('role')=='data-chart' and not p.get('data_source'):reasons.append('data_source_missing')
     return reasons
 
-def resolve(library,request):
-    root=Path(library).resolve();catalog=load(root);taxonomy=load_taxonomy(root,catalog);request=dict(request);request['_root']=root
+def resolve(library,request,*,catalog=None):
+    root=Path(library).resolve()
+    if catalog is None:
+        catalog=load(root)
+    taxonomy=load_taxonomy(root,catalog);request=dict(request);request['_root']=root
     seed=request.get('seed',0)
     if type(seed) is not int:raise ValueError('seed必须是整数')
     pages=request.get('pages')

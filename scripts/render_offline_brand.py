@@ -33,6 +33,7 @@ from minimal_body_layouts import compose as compose_minimal_body, verify_header_
 from relation_match import STRUCTURAL_ROLE_ORDER
 from free_composition import render_free_page
 from tech_background import apply_tech_background, uses_shared_tech_background
+from body_background import blue_red_background_issue
 
 
 SKILL = Path(__file__).resolve().parents[1]
@@ -1469,28 +1470,18 @@ def render(plan: dict, output: Path):
     checks = []
     for n, slide in enumerate(check.slides, 1):
         logos = [s for s in slide.shapes if s.name.startswith("brand:logo:")]
-        atmosphere_spec = layout["content_atmosphere"]
-        atmosphere = [s for s in slide.shapes if s.name.startswith("brand:atmosphere:")]
         tech_header = theme_name == "deep-blue-tech"
-        expected_atmosphere = [] if tech_header else atmosphere_spec["circles_by_theme"][theme_name]
         shapes_in_order = list(slide.shapes)
+        atmosphere_count = sum(s.name.startswith("brand:atmosphere:") for s in shapes_in_order)
         if tech_header:
-            if not uses_shared_tech_background(slide, layout) or atmosphere:
+            if not uses_shared_tech_background(slide, layout) or atmosphere_count:
                 raise RuntimeError(f"第 {n} 页未使用科技风公共背景")
             if not shapes_in_order or shapes_in_order[0].shape_type != 6:
                 raise RuntimeError(f"第 {n} 页科技风标题栏原生图形组缺失")
-        elif (not shapes_in_order or shapes_in_order[0].name != "brand:canvas"
-              or shapes_in_order[0].fill.fore_color.rgb != rgb(theme["canvas"])
-              or len(atmosphere) != len(expected_atmosphere)
-              or shapes_in_order[1:1+len(atmosphere)] != atmosphere):
-            raise RuntimeError(f"第 {n} 页底层弥散形状缺失或层级错误")
-        for shape, item in zip(atmosphere, expected_atmosphere):
-            alpha = shape._element.xpath("./p:spPr/a:solidFill/a:srgbClr/a:alpha")
-            soft_edge = shape._element.xpath("./p:spPr/a:effectLst/a:softEdge")
-            if (shape.shape_type != 1 or shape.fill.fore_color.rgb != rgb(theme[item["color_role"]])
-                or len(alpha) != 1 or alpha[0].get("val") != str(round(item["opacity"] * 100000))
-                or len(soft_edge) != 1 or soft_edge[0].get("rad") != str(Pt(atmosphere_spec["blur_pt"]))):
-                raise RuntimeError(f"第 {n} 页弥散形状的主题色、透明度或柔边参数异常")
+        else:
+            issue = blue_red_background_issue(shapes_in_order, layout, theme_name, theme)
+            if issue:
+                raise RuntimeError(f"第 {n} 页{issue[1]}")
         header_spec = layout["tech_content_header"] if tech_header else layout["content_header"]
         titles = [s for s in slide.shapes if s.name == "brand:content-title"]
         rules = [s for s in slide.shapes if s.name == "brand:content-rule"]
@@ -1528,7 +1519,7 @@ def render(plan: dict, output: Path):
         checks.append({"page": n, "type": page_type,
                        "variant": resolved_variant(pages[n-1], page_type) if page_type in {"bullets", "cards", "process", "priority_grid", "milestone_timeline", "metrics", "comparison", "data_table", "image_case"} else None,
                        "image_source_path": str(pages[n-1]["image_path"]) if page_type == "image_case" else None,
-                       "logo_count": len(logos), "atmosphere_shapes": len(atmosphere),
+                       "logo_count": len(logos), "atmosphere_shapes": atmosphere_count,
                        "editable_text_shapes": len(text_shapes)})
     return {"schema_version": "1.0", "mode": "skill_offline_brand",
             "status": "draft_pending_review", "theme": theme_name,

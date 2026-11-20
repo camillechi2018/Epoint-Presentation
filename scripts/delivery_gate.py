@@ -13,6 +13,7 @@ from lxml import etree as ET
 from pptx import Presentation
 
 from distribution import verify_manifest
+from library_location import layout_source
 from opc_relationships import resolve_target
 from relation_match import STRUCTURAL_ROLE_ORDER as STRUCTURAL
 from body_header import contract_for
@@ -69,13 +70,6 @@ def check_structure(pages, *, complete=True):
             'roles': roles}
 
 
-def _source(entry, theme):
-    source = entry.get('red_source') if theme == 'red' and entry.get('red_source') else entry['source']
-    page = entry.get('red_source_page') if theme == 'red' and entry.get('red_source_page') else entry['source_page']
-    ready = entry.get('ready_source_by_theme', {}).get(theme)
-    return (ready, 1) if ready else (source, page)
-
-
 def check_prefilled(assembly, library):
     """Recheck trusted library bytes and all prefilled pages before assembly."""
     root = Path(library).resolve()
@@ -110,8 +104,8 @@ def check_prefilled(assembly, library):
             theme = assembly['theme']
             if theme not in entry.get('themes', []):
                 raise ValueError('SOURCE_THEME_MISMATCH')
-            source, source_page = _source(entry, theme)
             body_header = page.get('body_header')
+            contract = None
             if body_header:
                 contract = contract_for(entry, theme, True)
                 if (page.get('role') in STRUCTURAL or not contract
@@ -119,7 +113,7 @@ def check_prefilled(assembly, library):
                         or body_header.get('asset_sha256') != contract['sha256']
                         or manifest['files'].get(contract['asset']) != contract['sha256']):
                     raise ValueError('SOURCE_STAMP_NOT_CATALOG_BOUND')
-                source, source_page = contract['asset'], 1
+            source, source_page = layout_source(entry, theme, body_contract=contract)
             expected = f'epoint:{layout}:{theme}:{source}:{source_page}:{commit}'
             if page.get('source_stamp') != expected or slide.get('source_stamp') != expected or presentation.slides[0]._element.cSld.get('name') != expected:
                 raise ValueError('SOURCE_STAMP_NOT_CATALOG_BOUND')
