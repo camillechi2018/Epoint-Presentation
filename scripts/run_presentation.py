@@ -20,6 +20,7 @@ from office_runtime import probe as probe_office, assemble as assemble_office
 from delivery_status import assess as assess_delivery, exit_code as delivery_exit_code
 from assembly_backend import BACKENDS, select_backend
 from relation_match import STRUCTURAL_ROLE_ORDER as STRUCTURAL
+from body_header import body_components_enabled
 
 
 def _load_workflow():
@@ -265,7 +266,7 @@ def execute_plan(request, plan, report, output: Path):
                         continue
                 capacity_check = capacity_preflight(Path(report['library_path']), entry, data,
                                             page.get('title'), report['theme'],
-                                            body_header_pilot=request.get('body_header_pilot', True) is True)
+                                            body_header_pilot=body_components_enabled(request))
                 if capacity_check['hard_issues']:
                     choice['trial_results'].append({
                         'layout_id': candidate_id, 'status': 'rejected',

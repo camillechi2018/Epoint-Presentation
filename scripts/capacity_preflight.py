@@ -36,6 +36,19 @@ def _bindings(path: str):
     return json.loads(file.read_text(encoding='utf-8-sig'))['fields'], hashlib.sha256(file.read_bytes()).hexdigest()
 
 
+def required_input_fields(fields):
+    reserved = {'brand_locked', 'decoration_locked', 'source_decorative_locked', 'computed_item_count'}
+    return [field for field in fields if field.get('required', True) is not False
+            and field.get('semantic_role') not in reserved and field['field'] != 'brand']
+
+
+def missing_binding_paths(fields, content):
+    texts = content.get('texts')
+    provided = set(texts) if isinstance(texts, dict) else set()
+    return [field.get('semantic_path') or field['field'] for field in required_input_fields(fields)
+            if field['field'] not in provided and field.get('semantic_path') not in provided]
+
+
 def _safe_wrap(value: str, width: int, max_lines: int, max_chars: int,
                prefer_three: bool = False) -> str | None:
     if '\n' in value or max_lines < 2 or len(value) + 1 > max_chars:

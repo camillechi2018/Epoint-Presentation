@@ -12,28 +12,19 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-from library_location import binding_path_key
+from body_header import body_components_enabled
 from relation_match import STRUCTURAL_ROLE_ORDER
 from fill_layout import fill
 from plan_deck import resolve
 from content_adapters import (adapt_for_layout, adapt_structural_fields,
                               classify_trial_failure, structural_mapping_issue,
                               field_source_evidence)
-from capacity_preflight import preflight
+from capacity_preflight import missing_binding_paths, preflight
 
 
-def unmapped_binding_paths(library: Path, layout_id: str, content: dict, theme: str) -> list[str]:
-    catalog = json.loads((library / 'catalog.json').read_text(encoding='utf-8-sig'))
-    entry = next(item for item in catalog['layouts'] if item['id'] == layout_id)
-    binding = entry[binding_path_key(entry, theme)]
+def unmapped_binding_paths(library: Path, binding: str, content: dict) -> list[str]:
     fields = json.loads((library / binding).read_text(encoding='utf-8-sig'))['fields']
-    texts = content.get('texts') if isinstance(content.get('texts'), dict) else {}
-    return sorted({field.get('semantic_path') or field['field'] for field in fields
-                   if field.get('required', True) is not False
-                   if field.get('semantic_role') not in
-                   ('brand_locked', 'decoration_locked', 'computed_item_count')
-                   and field['field'] != 'brand'
-                   and field['field'] not in texts and field.get('semantic_path') not in texts})
+    return sorted(set(missing_binding_paths(fields, content)))
 
 
 def library_commit(library: Path) -> str:
@@ -49,6 +40,7 @@ def audit(library: Path, request_path: Path, work: Path, trial: bool) -> dict:
     planning_request['allow_draft'] = request.get('asset_policy', 'verified_draft') != 'approved_only'
     planning_request['allow_provisional'] = request.get('asset_policy') == 'provisional_manual'
     plan = resolve(library, planning_request)
+    body_enabled = body_components_enabled(request)
     pages = []
     counters = Counter()
     for index, (source, choice) in enumerate(zip(request['pages'], plan['pages']), 1):
@@ -90,7 +82,8 @@ def audit(library: Path, request_path: Path, work: Path, trial: bool) -> dict:
                                 entry, content, source.get('title'), diagnostics=True)
                             if isinstance(partial.get('texts'), dict) and partial['texts']:
                                 partial_capacity = preflight(
-                                    library, entry, partial, source.get('title'), request['theme'])
+                                    library, entry, partial, source.get('title'), request['theme'],
+                                    body_header_pilot=body_enabled)
                         counters[issue['reason_code']] += 1
                         row['trials'].append({
                             'layout_id': layout_id, 'status': 'rejected',
@@ -100,7 +93,8 @@ def audit(library: Path, request_path: Path, work: Path, trial: bool) -> dict:
                                 partial_capacity['hard_issues'] if partial_capacity else []),
                             'content_adapter': None})
                         continue
-                capacity_check = preflight(library, entry, content, source.get('title'), request['theme'])
+                capacity_check = preflight(library, entry, content, source.get('title'), request['theme'],
+                                           body_header_pilot=body_enabled)
                 if capacity_check['hard_issues']:
                     counters['TEXT_OVER_CAPACITY'] += 1
                     row['trials'].append({'layout_id': layout_id, 'status': 'rejected',
@@ -117,8 +111,12 @@ def audit(library: Path, request_path: Path, work: Path, trial: bool) -> dict:
                     trial_content_path = work / f'P{index:03d}-trial-{order}-content.json'
                     trial_content_path.write_text(json.dumps(candidate_content, ensure_ascii=False), encoding='utf-8')
                 try:
-                    fill(library, layout_id, trial_content_path, output, allow_draft=planning_request['allow_draft'])
+                    options = {'allow_draft': planning_request['allow_draft']}
+                    if 'body_header_title' in capacity_check:
+                        options['body_header_title'] = capacity_check['body_header_title']
+                    result = fill(library, layout_id, trial_content_path, output, **options)
                     row['trials'].append({'layout_id': layout_id, 'status': 'filled',
+                                          **({'body_header': result['body_header']} if result.get('body_header') else {}),
                                           'visual_qa': 'not_run', 'content_adapter': adapter,
                                           'capacity_preflight': capacity_check,
                                           'wrap_applied': wrap_applied,
@@ -138,7 +136,7 @@ def audit(library: Path, request_path: Path, work: Path, trial: bool) -> dict:
                                  'content_adapter': adapter}
                     if code == 'MISSING_REQUIRED_FIELD':
                         rejection['unmapped_semantic_paths'] = unmapped_binding_paths(
-                            library, layout_id, candidate_content, request['theme'])
+                            library, capacity_check['binding_path'], candidate_content)
                     row['trials'].append(rejection)
             if not row['source_template_used']:
                 counters['no_fit_after_trial_pages'] += 1

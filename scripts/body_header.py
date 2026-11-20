@@ -9,6 +9,10 @@ from text_width import visual_width_units
 SKILL = Path(__file__).resolve().parents[1]
 
 
+def body_components_enabled(request):
+    return request.get('format', 'pptx') == 'pptx' and request.get('body_header_pilot', True) is True
+
+
 @lru_cache(maxsize=1)
 def frame():
     return json.loads((SKILL / 'assets/layouts/offline-core.json').read_text(encoding='utf-8'))
