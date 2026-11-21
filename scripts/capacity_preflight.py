@@ -165,7 +165,8 @@ def preflight(library: Path, entry: dict, content: dict, page_title: str | None,
         lines = value.split('\n')
         widest = max(visual_width_units(line) for line in lines)
         reasons = binding_text_issues(value, field, width_units=widest)
-        if type(measured_wrap) is int and 0 < measured_wrap < widest and field.get('semantic_role') == 'body':
+        if (type(measured_wrap) is int and 0 < measured_wrap < widest
+                and field.get('semantic_role') == 'body' and not (set(reasons) - {'max_width_units'})):
             suggestion = wrap_card_body(value, measured_wrap, line_limit or 1)
             if suggestion is None:
                 reasons.append('measured_card_wrap')
