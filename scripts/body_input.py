@@ -34,7 +34,9 @@ def _metric_is_sourced(metric, paragraphs, source_refs):
         return False
     support = paragraphs[index]
     value = re.escape(metric['value'])
-    return (metric['label'] in support and re.search(r'(?<![\d.])' + value + r'(?![\d.])', support) is not None
+    # A copied number must keep a directly attached sign, multiplier, unit or range.
+    complete = r'(?<![\d.+−-])' + value + r'(?![\d.%％万亿元㎡人次单倍]|百分点|[—–~～-]\s*\d)'
+    return (metric['label'] in support and re.search(complete, support) is not None
             and ('period' not in metric or (_text(metric['period']) and metric['period'] in support)))
 
 
