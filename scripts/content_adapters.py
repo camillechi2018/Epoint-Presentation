@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from relation_match import supports_input_structure
 
+DECLARED_TITLE_BODY_ADAPTER = 'declared_title_body_fields'
+
 
 def _has_text(value):
     return isinstance(value, str) and bool(value.strip())
@@ -247,7 +249,7 @@ def _adapt_declared_title_body_fields(contract, content, page_title):
     adapted = dict(content, texts=texts, item_count=len(items))
     if fields.get('generic_visual') is True:
         adapted['generic_visual'] = True
-    return adapted, 'declared_title_body_fields'
+    return adapted, fields.get('adapter_name', DECLARED_TITLE_BODY_ADAPTER)
 
 
 def _adapt_for_layout_impl(layout_id: str, content: dict, page_title: str | None = None, entry=None) -> tuple[dict, str | None]:
@@ -703,10 +705,9 @@ def unmapped_pilot_input_paths(content: dict, mapped: dict) -> list[str]:
 
 
 def _unmapped_pilot_fields(entry, content, mapped, adapter):
-    if adapter != 'declared_title_body_fields':
+    fields = (entry.get('matching_contract') or {}).get('title_body_fields')
+    if fields is None or adapter != fields.get('adapter_name', DECLARED_TITLE_BODY_ADAPTER):
         return unmapped_pilot_input_paths(content, mapped)
-
-    fields = entry['matching_contract']['title_body_fields']
     return unmapped_title_body_fields(content, fields.get('page_fields', {}))
 
 
