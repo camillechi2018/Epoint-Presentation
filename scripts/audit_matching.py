@@ -13,7 +13,7 @@ from collections import Counter
 from pathlib import Path
 
 from body_header import body_components_enabled
-from body_input import matching_content
+from content_adapters import matching_content
 from relation_match import STRUCTURAL_ROLE_ORDER
 from candidate_trial import try_candidate
 from plan_deck import load, resolve

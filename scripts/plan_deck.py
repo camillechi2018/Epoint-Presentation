@@ -9,10 +9,10 @@ from library_location import binding_path_key, get_library
 from relation_match import (STRUCTURAL_ROLE_ORDER, canonical, load_taxonomy,
                             match_relation, match_role, supports_input_structure)
 from fallback_rules import fallback_type, fallback_catalog, uses_minimal_body_layout
-from content_adapters import adapt_for_layout
+from content_adapters import (BODY_RELATIONS, BODY_INPUT_RELATIONS,
+                              adapt_body_input, adapt_for_layout, matching_content)
 from capacity_preflight import missing_binding_paths, preflight, required_input_fields
 from body_header import body_components_enabled, contract_for, title_path
-from body_input import BODY_RELATIONS, RELATIONS as BODY_INPUT_RELATIONS, adapt_body_input, matching_content
 
 
 def semantic_fit(page, entry):
