@@ -10,7 +10,7 @@ metadata:
 ## 从材料到逐页请求
 
 1. 用 `scripts/run.py --read-material --input <原文件> --out <事实清单.json>` 读取 Word、Excel、PPTX、HTML、TXT 或 Markdown。PDF 和 PNG/JPEG 先用平台提取文字或 OCR，再加 `--extraction <平台提取.json>`。核对页码、表格、图片、公式缓存和识别疑点。除非用户指定视觉参考，旧演示稿只提供内容。详见[材料接入](references/material-ingestion.md)。
-2. 依据事实清单形成逐页草稿，保留原段、来源、图片及真实信息关系。选版入口自动整理并列短标题、指标和分组，也可用 `scripts/run.py --structure-content --request <草稿.json> --out <逐页请求.json> --report <整理报告.json>` 单独核对整理结果。缺少可靠依据的内容按原结构进入选版或技能排版。详见[材料结构化](references/content-structuring.md)。
+2. 依据事实清单形成逐页草稿，保留原段、来源、图片及真实信息关系。选版入口自动整理并列短标题、单项指标、多指标分组和层级，也可用 `scripts/run.py --structure-content --request <草稿.json> --out <逐页请求.json> --report <整理报告.json>` 单独核对整理结果。缺少可靠依据的内容按原结构进入选版或技能排版。详见[材料结构化](references/content-structuring.md)。
 3. 沿用用户已确认的整套风格。未指定时展示[三种风格预览](assets/style-previews/index.html)，让用户选择蓝色、红色或科技风；用户明确采用默认值时用蓝色。记录 `theme`、`style_family` 和任务 `font_profile`。科技风显式使用 `deep-blue-tech`。运行 `scripts/read_style_kit.py --theme <主题>` 并打开对应样图，按[风格选择](references/style-selection.md)执行。
 
 ## 选稿与试填

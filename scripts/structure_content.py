@@ -243,7 +243,7 @@ def automatic_annotation(page, content):
     """Propose only structures that can be traced to the supplied page."""
     import re
 
-    from content_adapters import infer_metric, matching_content
+    from content_adapters import infer_metric, infer_parallel_metrics, matching_content
 
     title = page.get('title') or content.get('title')
     if not isinstance(title, str) or not title.strip() or page.get('layout_id'):
@@ -260,7 +260,10 @@ def automatic_annotation(page, content):
             if titles := infer_item_titles(items):
                 annotation = {'type': 'parallel_cards', 'item_titles': titles}
         elif relation in ('data', 'metrics') and count in (2, 3, 5, 6):
-            if metric := infer_metric(items, title):
+            groups = infer_parallel_metrics(items) if count in (5, 6) else None
+            if groups and (len(groups), count) in ((4, 5), (2, 6)):
+                annotation = {'type': 'parallel_metrics', 'groups': groups}
+            elif not groups and (metric := infer_metric(items, title)):
                 annotation = {'type': 'metric_evidence', 'metric': metric}
         elif relation == 'hierarchy' and count == 5:
             background = r'背景|现状|不足|差距|问题|面临|困难|瓶颈'

@@ -18,12 +18,14 @@ def _has_text(value):
 BODY_RELATIONS = {
     'image_gallery': 'image-text',
     'metric_evidence': 'metrics',
+    'parallel_metrics': 'metrics',
     'single_focus': 'single-focus',
     'text_hierarchy': 'hierarchy',
     'report_table': 'data-table',
 }
 BODY_INPUT_RELATIONS = {kind: {relation} for kind, relation in BODY_RELATIONS.items()}
 BODY_INPUT_RELATIONS['metric_evidence'].add('data')
+BODY_INPUT_RELATIONS['parallel_metrics'].add('data')
 BODY_INPUT_RELATIONS['parallel_cards'] = {'parallel-points'}
 _CONTEXT = {'type', 'title', 'unit_claims', 'source_refs', 'logo', 'theme', 'library_commit'}
 
@@ -164,6 +166,43 @@ def infer_metric(paragraphs, page_title):
     return finalists[0] if len(finalists) == 1 else None
 
 
+_PARALLEL_LABEL = r'[\u3400-\u9fffA-Za-z]{2,16}?'
+_REPORT_SEPARATOR = r'\s*[，,、]\s*'
+_PARALLEL_REPORT = re.compile(
+    rf'^(?P<heading>{_PARALLEL_LABEL})(?P<metric>累计{_METRIC_JOINER}{_METRIC_VALUE}'
+    rf'{_REPORT_SEPARATOR}(?:本月|当月){_METRIC_JOINER}{_METRIC_VALUE}'
+    rf'{_REPORT_SEPARATOR}(?:环比|较上月){_METRIC_JOINER}(?:升|降)?{_METRIC_VALUE})'
+    r'(?=$|\s*[。；;，,、！？!?])'
+)
+_REPORT_START = re.compile(rf'^{_PARALLEL_LABEL}(?:累计|本月|当月){_METRIC_JOINER}{_METRIC_VALUE}')
+_FORECAST_HEADING = re.compile(r'预计|预测|估算|计划|目标|拟定|预算上限')
+
+
+def infer_parallel_metrics(items):
+    """Find comparable report blocks and keep their evidence paragraphs in order."""
+    if not isinstance(items, list) or not items or not all(_has_text(item) for item in items):
+        return None
+    groups = []
+    for index, item in enumerate(items):
+        text = item.strip()
+        if match := _PARALLEL_REPORT.match(text):
+            heading = match['heading']
+            if (_FORECAST_HEADING.search(heading)
+                    or any(group['heading'] == heading for group in groups)):
+                return None
+            groups.append({'heading': heading, 'metric': match['metric'], 'indices': [index]})
+        elif groups and not _REPORT_START.match(text):
+            groups[-1]['indices'].append(index)
+        else:
+            return None
+    return groups if len(groups) >= 2 else None
+
+
+def _sourced_parallel_metrics(groups, items, refs):
+    return (isinstance(refs, list) and any(_has_text(ref) for ref in refs)
+            and isinstance(groups, list) and groups == infer_parallel_metrics(items))
+
+
 def _gallery_pairs(content):
     layout = content.get('free_layout')
     elements = layout.get('elements') if isinstance(layout, dict) else None
@@ -251,6 +290,13 @@ def matching_content(page):
             if not _only_fields(annotation, {'type', 'metric'}) or not _metric_is_sourced(metric, items, refs):
                 return rejected
             context.update(metric=metric, source_refs=refs)
+        elif kind == 'parallel_metrics':
+            groups = annotation.get('groups')
+            refs = page.get('source_refs', original.get('source_refs'))
+            if (not _only_fields(annotation, {'type', 'groups'})
+                    or not _sourced_parallel_metrics(groups, items, refs)):
+                return rejected
+            context.update(groups=groups, source_refs=refs)
         elif kind == 'parallel_cards':
             titles = annotation.get('item_titles')
             if (not _only_fields(annotation, {'type', 'item_titles'})
@@ -307,6 +353,17 @@ def adapt_body_input(contract, content, page_title):
                 return rejected
             texts.update({f'metric.{key}': metric[key] for key in ('label', 'value', 'period') if key in metric})
             texts['evidence'] = '\n'.join(items)
+        elif kind == 'parallel_metrics':
+            groups = content.get('groups')
+            if (not _only_fields(content, _CONTEXT | {'items', 'groups'})
+                    or not _sourced_parallel_metrics(groups, items, content.get('source_refs'))
+                    or len(groups) != contract.get('group_count')):
+                return rejected
+            for slot, group in enumerate(groups):
+                prefix = f'groups[{slot}]'
+                texts[f'{prefix}.heading'] = group['heading']
+                texts[f'{prefix}.metric'] = group['metric']
+                texts[f'{prefix}.body'] = '\n'.join(items[index] for index in group['indices'])
         elif kind == 'single_focus':
             index = content.get('thesis_index')
             if (not _only_fields(content, _CONTEXT | {'items', 'thesis_index'}) or len(items) != 3
