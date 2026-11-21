@@ -22,6 +22,7 @@ from assembly_backend import BACKENDS, select_backend
 from relation_match import STRUCTURAL_ROLE_ORDER as STRUCTURAL
 from body_header import body_components_enabled
 from content_adapters import unmapped_title_body_fields
+from body_input import matching_content
 
 
 def _load_workflow():
@@ -241,7 +242,7 @@ def execute_plan(request, plan, report, output: Path, *, catalog=None):
             library = Path(report['library_path'])
             if entries is None:
                 entries = {entry['id']: entry for entry in load_catalog(library)['layouts']}
-            data = dict(content)
+            data = dict(matching_content(page)[0])
             data['theme'] = report['theme']
             data['library_commit'] = report['library_commit']
             if 'items' not in data and isinstance(page.get('items'), list):

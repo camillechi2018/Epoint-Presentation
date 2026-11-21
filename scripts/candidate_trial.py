@@ -58,8 +58,13 @@ def try_candidate(library, entry, data, page, content_path, trial_path, output,
         options["body_header_title"] = capacity["body_header_title"]
     try:
         filled = fill(library, layout_id, content_path, output, **options)
-    except (ValueError, KeyError, FileNotFoundError) as exc:
-        code = classify_trial_failure(str(exc))
+    except (ValueError, KeyError, OSError) as exc:
+        if isinstance(exc, OSError) and adapter == 'image_gallery_to_fields':
+            code = 'IMAGE_SLOT_MISMATCH'
+        elif isinstance(exc, OSError) and not isinstance(exc, FileNotFoundError):
+            raise
+        else:
+            code = classify_trial_failure(str(exc))
         record.update(reason_code=code, wrap_applied=wrap, detail=str(exc))
         if diagnostics and code == "MISSING_REQUIRED_FIELD":
             fields = json.loads((library / capacity["binding_path"]).read_text(encoding="utf-8-sig"))["fields"]

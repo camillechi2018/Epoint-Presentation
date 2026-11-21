@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from relation_match import supports_input_structure
+from body_input import adapt_body_input
 
 DECLARED_TITLE_BODY_ADAPTER = 'declared_title_body_fields'
 
@@ -738,6 +739,9 @@ def unmapped_title_body_fields(content, page_fields=()):
 
 
 def adapt_for_layout(layout_id: str, content: dict, page_title: str | None = None, entry=None) -> tuple[dict, str | None]:
+    contract = (entry or {}).get('matching_contract') or {}
+    if contract.get('body_input'):
+        return adapt_body_input(contract, content, page_title)
     mapped, adapter = _adapt_for_layout_impl(layout_id, content, page_title, entry)
     if (adapter and entry and entry.get('matching_activation') == 'pilot_verified'
             and content.get('type') != 'template_fields'

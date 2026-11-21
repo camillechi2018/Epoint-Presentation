@@ -35,4 +35,14 @@
 
 四项并列接收 `cards` 的 `items[].title` 和 `items[].body`。已验证组件的 `matching_contract.title_body_fields` 登记页标题、按视觉阅读顺序排列的条目绑定，以及可用的页面辅助字段。科技风 `content-tech-048` 需要材料支持的 `conclusion`，可选 `summary`。蓝红 `content-blue-112` 按同一输入契约填四项，并清理来源业务图标。旧知识库仍可用原有字段适配器，显式提供原生 `texts` 时沿用原字段路径。已验收的蓝红六项长文案版接收六组标题与正文，保持六项并列关系并按生效绑定做容量校验。
 
+图文、指标说明和单论点正文允许逐页提供 `body_match`。选版和试填读取该声明整理出的匹配字段，技能排版或自由编排时继续使用原 `content`。声明无法从原内容得到完整字段时，计划记录 `body_match_rejected` 并沿用原内容选版。
+
+| `body_match.type` | 适用关系 | 原内容和声明 |
+| --- | --- | --- |
+| `image_gallery` | `image-text` | `free_composition` 依次放入图片及正下方对应图注，共 4 或 5 对。原图为可访问的 PNG 或 JPEG 绝对路径，试填按比例缩放并保留图注。 |
+| `metric_evidence` | `metrics`、`data` | `bullets` 含 2、3、5 或 6 段原文。声明 `metric` 的 `label`、`value`、可选 `period` 均来自 `evidence_index` 指定的同一原段，索引从零开始。提供页面 `source_refs`。醒目位置引用原数值，全部原段照录，保留单位、时期、口径和限制。 |
+| `single_focus` | `single-focus` | `bullets` 含三段原文。用 `thesis_index` 指定原文中承担论点的段落，索引从零开始。其余两段作为依据，保留两段之间的原顺序。 |
+
+也可在有对应知识库组件的请求中直接提供同名 `content.type`。图库的 `items` 各项为 `image_path`、`caption`，指标说明沿用 `items` 原段及 `metric`，单论点沿用 `items` 原段及 `thesis_index`。
+
 封面、目录、章节、封底从当前固定知识库提交的 `review/structure-page-capacity.json` 读取主题、项数和逐字段已测容量；实际选版仍执行各组件 `bindings.json` 的字符、行数、行宽限制与 PowerPoint 渲染检查。目录按支持项数和每项标题／副标题分别校验；封面核对标题、副标题、署名与日期；章节页核对编号、标题和辅助文字，并保持整稿同一 `layout_id`；封底核对结束语与署名。已测字数只是对应压力样例的规划参考，不保证任意同长度文字均适配。封面、章节、封底的全部可编辑文字字段必须提供真实非空内容，缺失则改选版式或停止完整出稿，不保留来源示例文案。`visual_review=pending_final_deck_review` 的目录须在成稿中逐页目视复核。

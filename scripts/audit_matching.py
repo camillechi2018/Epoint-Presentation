@@ -13,6 +13,7 @@ from collections import Counter
 from pathlib import Path
 
 from body_header import body_components_enabled
+from body_input import matching_content
 from relation_match import STRUCTURAL_ROLE_ORDER
 from candidate_trial import try_candidate
 from plan_deck import load, resolve
@@ -54,7 +55,7 @@ def audit(library: Path, request_path: Path, work: Path, trial: bool) -> dict:
                'normalization': choice.get('request_normalization', []),
                'trials': [], 'source_template_used': False}
         if trial and candidate_ids:
-            content = dict(source.get('content') or {})
+            content = dict(matching_content(source)[0])
             content['theme'] = request['theme']
             content['library_commit'] = commit
             if 'items' not in content and isinstance(source.get('items'), list):

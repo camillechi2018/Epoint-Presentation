@@ -12,6 +12,7 @@ from fallback_rules import fallback_type, fallback_catalog, uses_minimal_body_la
 from content_adapters import adapt_for_layout
 from capacity_preflight import missing_binding_paths, preflight, required_input_fields
 from body_header import body_components_enabled, contract_for, title_path
+from body_input import BODY_RELATIONS, RELATIONS as BODY_INPUT_RELATIONS, adapt_body_input, matching_content
 
 
 def semantic_fit(page, entry):
@@ -37,7 +38,7 @@ CONTENT_RELATIONS = {
     'metrics': 'metrics', 'comparison': 'comparison', 'process': 'process',
     'bullets': 'parallel-points', 'cards': 'parallel-points',
     'data_table': 'data-table', 'milestone_timeline': 'timeline',
-    'hierarchy': 'framework',
+    'hierarchy': 'framework', **BODY_RELATIONS,
 }
 
 
@@ -49,7 +50,12 @@ def normalize_body_request(page):
         if page.get('layout_id') in NO_TEMPLATE_MARKERS:
             page.pop('layout_id')
             notes.append('removed_legacy_no_template_marker')
-        content = page.get('content') if isinstance(page.get('content'), dict) else {}
+        supplied, body_note = matching_content(page)
+        content = supplied if isinstance(supplied, dict) else {}
+        if body_note:
+            notes.append(body_note)
+        if supplied is not page.get('content'):
+            page['content'] = content
         if not page.get('information_relation'):
             relation = CONTENT_RELATIONS.get(content.get('type'))
             if relation:
@@ -115,6 +121,14 @@ def matches_structural_contract(entry, page, taxonomy):
         return False
     if page.get('role') not in (None, 'body', 'content', 'summary', 'parallel'):
         return False
+    if body_input := contract.get('body_input'):
+        relation = page.get('matching_relation') or page.get('information_relation')
+        valid_relations = BODY_INPUT_RELATIONS.get(body_input, set())
+        if entry.get('matching_activation') != 'pilot_verified' or (
+                relation not in valid_relations and canonical(relation, taxonomy) not in valid_relations):
+            return False
+        content = page.get('content') or {}
+        return bool(adapt_body_input(contract, content, page.get('title'))[1])
     if entry.get('matching_activation') == 'structure_ready' and not structural_relation_compatible(entry, page):
         return False
     content = page.get('content') if isinstance(page.get('content'), dict) else {}
@@ -382,6 +396,7 @@ def resolve(library,request,*,catalog=None):
     rng=random.Random(seed);chosen=[];family_usage=Counter();layout_usage=Counter();section_layout_id=None
     for index,p in enumerate(pages,1):
         if not isinstance(p,dict) or not str(p.get('purpose','')).strip():raise ValueError(f'第{index}页缺少purpose')
+        fallback_content = p.get('content')
         p,normalization=normalize_body_request(p);need=dict(p.get('needs') or {})
         content=p.get('content') if isinstance(p.get('content'),dict) else {}
         relation=p.get('information_relation')
@@ -413,7 +428,7 @@ def resolve(library,request,*,catalog=None):
         if not candidates:
             if p.get('role') in STRUCTURAL_ROLE_ORDER:
                 raise ValueError(f'第{index}页结构页没有合格版式；排除原因：{dict(rejected)}。')
-            content = p.get('content') if isinstance(p.get('content'), dict) else {}
+            content = fallback_content if isinstance(fallback_content, dict) else {}
             inferred = fallback_type(content) if content else None
             fallback_id = inferred if inferred in fallback_catalog() else inferred if inferred in ('bullets','cards','process','comparison','metrics') else None
             assessment=content.get('layout_assessment') if isinstance(content.get('layout_assessment'),dict) else {}
