@@ -52,7 +52,7 @@ _TITLE_NOUN_END = re.compile(
     r'达标率|合格率|采纳率|外勤率|检出率|达成率|出勤率|基线|保险|保障|开发商|提供商|'
     r'基金|材料|道路|教室|操场|讲座|比赛|演出|展览|图书|读物|标本|灌溉|土壤|物种|'
     r'片区|社区|公园|小区|街道|窗口|工厂|仓库|车辆|交通|供电|设施|建筑物|校区|'
-    r'报名|登记|预约|桩|站|馆|库|厅|站点|时段|时效|摘要|搜索|样本|池|专区|奖学金)\Z'
+    r'报名|登记|预约|条约|契约|桩|站|馆|库|厅|站点|时段|时效|摘要|搜索|样本|池|专区|奖学金)\Z'
 )
 _TITLE_TIME = re.compile(
     r'(?:上线[前后]|投产[前后]|开通[前后])|'
@@ -103,7 +103,8 @@ def _title_candidates(body):
         if (title not in body or title in _VAGUE_TITLES or visual_width_units(title) > 16
                 or not _TITLE_FORM.fullmatch(title) or len(title) < 2
                 or not any(char.isalpha() for char in title) or _UNCERTAIN.match(title)
-                or _NON_TITLE_END.search(title) or _PLACEHOLDER_TITLE.fullmatch(title)):
+                or (_NON_TITLE_END.search(title) and not _TITLE_NOUN_END.search(title))
+                or _PLACEHOLDER_TITLE.fullmatch(title)):
             return
         scores[title] = max(scores.get(title, 0), score)
 
