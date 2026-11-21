@@ -728,9 +728,11 @@ def unmapped_title_body_fields(content, page_fields=()):
 
     mapped_page_fields = {key for key in page_fields if _has_text(content.get(key))}
     unused = unused_fields(content, control | {'items'} | mapped_page_fields)
-    for index, item in enumerate(content.get('items', [])):
-        if isinstance(item, dict):
-            unused.extend(unused_fields(item, {'title', 'body'}, f'items[{index}].'))
+    items = content.get('items')
+    if isinstance(items, list):
+        for index, item in enumerate(items):
+            if isinstance(item, dict):
+                unused.extend(unused_fields(item, {'title', 'body'}, f'items[{index}].'))
     return unused
 
 

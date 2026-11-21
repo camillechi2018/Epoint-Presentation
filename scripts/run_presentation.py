@@ -237,7 +237,6 @@ def execute_plan(request, plan, report, output: Path, *, catalog=None):
         page_out = work / f'P{index:03d}.pptx'
         if page_out.exists():
             raise FileExistsError(f'中间文件已存在：{page_out}')
-        tried_declared_cards = False
         if choice['selection_mode'] == 'source_template':
             library = Path(report['library_path'])
             if entries is None:
@@ -255,11 +254,9 @@ def execute_plan(request, plan, report, output: Path, *, catalog=None):
                 candidate_ids = [locked_section_layout_id]
                 choice['candidate_ids'] = candidate_ids
             for candidate_id in candidate_ids:
-                entry = entries[candidate_id]
-                tried_declared_cards |= 'title_body_fields' in (entry.get('matching_contract') or {})
                 trial_path = work / f'P{index:03d}-{candidate_id}-content.json'
                 filled, trial = try_candidate(
-                    library, entry, data, page, content_path, trial_path, page_out,
+                    library, entries[candidate_id], data, page, content_path, trial_path, page_out,
                     allow_draft=allow_draft, body_header_pilot=body_enabled)
                 if 'detail' in trial:
                     trial['reason'] = safe_message(trial.pop('detail'))
@@ -305,7 +302,7 @@ def execute_plan(request, plan, report, output: Path, *, catalog=None):
             if guided['type'] in STRUCTURAL:
                 raise ValueError('结构页不得由离线正文绘制器替代')
             try:
-                if tried_declared_cards and guided['type'] == 'cards':
+                if guided['type'] == content.get('type') == 'cards':
                     unused = unmapped_title_body_fields(content)
                     if unused:
                         raise ValueError(f'卡片托底无法承载全部字段：{", ".join(unused)}')
