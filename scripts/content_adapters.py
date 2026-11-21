@@ -155,13 +155,15 @@ def matching_content(page):
             context.update(type='cards', items=cards)
         elif kind == 'text_hierarchy':
             groups = annotation.get('groups')
-            if not _only_fields(annotation, {'type', 'groups'}) or not _ordered_groups(groups, len(items)):
+            if (not _only_fields(annotation, {'type', 'groups'}) or not _label_list(items, len(items))
+                    or not _ordered_groups(groups, len(items))):
                 return rejected
             context['groups'] = groups
         else:
             columns, row_labels = annotation.get('columns'), annotation.get('row_labels')
             if (not _only_fields(annotation, {'type', 'columns', 'row_labels'})
-                    or not _label_list(columns, 2) or not _label_list(row_labels, len(items))):
+                    or not _label_list(columns, 2) or not _label_list(row_labels, len(items))
+                    or not _label_list(items, len(items))):
                 return rejected
             context.update(columns=columns, row_labels=row_labels)
     return context, f'body_match:{kind}'
@@ -212,7 +214,7 @@ def adapt_body_input(contract, content, page_title):
         elif kind == 'text_hierarchy':
             groups = content.get('groups')
             if (not _only_fields(content, _CONTEXT | {'items', 'groups'})
-                    or not _ordered_groups(groups, len(items))
+                    or not _label_list(items, len(items)) or not _ordered_groups(groups, len(items))
                     or [len(group['indices']) for group in groups] != contract.get('group_sizes', [2, 2, 1])):
                 return rejected
             for slot, group in enumerate(groups):
@@ -221,15 +223,16 @@ def adapt_body_input(contract, content, page_title):
         else:
             columns, labels = content.get('columns'), content.get('row_labels')
             if (not _only_fields(content, _CONTEXT | {'items', 'columns', 'row_labels'})
-                    or not _label_list(columns, 2) or not _label_list(labels, len(items))):
+                    or not _label_list(columns, 2) or not _label_list(labels, len(items))
+                    or not _label_list(items, len(items))):
                 return rejected
             rows = [columns, *[list(row) for row in zip(labels, items, strict=True)]]
             shape_id = contract.get('table_shape_id')
             width = contract.get('table_column_width_units', [])
             if (contract.get('table_columns') != 2 or contract.get('table_rows') != len(rows)
                     or type(shape_id) is not int or len(width) != 2
-                    or any(visual_width_units(line) > max_width for row in rows
-                           for value, max_width in zip(row, width, strict=True) for line in value.splitlines())):
+                    or any(visual_width_units(value) > max_width for row in rows
+                           for value, max_width in zip(row, width, strict=True))):
                 return rejected
             return dict(content, texts=texts, tables=[{'shape_id': shape_id, 'rows': rows}]), 'report_table_to_fields'
     result = dict(content, texts=texts)
