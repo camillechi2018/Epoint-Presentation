@@ -170,7 +170,7 @@ def structural_mapping_issue(entry, content, page_title=None):
     if entry.get('matching_activation') == 'pilot_verified':
         mapped, adapter = _adapt_for_layout_impl(entry['id'], content, page_title, entry)
         if adapter:
-            unused = unmapped_pilot_input_paths(content, mapped)
+            unused = _unmapped_pilot_fields(entry, content, mapped, adapter)
             if unused:
                 return {'reason_code': 'INPUT_FACTS_UNMAPPED', 'paths': unused}
         return None
@@ -702,11 +702,43 @@ def unmapped_pilot_input_paths(content: dict, mapped: dict) -> list[str]:
     return unused
 
 
+def _unmapped_pilot_fields(entry, content, mapped, adapter):
+    if adapter != 'declared_title_body_fields':
+        return unmapped_pilot_input_paths(content, mapped)
+
+    fields = entry['matching_contract']['title_body_fields']
+    return unmapped_title_body_fields(content, fields.get('page_fields', {}))
+
+
+def unmapped_title_body_fields(content, page_fields=()):
+    """List supplied facts outside the card and supported page fields."""
+    control = {'type', 'structure_type', 'title', 'theme', 'library_commit', 'item_count',
+               'layout_id', 'unit_claims', 'layout_assessment', 'free_layout', 'logo', 'variant'}
+
+    def unused_fields(record, allowed, prefix=''):
+        paths = []
+        for key, value in record.items():
+            if (key in allowed or key == 'source_refs' or key.endswith('_source_refs')
+                    or (not prefix and key.startswith('_'))):
+                continue
+            present = value.strip() if isinstance(value, str) else value not in (None, [], {})
+            if present:
+                paths.append(f'unmapped_input:{prefix}{key}')
+        return paths
+
+    mapped_page_fields = {key for key in page_fields if _has_text(content.get(key))}
+    unused = unused_fields(content, control | {'items'} | mapped_page_fields)
+    for index, item in enumerate(content.get('items', [])):
+        if isinstance(item, dict):
+            unused.extend(unused_fields(item, {'title', 'body'}, f'items[{index}].'))
+    return unused
+
+
 def adapt_for_layout(layout_id: str, content: dict, page_title: str | None = None, entry=None) -> tuple[dict, str | None]:
     mapped, adapter = _adapt_for_layout_impl(layout_id, content, page_title, entry)
     if (adapter and entry and entry.get('matching_activation') == 'pilot_verified'
             and content.get('type') != 'template_fields'
-            and unmapped_pilot_input_paths(content, mapped)):
+            and _unmapped_pilot_fields(entry, content, mapped, adapter)):
         return dict(content), None
     return mapped, adapter
 
