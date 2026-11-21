@@ -42,7 +42,10 @@
 | `image_gallery` | `image-text` | `free_composition` 依次放入图片及正下方对应图注，共 4 或 5 对。原图为可访问的 PNG 或 JPEG 绝对路径，试填按比例缩放并保留图注。 |
 | `metric_evidence` | `metrics`、`data` | `bullets` 含 2、3、5 或 6 段原文。声明 `metric` 的 `label`、`value`、可选 `period` 均来自 `evidence_index` 指定的同一原段，索引从零开始。提供页面 `source_refs`。醒目位置引用原数值，全部原段照录，保留单位、时期、口径和限制。 |
 | `single_focus` | `single-focus` | `bullets` 含三段原文。用 `thesis_index` 指定原文中承担论点的段落，索引从零开始。其余两段作为依据，保留两段之间的原顺序。 |
+| `parallel_cards` | `parallel-points` | `bullets` 的每段对应一个有来源的 `item_titles` 短标题。按原顺序映射为 `cards`，逐条保留正文原句。知识库可按蓝红和科技风所登记的固定项数及容量选择长文版。 |
+| `text_hierarchy` | `hierarchy` | `bullets` 的五段原文按 `groups:[{heading,indices}]` 分为三组，段数为 2、2、1。索引从零开始，完整覆盖并保持原顺序。版式用三层信息分组呈现背景、方法、目标等内容。 |
+| `report_table` | `data-table` | `bullets` 的五段原始摘要对应五项 `row_labels`，`columns` 提供两个列名。原生表格用表头加五行呈现项目与原文，保留数值、公式表现及口径说明。数据仍使用原材料的来源和业务状态。 |
 
-也可在有对应知识库组件的请求中直接提供同名 `content.type`。图库的 `items` 各项为 `image_path`、`caption`，指标说明沿用 `items` 原段及 `metric`，单论点沿用 `items` 原段及 `thesis_index`。
+也可在有对应知识库组件的请求中直接提供同名 `content.type`。图库的 `items` 各项为 `image_path`、`caption`，指标说明、单论点、层级和表格沿用 `items` 原段及各自标注字段。并列正文的直接输入沿用 `cards`；也可继续用 `--structure-content` 把原列表与 `content.item_titles` 整理为卡片。
 
 封面、目录、章节、封底从当前固定知识库提交的 `review/structure-page-capacity.json` 读取主题、项数和逐字段已测容量；实际选版仍执行各组件 `bindings.json` 的字符、行数、行宽限制与 PowerPoint 渲染检查。目录按支持项数和每项标题／副标题分别校验；封面核对标题、副标题、署名与日期；章节页核对编号、标题和辅助文字，并保持整稿同一 `layout_id`；封底核对结束语与署名。已测字数只是对应压力样例的规划参考，不保证任意同长度文字均适配。封面、章节、封底的全部可编辑文字字段必须提供真实非空内容，缺失则改选版式或停止完整出稿，不保留来源示例文案。`visual_review=pending_final_deck_review` 的目录须在成稿中逐页目视复核。

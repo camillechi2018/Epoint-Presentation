@@ -5,6 +5,8 @@ from pathlib import Path
 import re
 
 from relation_match import STRUCTURAL_ROLES, supports_input_structure
+from structure_content import titled_items
+from text_width import visual_width_units
 
 DECLARED_TITLE_BODY_ADAPTER = 'declared_title_body_fields'
 
@@ -17,9 +19,12 @@ BODY_RELATIONS = {
     'image_gallery': 'image-text',
     'metric_evidence': 'metrics',
     'single_focus': 'single-focus',
+    'text_hierarchy': 'hierarchy',
+    'report_table': 'data-table',
 }
 BODY_INPUT_RELATIONS = {kind: {relation} for kind, relation in BODY_RELATIONS.items()}
 BODY_INPUT_RELATIONS['metric_evidence'].add('data')
+BODY_INPUT_RELATIONS['parallel_cards'] = {'parallel-points'}
 _CONTEXT = {'type', 'title', 'unit_claims', 'source_refs', 'logo', 'theme', 'library_commit'}
 
 
@@ -79,6 +84,24 @@ def _gallery_pairs(content):
     return pairs
 
 
+def _label_list(values, size):
+    return isinstance(values, list) and len(values) == size and all(
+        _has_text(value) and '\n' not in value and '\r' not in value for value in values)
+
+
+def _ordered_groups(groups, count):
+    if not isinstance(groups, list) or not groups:
+        return False
+    order = []
+    for group in groups:
+        if (not _only_fields(group, {'heading', 'indices'}) or not _label_list([group.get('heading')], 1)
+                or not isinstance(group.get('indices'), list) or not group['indices']
+                or any(type(index) is not int for index in group['indices'])):
+            return False
+        order.extend(group['indices'])
+    return order == list(range(count))
+
+
 def matching_content(page):
     """Add a source-proven matching interpretation while keeping fallback content intact."""
     original = page.get('content') or {}
@@ -89,7 +112,7 @@ def matching_content(page):
             return dict(original, source_refs=original.get('source_refs', page['source_refs'])), None
         return original, None
     kind = annotation.get('type') if isinstance(annotation, dict) else None
-    label = kind if isinstance(kind, str) and kind in BODY_RELATIONS else 'invalid'
+    label = kind if isinstance(kind, str) and kind in BODY_INPUT_RELATIONS else 'invalid'
     rejected = original, f'body_match_rejected:{label}'
     relation = page.get('matching_relation') or page.get('information_relation')
     if (label == 'invalid' or relation not in BODY_INPUT_RELATIONS[kind]
@@ -118,12 +141,29 @@ def matching_content(page):
                     or type(index) is not int or not 0 <= index < len(items)):
                 return rejected
             context['thesis_index'] = index
-        else:
+        elif kind == 'metric_evidence':
             metric = annotation.get('metric')
             refs = page.get('source_refs', original.get('source_refs'))
             if not _only_fields(annotation, {'type', 'metric'}) or not _metric_is_sourced(metric, items, refs):
                 return rejected
             context.update(metric=metric, source_refs=refs)
+        elif kind == 'parallel_cards':
+            titles = annotation.get('item_titles')
+            if (not _only_fields(annotation, {'type', 'item_titles'})
+                    or not _label_list(titles, len(items)) or not (cards := titled_items(items, titles))):
+                return rejected
+            context.update(type='cards', items=cards)
+        elif kind == 'text_hierarchy':
+            groups = annotation.get('groups')
+            if not _only_fields(annotation, {'type', 'groups'}) or not _ordered_groups(groups, len(items)):
+                return rejected
+            context['groups'] = groups
+        else:
+            columns, row_labels = annotation.get('columns'), annotation.get('row_labels')
+            if (not _only_fields(annotation, {'type', 'columns', 'row_labels'})
+                    or not _label_list(columns, 2) or not _label_list(row_labels, len(items))):
+                return rejected
+            context.update(columns=columns, row_labels=row_labels)
     return context, f'body_match:{kind}'
 
 
@@ -161,7 +201,7 @@ def adapt_body_input(contract, content, page_title):
                 return rejected
             texts.update({f'metric.{key}': metric[key] for key in ('label', 'value', 'period') if key in metric})
             texts['evidence'] = '\n'.join(items)
-        else:
+        elif kind == 'single_focus':
             index = content.get('thesis_index')
             if (not _only_fields(content, _CONTEXT | {'items', 'thesis_index'}) or len(items) != 3
                     or type(index) is not int or not 0 <= index < len(items)):
@@ -169,6 +209,29 @@ def adapt_body_input(contract, content, page_title):
             texts['thesis'] = items[index]
             for slot, evidence in enumerate(items[:index] + items[index + 1:]):
                 texts[f'items[{slot}].body'] = evidence
+        elif kind == 'text_hierarchy':
+            groups = content.get('groups')
+            if (not _only_fields(content, _CONTEXT | {'items', 'groups'})
+                    or not _ordered_groups(groups, len(items))
+                    or [len(group['indices']) for group in groups] != contract.get('group_sizes', [2, 2, 1])):
+                return rejected
+            for slot, group in enumerate(groups):
+                texts[f'groups[{slot}].heading'] = group['heading']
+                texts[f'groups[{slot}].body'] = '\n'.join(items[index] for index in group['indices'])
+        else:
+            columns, labels = content.get('columns'), content.get('row_labels')
+            if (not _only_fields(content, _CONTEXT | {'items', 'columns', 'row_labels'})
+                    or not _label_list(columns, 2) or not _label_list(labels, len(items))):
+                return rejected
+            rows = [columns, *[list(row) for row in zip(labels, items, strict=True)]]
+            shape_id = contract.get('table_shape_id')
+            width = contract.get('table_column_width_units', [])
+            if (contract.get('table_columns') != 2 or contract.get('table_rows') != len(rows)
+                    or type(shape_id) is not int or len(width) != 2
+                    or any(visual_width_units(line) > max_width for row in rows
+                           for value, max_width in zip(row, width, strict=True) for line in value.splitlines())):
+                return rejected
+            return dict(content, texts=texts, tables=[{'shape_id': shape_id, 'rows': rows}]), 'report_table_to_fields'
     result = dict(content, texts=texts)
     if images:
         result.pop('items')  # Native images and captions already cover each input item.

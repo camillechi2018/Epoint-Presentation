@@ -15,11 +15,20 @@ PARALLEL = {'parallel-points', 'summary', 'framework'}
 STRUCTURAL = set(STRUCTURAL_ROLES)
 
 
+def titled_items(items, titles):
+    """Attach reviewed short titles to the original bodies in order."""
+    if (not isinstance(items, list) or not items or not isinstance(titles, list)
+            or len(titles) != len(items)
+            or not all(isinstance(text, str) and text.strip() for text in [*items, *titles])):
+        return None
+    return [{'title': title.strip(), 'body': body} for title, body in zip(titles, items, strict=True)]
+
+
 def prepare(request):
     if not isinstance(request, dict) or not isinstance(request.get('pages', []), list):
         raise ValueError('REQUEST_PAGES_INVALID')
     result = copy.deepcopy(request)
-    changes, tasks, retained = [], [], []
+    changes, tasks, retained, matching_only = [], [], [], []
     for index, page in enumerate(result.get('pages', []), 1):
         if not isinstance(page, dict):
             raise ValueError('PAGE_INVALID: ' + str(index))
@@ -38,15 +47,21 @@ def prepare(request):
         if isinstance(reason, str) and reason.strip():
             retained.append(dict(info, reason=reason))
             continue
+        if 'body_match' in page:
+            from content_adapters import matching_content
+            _, note = matching_content(page)
+            if note and note.startswith('body_match:'):
+                matching_only.append(dict(info, operation=note, body_preserved=True))
+                continue
         relation = page.get('matching_relation') or page.get('information_relation')
         titles = content.get('item_titles')
+        cards = titled_items(items, titles)
         issue = None
         if relation not in PARALLEL:
             issue = 'RELATION_NEEDS_STRUCTURED_CONTENT'
         elif not all(isinstance(item, str) and item.strip() for item in items):
             issue = 'ITEMS_NEED_REVIEW'
-        elif (not isinstance(titles, list) or len(titles) != len(items)
-              or not all(isinstance(title, str) and title.strip() for title in titles)):
+        elif cards is None:
             issue = 'ITEM_TITLES_REQUIRED'
         if issue:
             tasks.append(dict(info, code=issue, information_relation=relation,
@@ -58,8 +73,7 @@ def prepare(request):
                                       '不新增业务结论。确需纯列表时填写 keep_bullets_reason。')))
             continue
         content['type'] = 'cards'
-        content['items'] = [{'title': title.strip(), 'body': body}
-                            for title, body in zip(titles, items)]
+        content['items'] = cards
         del content['item_titles']
         evidence = dict(info, operation='verbatim_bullets_to_cards',
                         body_preserved=True, title_review='host_agent_provided',
@@ -73,6 +87,8 @@ def prepare(request):
               'status': 'needs_agent_structure' if tasks else 'ready_for_matching',
               'changed_pages': changes, 'tasks': tasks, 'retained_bullet_pages': retained,
               'scope': 'content organization only; no template fill or visual acceptance'}
+    if matching_only:
+        report['matching_only_pages'] = matching_only
     return result, report
 
 
