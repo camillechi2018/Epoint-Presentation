@@ -48,4 +48,6 @@
 
 也可在有对应知识库组件的请求中直接提供同名 `content.type`。图库的 `items` 各项为 `image_path`、`caption`，指标说明、单论点、层级和表格沿用 `items` 原段及各自标注字段。并列正文的直接输入沿用 `cards`；也可继续用 `--structure-content` 把原列表与 `content.item_titles` 整理为卡片。
 
+登记 `matching_contract.body_wrap_width_units` 的卡片在试填时按实测行宽加入换行，复核符号、数值与单位的相邻关系，避免常用闭合标点单独断到下一行。换行保留所有原字符，仍执行对应绑定的单段字数和行数上限。
+
 封面、目录、章节、封底从当前固定知识库提交的 `review/structure-page-capacity.json` 读取主题、项数和逐字段已测容量；实际选版仍执行各组件 `bindings.json` 的字符、行数、行宽限制与 PowerPoint 渲染检查。目录按支持项数和每项标题／副标题分别校验；封面核对标题、副标题、署名与日期；章节页核对编号、标题和辅助文字，并保持整稿同一 `layout_id`；封底核对结束语与署名。已测字数只是对应压力样例的规划参考，不保证任意同长度文字均适配。封面、章节、封底的全部可编辑文字字段必须提供真实非空内容，缺失则改选版式或停止完整出稿，不保留来源示例文案。`visual_review=pending_final_deck_review` 的目录须在成稿中逐页目视复核。

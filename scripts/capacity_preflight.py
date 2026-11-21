@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from functools import lru_cache
 from pathlib import Path
 
@@ -87,6 +88,43 @@ def _safe_wrap(value: str, width: int, max_lines: int, max_chars: int,
     return None
 
 
+_CARD_TOKENS = (
+    re.compile(r'[+−-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:[—–~～/-]\d+(?:\.\d+)?)*'
+               r'(?:[ \t]*(?:个百分点|万元|亿元|千克|公里|[％%万亿元㎡人次项个单倍年月日]))?'),
+    re.compile(r'[A-Za-z][A-Za-z0-9_.+-]*'),
+)
+_CARD_TRAILING = '，。！？；：、,.!?;:）)]】》”’'
+_CARD_OPENING = '（([【《“‘'
+
+
+def wrap_card_body(value, width, max_lines):
+    """Insert measured card line breaks without splitting amounts or punctuation."""
+    lines = []
+    for paragraph in value.split('\n'):
+        if visual_width_units(paragraph) <= width:
+            lines.append(paragraph)
+            continue
+        protected = {cut for pattern in _CARD_TOKENS for token in pattern.finditer(paragraph)
+                     for cut in range(token.start() + 1, token.end())}
+        allowed = [cut for cut in range(1, len(paragraph)) if cut not in protected
+                   and paragraph[cut] not in _CARD_TRAILING and paragraph[cut - 1] not in _CARD_OPENING]
+        start = 0
+        while visual_width_units(paragraph[start:]) > width:
+            choices = [cut for cut in allowed if cut > start
+                       and visual_width_units(paragraph[start:cut]) <= width]
+            if not choices or len(lines) >= max_lines:
+                return None
+            end = choices[-1]
+            natural = [cut for cut in choices if paragraph[cut - 1] in _CARD_TRAILING
+                       and visual_width_units(paragraph[cut:end]) <= 6]
+            if natural:
+                end = natural[-1]
+            lines.append(paragraph[start:end])
+            start = end
+        lines.append(paragraph[start:])
+    return '\n'.join(lines) if len(lines) <= max_lines else None
+
+
 def preflight(library: Path, entry: dict, content: dict, page_title: str | None,
               theme: str, *, body_header_pilot=False) -> dict:
     """Return hard binding failures, advisory long-copy pressure and wrap options."""
@@ -112,6 +150,7 @@ def preflight(library: Path, entry: dict, content: dict, page_title: str | None,
     margins = []
     near_hard = policy.get('near_hard_limit_ratio', .85)
     near_reviewed = policy.get('near_recommended_limit_ratio', .9)
+    measured_wrap = (entry.get('matching_contract') or {}).get('body_wrap_width_units')
     for field in bindings:
         semantic = field.get('semantic_path')
         key = semantic if semantic in texts else field['field'] if field['field'] in texts else None
@@ -126,7 +165,16 @@ def preflight(library: Path, entry: dict, content: dict, page_title: str | None,
         lines = value.split('\n')
         widest = max(visual_width_units(line) for line in lines)
         reasons = binding_text_issues(value, field, width_units=widest)
-        if reasons == ['max_width_units']:
+        if type(measured_wrap) is int and 0 < measured_wrap < widest and field.get('semantic_role') == 'body':
+            suggestion = wrap_card_body(value, measured_wrap, line_limit or 1)
+            if suggestion is None:
+                reasons.append('measured_card_wrap')
+            else:
+                reasons = binding_text_issues(suggestion, field)
+                if not reasons:
+                    wrap_suggestions[key] = suggestion
+                    advisory.append({'field': semantic or field['field'], 'rule': 'measured_card_wrap'})
+        elif reasons == ['max_width_units']:
             suggestion = _safe_wrap(value, int(width_limit), line_limit or 1,
                                     char_limit or 9999,
                                     prefer_three=field.get('semantic_role') == 'body')
