@@ -150,7 +150,7 @@ def adapt_body_input(contract, content, page_title):
             if not path.is_absolute() or path.suffix.lower() not in {'.jpg', '.jpeg', '.png'} or not path.is_file():
                 return rejected
             images.append({'shape_name': slot['shape_name'], 'path': str(path), 'source': str(path)})
-            texts[slot['semantic_path']] = item['caption']
+            texts[slot['caption_path']] = item['caption']
     else:
         if not all(_has_text(item) for item in items):
             return rejected
