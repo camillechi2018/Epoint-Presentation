@@ -11,6 +11,47 @@ from distribution import verify_manifest
 from managed_library_cache import online_snapshot, cached as managed_cached
 
 SKILL = Path(__file__).resolve().parents[1]
+BODY_PACK = SKILL / 'assets' / 'body-components'
+
+
+def bundled_body_manifest():
+    return verify_manifest(BODY_PACK)
+
+
+def load_catalog(root, *, body_manifest=None):
+    """Use one candidate pool while keeping both asset roots independently verifiable."""
+    catalog = json.loads((Path(root) / 'catalog.json').read_text(encoding='utf-8-sig'))
+    if body_manifest is None:
+        bundled_body_manifest()
+    if any('asset_origin' in entry for entry in catalog['layouts']):
+        raise ValueError('CATALOG_ASSET_ORIGIN_RESERVED')
+    bundled = json.loads((BODY_PACK / 'catalog.json').read_text(encoding='utf-8'))
+    ids = {entry['id'] for entry in bundled['layouts']}
+    if len(ids) != len(bundled['layouts']):
+        raise ValueError('BUNDLED_BODY_DUPLICATE_LAYOUT_ID')
+    existing = {entry['id'] for entry in catalog['layouts']}
+    # Older snapshots may have their own versions of the same ID. Keep that
+    # version so requests pinned to those snapshots remain reproducible.
+    catalog['layouts'] += [dict(entry, asset_origin='skill') for entry in bundled['layouts']
+                           if entry['id'] not in existing]
+    taxonomy = bundled.get('relation_taxonomy')
+    if taxonomy:
+        catalog['bundled_relations'] = json.loads(
+            (BODY_PACK / taxonomy).read_text(encoding='utf-8'))['relations']
+    return catalog
+
+
+def asset_root(root, entry):
+    return BODY_PACK if entry.get('asset_origin') == 'skill' else Path(root)
+
+
+def source_locator(entry, relative):
+    """Qualify component paths in source stamps without changing the base commit field."""
+    return 'skill/' + relative if entry.get('asset_origin') == 'skill' else relative
+
+
+def selection_label(entry):
+    return '技能内置组件' if entry.get('asset_origin') == 'skill' else '知识库模板'
 
 
 def binding_path_key(entry, theme):

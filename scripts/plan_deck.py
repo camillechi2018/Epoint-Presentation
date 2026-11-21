@@ -5,7 +5,7 @@ from text_width import directory_text_over_capacity, visual_width_units
 import argparse, json, random, re
 from collections import Counter
 from pathlib import Path
-from library_location import binding_path_key, get_library
+from library_location import asset_root, binding_path_key, get_library, load_catalog as load, selection_label
 from relation_match import (STRUCTURAL_ROLE_ORDER, canonical, load_taxonomy,
                             match_relation, match_role, supports_input_structure)
 from fallback_rules import fallback_type, fallback_catalog, uses_minimal_body_layout
@@ -26,10 +26,6 @@ def semantic_fit(page, entry):
         return {part for chunk in chunks for part in
                 ([chunk[i:i+2] for i in range(len(chunk)-1)] if '\u3400'<=chunk[0]<='\u9fff' else [chunk])}
     return min(4,len(terms(query)&terms(label)))
-
-def load(root: Path):
-    return json.loads((root/'catalog.json').read_text(encoding='utf-8-sig'))
-
 
 # Older request examples used this marker to force a drawn page. It is not a
 # catalog ID and must not suppress a later, newly verified template match.
@@ -71,6 +67,7 @@ def normalize_body_request(page):
 
 def count_profile(entry, root):
     """Use recorded fixed-count evidence when old layouts lack verified_counts."""
+    root=asset_root(root,entry)
     rules=json.loads((root/entry['layout_rules']).read_text(encoding='utf-8'))
     verified=rules.get('verified_counts')
     if isinstance(verified,list):
@@ -93,7 +90,7 @@ def binding_gap(entry, page, root, theme, *, binding_rel=None):
     content = page.get('content') if isinstance(page.get('content'), dict) else {}
     content, _ = adapt_for_layout(entry['id'], content, page.get('title'), entry=entry)
     binding_rel = binding_rel or entry[binding_path_key(entry, theme)]
-    fields = json.loads((root / binding_rel).read_text(encoding='utf-8-sig'))['fields']
+    fields = json.loads((asset_root(root, entry) / binding_rel).read_text(encoding='utf-8-sig'))['fields']
     return len(missing_binding_paths(fields, content))
 
 STRUCTURAL_RELATION_GROUPS = {
@@ -340,7 +337,7 @@ def eligible(e, p, request, taxonomy):
     if title_chars is not None:
         if type(title_chars) is not int or title_chars<1:reasons.append('invalid_title_length')
         elif e.get('title_pressure_status')=='tested_short_copy_only' and not replaces_title:
-            rules=json.loads((request['_root']/e['layout_rules']).read_text(encoding='utf-8'))
+            rules=json.loads((asset_root(request['_root'],e)/e['layout_rules']).read_text(encoding='utf-8'))
             if title_chars>rules.get('title_pressure_test',{}).get('safe_title_chars',0):reasons.append('title_over_capacity')
         if isinstance(p.get('title'),str) and e.get('role') in STRUCTURAL_ROLE_ORDER:
             binding_rel = e.get(binding_path_key(e, theme))
@@ -383,6 +380,14 @@ def eligible(e, p, request, taxonomy):
                 if any(reason in reasons for reason in ('missing_directory_field','directory_text_over_capacity')):break
     if e.get('role')=='data-chart' and not p.get('data_source'):reasons.append('data_source_missing')
     return reasons
+
+def summarize_selection(pages):
+    counts = Counter(page['selection_label'] for page in pages)
+    summary = {label: counts[label] for label in ('知识库模板', '技能排版', '自由编排')}
+    if counts['技能内置组件']:
+        summary['技能内置组件'] = counts['技能内置组件']
+    return summary
+
 
 def resolve(library,request,*,catalog=None):
     root=Path(library).resolve()
@@ -480,7 +485,8 @@ def resolve(library,request,*,catalog=None):
         for row in scored[:12]:
             candidate=row[12]
             binding_rel = row[13]['binding_path']
-            binding_fields=json.loads((root/binding_rel).read_text(encoding='utf-8-sig'))['fields']
+            candidate_root=asset_root(root,candidate)
+            binding_fields=json.loads((candidate_root/binding_rel).read_text(encoding='utf-8-sig'))['fields']
             candidate_summaries.append({
                 'layout_id':candidate['id'],
                 'structure_type':(candidate.get('matching_contract') or {}).get('structure_type'),
@@ -496,7 +502,9 @@ def resolve(library,request,*,catalog=None):
                 'unmapped_binding_fields':row[1],
                 'field_status':'ready' if row[1]==0 else 'awaiting_mapping',
                 'capacity_preflight':row[13],
-                'source_preview':candidate.get('preview')})
+                'source_preview':candidate.get('preview'),
+                **({'asset_origin':'skill','source_preview_root':str(candidate_root)}
+                   if candidate.get('asset_origin') == 'skill' else {})})
         layout_usage[e['id']]+=1;family_usage[fam]+=1
         if p.get('role')=='section' and section_layout_id is None:
             section_layout_id=e['id']
@@ -504,7 +512,7 @@ def resolve(library,request,*,catalog=None):
         if type(trial_limit) is not int or not 1<=trial_limit<=8:
             raise ValueError('max_template_trials须为1至8的整数')
         chosen.append({'page':index,'purpose':p['purpose'],'evidence':p.get('evidence'),
-                        'selection_mode':'source_template','selection_label':'知识库模板','candidate_ids':[e['id']] if p.get('role')=='section' else [row[12]['id'] for row in scored[:trial_limit]],
+                        'selection_mode':'source_template','selection_label':selection_label(e),'candidate_ids':[e['id']] if p.get('role')=='section' else [row[12]['id'] for row in scored[:trial_limit]],
                        'candidate_summaries':candidate_summaries,
                        'field_ready_candidate_count':sum(row[1]==0 for row in scored),
                        'trial_results':[],'reason_code':None,'source_stamp':None,
@@ -522,8 +530,7 @@ def resolve(library,request,*,catalog=None):
                        'classification_status':e.get('classification_status'),
                        'manual_review_required':e.get('classification_status')!='verified' or e.get('status')!='approved'})
         chosen[-1]['request_normalization']=normalization
-    summary={label:sum(row['selection_label']==label for row in chosen)
-             for label in ('知识库模板','技能排版','自由编排')}
+    summary=summarize_selection(chosen)
     return {'schema_version':'1.0','library_version':catalog['version'],'seed':seed,
             'status':'planned_not_filled','selection_summary':summary,'pages':chosen}
 

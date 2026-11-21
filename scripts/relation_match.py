@@ -30,7 +30,9 @@ def supports_input_structure(input_type, structure):
 
 def load_taxonomy(root: Path, catalog: dict) -> dict:
     path = root / catalog.get('relation_taxonomy', 'relation-taxonomy.json')
-    return json.loads(path.read_text(encoding='utf-8-sig'))
+    taxonomy = json.loads(path.read_text(encoding='utf-8-sig'))
+    taxonomy['relations'] = {**catalog.get('bundled_relations', {}), **taxonomy['relations']}
+    return taxonomy
 
 
 def canonical(value: str | None, taxonomy: dict) -> str | None:

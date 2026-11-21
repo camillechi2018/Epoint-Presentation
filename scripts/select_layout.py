@@ -2,7 +2,7 @@
 from __future__ import annotations
 import argparse,json
 from pathlib import Path
-from library_location import get_library
+from library_location import asset_root, get_library, load_catalog
 from relation_match import load_taxonomy, match_relation, match_role
 from plan_deck import count_profile, semantic_fit
 
@@ -13,7 +13,7 @@ def main():
     a=ap.parse_args()
     if a.limit<1:ap.error('--limit必须大于0')
     if a.item_count is not None and a.item_count<1:ap.error('--item-count必须大于0')
-    root=a.library or get_library();catalog=json.loads((root/'catalog.json').read_text(encoding='utf-8-sig'))
+    root=a.library or get_library();catalog=load_catalog(root)
     taxonomy=load_taxonomy(root,catalog)
     rows=[e for e in catalog['layouts'] if match_role(e,a.role,a.relation,taxonomy)
           and match_relation(e,a.relation,taxonomy)
@@ -30,8 +30,12 @@ def main():
                              -semantic_fit({'purpose':a.purpose or ''},e),
                              -int(a.item_count is not None and a.item_count==count_profile(e,root)[1]),
                              e['id']))
+    rows=[dict(e, preview_root=str(asset_root(root,e))) if e.get('asset_origin') == 'skill' else e for e in rows]
     if a.brief:
-        rows=[{k:(e.get(k) or 'legacy-blue-red') if k=='style_family' else e.get(k) for k in ('id','role','style_family','information_relation','canonical_relation','search_label','classification_status','family_id','source_page','themes','style','visual_impact','preview','status')} for e in rows]
+        fields = ('id','role','style_family','information_relation','canonical_relation','search_label',
+                  'classification_status','family_id','source_page','themes','style','visual_impact','preview','status')
+        rows = [dict({k: e.get(k) for k in fields}, style_family=e.get('style_family') or 'legacy-blue-red',
+                     **{k: e[k] for k in ('asset_origin','preview_root') if k in e}) for e in rows]
     print(json.dumps({'version':catalog['version'],'total_matches':len(rows),'shown_matches':min(len(rows),a.limit),
                       'matches':rows[:a.limit]},ensure_ascii=False,indent=2))
     return 0 if rows else 2

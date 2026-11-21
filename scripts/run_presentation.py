@@ -14,7 +14,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from library_location import SKILL, resolve_library
+from library_location import SKILL, load_catalog, resolve_library, selection_label
 from font_profile import probe as probe_font_profile
 from office_runtime import probe as probe_office, assemble as assemble_office
 from delivery_status import assess as assess_delivery, exit_code as delivery_exit_code
@@ -26,10 +26,10 @@ from content_adapters import matching_content, unmapped_title_body_fields
 
 def _load_workflow():
     # Environment inspection and library preflight must not require rendering packages.
-    global resolve, load_catalog, try_candidate, render_guided_page
+    global resolve, summarize_selection, try_candidate, render_guided_page
     global resolved_variant, validate_page, fallback_type, audit_deck
     global check_structure, check_directory_section_count, directory_item_count, check_prefilled, check_finished
-    from plan_deck import load as load_catalog, resolve
+    from plan_deck import resolve, summarize_selection
     from candidate_trial import try_candidate
     from render_offline_brand import render as render_guided_page, resolved_variant, validate_page
     from fallback_rules import fallback_type
@@ -102,7 +102,7 @@ def capability(assembly_backend='auto'):
 
 
 def candidate_counts(root, theme, family):
-    catalog = json.loads((root / 'catalog.json').read_text(encoding='utf-8-sig'))
+    catalog = load_catalog(root)
     counts = {}
     for role in (*STRUCTURAL, 'body'):
         rows = [e for e in catalog['layouts']
@@ -267,6 +267,7 @@ def execute_plan(request, plan, report, output: Path, *, catalog=None):
                     if filled.get('body_header'):
                         choice['body_header'] = filled['body_header']
                     choice['layout_id'] = candidate_id
+                    choice['selection_label'] = selection_label(entries[candidate_id])
                     if page.get('role') == 'section' and locked_section_layout_id is None:
                         locked_section_layout_id = candidate_id
                     break
@@ -382,11 +383,11 @@ def execute_plan(request, plan, report, output: Path, *, catalog=None):
     audit_path.write_text(json.dumps(audit, ensure_ascii=False, indent=2), encoding='utf-8')
     if not audit['p0_passed']:
         raise RuntimeError('成稿来源或内容验收失败：' + str(audit['issues'][:5]))
-    plan['selection_summary'] = {label: sum(row['selection_label'] == label for row in plan['pages'])
-                                 for label in ('知识库模板', '技能排版', '自由编排')}
+    plan['selection_summary'] = summarize_selection(plan['pages'])
     delivery = assess_delivery(output, render_dir, len(slides), native_render)
     return {'output': str(output.resolve()), 'slides': len(slides),
-            'library_used': any(x['selection_mode'] == 'source_template' for x in plan['pages']),
+            'library_used': plan['selection_summary']['知识库模板'] > 0,
+            'bundled_body_pages': plan['selection_summary'].get('技能内置组件', 0),
             'source_template_pages': sum(x['selection_mode'] == 'source_template' for x in plan['pages']),
             'guided_pages': sum(x['selection_mode'] == 'guided_composition' for x in plan['pages']),
             'free_pages': sum(x['selection_mode'] == 'free_composition' for x in plan['pages']),

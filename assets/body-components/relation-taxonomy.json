@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "relations": {
+    "image-text": {
+      "aliases": [
+        "图文",
+        "图片图集",
+        "图片与说明"
+      ],
+      "specific_relations": [
+        "image-text"
+      ]
+    }
+  }
+}

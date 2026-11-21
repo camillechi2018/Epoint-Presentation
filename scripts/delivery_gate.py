@@ -13,7 +13,7 @@ from lxml import etree as ET
 from pptx import Presentation
 
 from distribution import verify_manifest
-from library_location import layout_source
+from library_location import asset_root, bundled_body_manifest, layout_source, load_catalog, source_locator
 from opc_relationships import resolve_target
 from relation_match import STRUCTURAL_ROLE_ORDER as STRUCTURAL
 from body_header import contract_for
@@ -80,7 +80,8 @@ def check_prefilled(assembly, library):
                      else manifest.get('source_commit'))
     if commit != actual_commit or not re.fullmatch(r'[0-9a-f]{40}', str(commit)):
         raise ValueError('LIBRARY_COMMIT_MISMATCH')
-    catalog = json.loads((root / 'catalog.json').read_text(encoding='utf-8-sig'))
+    body_manifest = bundled_body_manifest()
+    catalog = load_catalog(root, body_manifest=body_manifest)
     entries = {entry['id']: entry for entry in catalog['layouts']}
     pages = assembly.get('pages', [])
     slides = assembly.get('slides', [])
@@ -104,6 +105,8 @@ def check_prefilled(assembly, library):
             theme = assembly['theme']
             if theme not in entry.get('themes', []):
                 raise ValueError('SOURCE_THEME_MISMATCH')
+            bundled = entry.get('asset_origin') == 'skill'
+            source_manifest = body_manifest if bundled else manifest
             body_header = page.get('body_header')
             contract = None
             if body_header:
@@ -111,17 +114,20 @@ def check_prefilled(assembly, library):
                 if (page.get('role') in STRUCTURAL or not contract
                         or body_header.get('asset') != contract['asset']
                         or body_header.get('asset_sha256') != contract['sha256']
-                        or manifest['files'].get(contract['asset']) != contract['sha256']):
+                        or source_manifest['files'].get(contract['asset']) != contract['sha256']):
                     raise ValueError('SOURCE_STAMP_NOT_CATALOG_BOUND')
             source, source_page = layout_source(entry, theme, body_contract=contract)
-            expected = f'epoint:{layout}:{theme}:{source}:{source_page}:{commit}'
+            locator = source_locator(entry, source)
+            expected = f'epoint:{layout}:{theme}:{locator}:{source_page}:{commit}'
             if page.get('source_stamp') != expected or slide.get('source_stamp') != expected or presentation.slides[0]._element.cSld.get('name') != expected:
                 raise ValueError('SOURCE_STAMP_NOT_CATALOG_BOUND')
-            expected_hash = manifest['files'].get(source)
-            if not expected_hash or hashlib.sha256((root / source).read_bytes()).hexdigest() != expected_hash:
+            expected_hash = source_manifest['files'].get(source)
+            if not expected_hash or hashlib.sha256((asset_root(root,entry) / source).read_bytes()).hexdigest() != expected_hash:
                 raise ValueError('SOURCE_FILE_HASH_MISMATCH')
-            record.update(layout_id=layout, source=source, source_page=source_page,
+            record.update(layout_id=layout, source=locator, source_page=source_page,
                           source_sha256=expected_hash, source_stamp=expected)
+            if bundled:
+                record.update(asset_origin='skill', asset_source_commit=body_manifest['source_commit'])
         elif page.get('role') in STRUCTURAL:
             raise ValueError('STRUCTURE_SOURCE_REQUIRED')
         evidence.append(record)

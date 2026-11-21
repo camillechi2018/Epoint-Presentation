@@ -189,7 +189,7 @@ Epoint-Presentation/
 └── install.ps1 / install.sh 跨系统运行环境安装入口
 ```
 
-完整模板、组件目录和专项验收记录位于[独立知识库仓库](https://github.com/camillechi2018/Epoint-Presentation-KnowledgeBase)，不随本技能仓库重复分发。历史本地备份 `assets/minimal-template-pack.previous/` 不进入 Git 仓库。
+完整原稿、原模板组件目录和专项验收记录位于[独立知识库仓库](https://github.com/camillechi2018/Epoint-Presentation-KnowledgeBase)。技能编排试点新增的正文组件随本包的 assets/body-components 分发，包含独立目录、检查清单、可编辑纯正文和兼容整页。匹配时与原模板候选一起比较，成稿来源记录区分技能内置组件和知识库模板。历史本地备份 `assets/minimal-template-pack.previous/` 不进入 Git 仓库。
 
 ## 授权状态
 

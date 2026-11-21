@@ -1,5 +1,5 @@
 """Fill one editable template; fail before writing on missing facts or capacity errors."""
-from library_location import binding_path_key, get_library, layout_source
+from library_location import asset_root, binding_path_key, get_library, layout_source, load_catalog, source_locator
 from normalize_fonts import normalize
 from font_profile import resolve as resolve_font_profile
 from pathlib import Path
@@ -611,7 +611,7 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
     lib=Path(lib).resolve();out=Path(out).resolve();content=Path(content).resolve()
     m=catalog_entry
     if m is None:
-        cat=json.loads((lib/'catalog.json').read_text(encoding='utf-8-sig'))
+        cat=load_catalog(lib)
         m=next((x for x in cat['layouts'] if x['id']==layout),None)
     if m is None or m['id']!=layout:raise ValueError('未知组件 '+layout)
     if m['status']!='approved' and not allow_draft:raise ValueError('组件尚未批准；内部使用必须显式 --allow-draft')
@@ -619,7 +619,8 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
     theme=data.get('theme','blue')
     if theme not in m.get('themes',[]):raise ValueError('该组件不支持所选主题：'+str(theme))
     source_rel, source_page = layout_source(m, theme)
-    constraint_file=(lib/source_rel).parent/'constraints.json'
+    component_root=asset_root(lib,m)
+    constraint_file=(component_root/source_rel).parent/'constraints.json'
     body_header = contract_for(m, theme, body_header_title is not None)
     if body_header_title is not None:
         if not body_header or logo_config is not None or data.get('logo') is not None:
@@ -637,13 +638,16 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
             actual=manifest.get('source_commit')
         if actual!=commit:
             raise ValueError('知识库提交号与填充计划不一致')
-        source_stamp=f'epoint:{layout}:{theme}:{source_rel}:{source_page}:{commit}'
-    source=(lib/source_rel).resolve()
-    if not source.is_relative_to(lib):raise ValueError('源文件越出库根目录')
-    if out==source or out.is_relative_to(lib/'layouts') or out.is_relative_to(lib/'diagrams') or out.is_relative_to(lib/'master'):raise ValueError('输出不能覆盖模板库资产')
+        locator=source_locator(m,source_rel)
+        source_stamp=f'epoint:{layout}:{theme}:{locator}:{source_page}:{commit}'
+    source=(component_root/source_rel).resolve()
+    if not source.is_relative_to(component_root):raise ValueError('源文件越出库根目录')
+    if (out==source or out.is_relative_to(lib/'layouts') or out.is_relative_to(lib/'diagrams')
+            or out.is_relative_to(lib/'master') or (component_root != lib and out.is_relative_to(component_root))):
+        raise ValueError('输出不能覆盖模板库资产')
     binding_rel = body_header['bindings'] if body_header else m[binding_path_key(m, theme)]
-    binding_path = (lib/binding_rel).resolve()
-    if not binding_path.is_relative_to(lib):
+    binding_path = (component_root/binding_rel).resolve()
+    if not binding_path.is_relative_to(component_root):
         raise ValueError('绑定文件越出库根目录')
     if body_header:
         verify_asset(source, body_header['sha256'])
@@ -653,7 +657,7 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
         safe_media={'brand_logo_locked','source_decorative_locked','source_visual_locked','cover_visual_layer'}
         unreviewed=[x for x in binding_data.get('objects',{}).get('images',[]) if x.get('semantic_role') not in safe_media]
         if unreviewed:raise ValueError('该页含未分类的源稿图片，需先确认装饰用途或替换内容图片；内部结构测试可传 --internal-draft')
-    rules=json.loads((lib/m['layout_rules']).read_text(encoding='utf-8-sig'))
+    rules=json.loads((component_root/m['layout_rules']).read_text(encoding='utf-8-sig'))
     item_count=data.get('item_count')
     if item_count is not None and rules.get('cardinality_mode')=='fixed' and item_count not in rules.get('supported_counts',[]):
         raise ValueError('固定项数组件不支持该项数；请重新选版')

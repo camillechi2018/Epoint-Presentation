@@ -7,7 +7,7 @@ import re
 from functools import lru_cache
 from pathlib import Path
 
-from library_location import binding_path_key
+from library_location import asset_root, binding_path_key
 from content_adapters import adapt_for_layout
 from text_width import binding_text_issues, visual_width_units
 from body_header import checked_title, contract_for
@@ -128,7 +128,7 @@ def wrap_card_body(value, width, max_lines):
 def preflight(library: Path, entry: dict, content: dict, page_title: str | None,
               theme: str, *, body_header_pilot=False) -> dict:
     """Return hard binding failures, advisory long-copy pressure and wrap options."""
-    library = Path(library).resolve()
+    library = asset_root(Path(library).resolve(), entry)
     mapped, adapter = adapt_for_layout(entry['id'], content, page_title, entry=entry)
     texts = mapped.get('texts') if isinstance(mapped.get('texts'), dict) else {}
     contract = contract_for(entry, theme, body_header_pilot and content.get('logo') is None)

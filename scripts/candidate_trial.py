@@ -10,6 +10,7 @@ from content_adapters import (
     structural_mapping_issue,
 )
 from fill_layout import fill
+from library_location import asset_root
 
 
 def try_candidate(library, entry, data, page, content_path, trial_path, output,
@@ -19,6 +20,8 @@ def try_candidate(library, entry, data, page, content_path, trial_path, output,
     theme = data["theme"]
     candidate, adapter = adapt_for_layout(layout_id, data, title, entry=entry)
     record = {"layout_id": layout_id, "status": "rejected", "content_adapter": adapter}
+    if entry.get('asset_origin') == 'skill':
+        record['asset_origin'] = 'skill'
 
     if not adapter and entry.get("matching_activation") in ("structure_ready", "pilot_verified"):
         issue = structural_mapping_issue(entry, data, title)
@@ -67,7 +70,7 @@ def try_candidate(library, entry, data, page, content_path, trial_path, output,
             code = classify_trial_failure(str(exc))
         record.update(reason_code=code, wrap_applied=wrap, detail=str(exc))
         if diagnostics and code == "MISSING_REQUIRED_FIELD":
-            fields = json.loads((library / capacity["binding_path"]).read_text(encoding="utf-8-sig"))["fields"]
+            fields = json.loads((asset_root(library, entry) / capacity["binding_path"]).read_text(encoding="utf-8-sig"))["fields"]
             record["unmapped_semantic_paths"] = sorted(set(missing_binding_paths(fields, candidate)))
         return None, record
 
