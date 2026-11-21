@@ -174,7 +174,11 @@ _PARALLEL_REPORT = re.compile(
     rf'{_REPORT_SEPARATOR}(?:环比|较上月){_METRIC_JOINER}(?:升|降|持平)?{_METRIC_VALUE})'
     r'(?=$|\s*[。；;，,、！？!?])'
 )
-_REPORT_START = re.compile(rf'^{_PARALLEL_LABEL}(?:累计|本月|当月){_METRIC_JOINER}{_METRIC_VALUE}')
+_REPORT_START = re.compile(
+    r'^(?:(?:[•●▪‣-]|\d+[.、]|[（(]\d+[）)])\s*)?'
+    r'[\u3400-\u9fffA-Za-z/／ \t]{1,24}?\s*[:：]?\s*'
+    rf'(?:累计|本月|当月){_METRIC_JOINER}{_METRIC_VALUE}'
+)
 _FORECAST_HEADING = re.compile(r'预计|预测|估算|计划|目标|拟定|预算上限')
 
 
