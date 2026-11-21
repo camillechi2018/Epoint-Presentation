@@ -17,6 +17,7 @@ from content_adapters import matching_content
 from relation_match import STRUCTURAL_ROLE_ORDER
 from candidate_trial import try_candidate
 from plan_deck import load, resolve
+from structure_content import prepare
 
 
 def library_commit(library: Path) -> str:
@@ -27,7 +28,7 @@ def library_commit(library: Path) -> str:
 
 
 def audit(library: Path, request_path: Path, work: Path, trial: bool) -> dict:
-    request = json.loads(request_path.read_text(encoding='utf-8-sig'))
+    request, content_preparation = prepare(json.loads(request_path.read_text(encoding='utf-8-sig')), auto=True)
     planning_request = dict(request)
     planning_request['allow_draft'] = request.get('asset_policy', 'verified_draft') != 'approved_only'
     planning_request['allow_provisional'] = request.get('asset_policy') == 'provisional_manual'
@@ -84,6 +85,7 @@ def audit(library: Path, request_path: Path, work: Path, trial: bool) -> dict:
     total = counters['body_pages']
     return {'request': str(request_path), 'library': str(library),
             'library_commit': commit,
+            'content_preparation': content_preparation,
             'trial_enabled': trial, 'metrics': {
                 'body_pages': total,
                 'template_attempt_rate': counters['template_attempted'] / total if total else 0,

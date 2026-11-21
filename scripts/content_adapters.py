@@ -43,21 +43,125 @@ def _metric_is_sourced(metric, paragraphs, source_refs):
         return False
     support = paragraphs[index]
     # Match a complete label-to-value quote, not two independent hits in a paragraph.
-    joiner = r'\s*(?:[:：=＝]|为|是|达到|达)?\s*'
     label = re.escape(metric['label'])
     value = (re.escape(metric['value'])
              + r'(?!\d|[.,]\d|\s*(?:[%％万亿元㎡人次单倍个]|百分点|千克|公斤|吨|公里|[—–~～-]\s*\d))')
     period = metric.get('period')
     if 'period' not in metric:
-        return re.search(label + joiner + value, support) is not None
+        return re.search(label + _METRIC_JOINER + value, support) is not None
     if not _has_text(period):
         return False
     period = re.escape(period)
-    target = r'(?:\s*目标(?:为)?\s*[+−-]?\d[\d.,]*(?:[%％]|万元|元)?[，,、]\s*)?'
     return any(re.search(pattern, support) is not None for pattern in (
-        period + joiner + label + joiner + value,
-        label + target + period + joiner + value,
+        period + _METRIC_JOINER + label + _METRIC_JOINER + value,
+        label + _METRIC_TARGET + period + _METRIC_JOINER + value,
     ))
+
+
+_METRIC_JOINER = r'\s*(?:[:：=＝]|为|是|达到|达)?\s*'
+_METRIC_TARGET = r'(?:\s*目标(?:为)?\s*[+−-]?\d[\d.,]*(?:[%％]|万元|元)?[，,、]\s*)?'
+_METRIC_MONTH = r'\d{1,2}(?:月?\s*[至到—–－~～-]\s*\d{1,2})?月(?:\d{1,2}日)?'
+_METRIC_QUARTER = r'(?:第?[一二三四1-4]季度|[上下]半年)'
+_METRIC_PERIOD = (
+    rf'(?:(?:截至\s*)?(?:\d{{4}}年(?:{_METRIC_MONTH}|{_METRIC_QUARTER})?'
+    rf'|{_METRIC_MONTH}|{_METRIC_QUARTER}|(?:\d{{4}}\s*)?Q[1-4])'
+    r'|当前|现阶段|[本当上]月|[本当上]周|[本当上]季度|[本当上]年度|[本当上今去]年)'
+)
+_METRIC_DIGITS = r'(?:[+＋−－-]?\s*[¥￥$€£]?)\s*(?:\d{1,3}(?:[,，]\d{3})+|\d+)(?:[.．]\d+)?'
+_METRIC_UNIT = (
+    r'(?:(?:万亿|千亿|百万|千万|亿|万|千)?(?:元(?:人民币)?|美元|欧元|港元|平方米|平方公里|'
+    r'千瓦时|千克|公斤|公里|公顷|毫秒|分钟|小时|㎡|吨|秒|米|天|年|月|周|日|'
+    r'人(?:天|次)?|家|台|项|条|次|单|间|份|套|件|宗|个|户|位|辆|本|笔|名|组|座)'
+    r'|万亿|亿元|万|亿|千万|百万|百分点|[%％‰]|℃|°[CF]|倍|[kKMGT]?[Bb](?:ps)?|[TGMK]Hz|ms|kg|km|m²|m³)'
+    r'(?:\s*[/／]\s*(?:秒|分钟|小时|天|月|年|人|次|单|台|平方米|㎡|m²|m³|s))?'
+)
+_METRIC_QUANTITY = rf'{_METRIC_DIGITS}(?:\s*(?:余|多)?\s*{_METRIC_UNIT})?'
+_METRIC_VALUE = (
+    rf'(?:不超过|不低于|不高于|不少于|不大于|不小于|超过|超出|不足|不到|少于|'
+    rf'低于|高于|大于|小于|至多|至少|约为|大约|接近|介于|约|近|逾|超|≥|≤|[<>]=?|'
+    rf'(?:同比|环比)?(?:下降|降至|下跌|减少|回落|增长|上升|上涨|增至|升至|提升)(?:了)?)?\s*'
+    rf'{_METRIC_QUANTITY}(?:\s*[至到—–－−~～-]\s*{_METRIC_QUANTITY})?'
+    rf'(?:\s*(?:以上|以下|左右|以内|以外|上下|之间|余|多))?'
+)
+_METRIC_QUOTE = re.compile(
+    r'(?:^|[。；;，、\n]|[.](?!\d)|,(?!\d{3}(?!\d)))\s*(?:[·•●▪‣]\s*)?'
+    rf'(?:(?P<period_before>{_METRIC_PERIOD}){_METRIC_JOINER})?'
+    r'(?P<label>[^\d:：=＝,，;；、。\r\n()（）!！?？+＋−－%％‰]{1,28}?'
+    r'(?:[（(][^（）()\r\n]{1,12}[）)])?)'
+    rf'(?:{_METRIC_TARGET}(?P<period_after>{_METRIC_PERIOD}))?'
+    rf'{_METRIC_JOINER}(?P<value>{_METRIC_VALUE})'
+    r'(?=\s*(?:$|[。；;，,、\n！!？?（）()]|[.](?!\d)))'
+)
+_METRIC_IDENTIFIER = re.compile(
+    r'(?:编码|编号|文号|序号|型号|版本|款号|年号|批号|批次|代码|账号|帐号|电话|工号|'
+    r'口令|地址|邮编|日期|章节|第|ID|ISBN|Code)(?:号)?$', re.IGNORECASE
+)
+_METRIC_LABELS = (
+    r'面积|金额|成本|利润|收入|余额|缺口|净值|产值|造价|工期|时长|时间|耗时|延迟|进度|'
+    r'规模|时效|速度|水位|温度|电压|浓度|长度|距离|单价|均价|均值|总额|'
+    r'合计|总计|共计|累计|上限|下限|占比|得分|指数|倍率|[量数率额值]'
+)
+_METRIC_LABEL = re.compile(
+    rf'^(?:累计|平均|年均|月均|日均)\S.+'
+    rf'|(?:{_METRIC_LABELS}|\b(?:rate|ratio|score|time|duration|amount|cost|count|'
+    r'area|latency|throughput|revenue|profit|volume))$',
+    re.IGNORECASE,
+)
+_METRIC_CONTEXT_ONLY = re.compile(
+    r'^(?:累计|合计|总计|共计|环比|同比|占比|预计|估算|目标|日均|月均|'
+    r'当前|当月|本月|全年|年度|实际|截至|合规|正常|预警|异常|落后|超前|'
+    r'升|增加|增长|降低|减少|下降|下滑|降|涨)(?:升|增|下降|降|增长|减少|上升|%|达)?$'
+)
+
+
+def infer_metric(paragraphs, page_title):
+    """Choose one clearly supported measure and retain its exact source wording."""
+    if not isinstance(paragraphs, list) or not all(_has_text(item) for item in paragraphs):
+        return None
+    title = page_title.casefold() if _has_text(page_title) else ''
+    candidates = {}
+    for index, paragraph in enumerate(paragraphs):
+        for quote in _METRIC_QUOTE.finditer(paragraph):
+            label = quote['label'].strip()
+            value = quote['value'].strip()
+            period = quote['period_before'] or quote['period_after']
+            topic = re.split(r'[（(]', label, maxsplit=1)[0].strip()
+            if not topic or _METRIC_IDENTIFIER.search(topic) or _METRIC_CONTEXT_ONLY.fullmatch(topic):
+                continue
+            if (re.search(r'(?:目标|计划|预计|估算|预期|预测|拟定|依次|分别|约为|达到)$', topic)
+                    or re.match(r'(?:(?:下月|下周|明年|未来)\s*)?'
+                                r'(?:预计|估算|估计|预估|预期|预测|目标|计划|拟实现|拟定)', topic)
+                    or re.search(r'(?:计划|拟|将)(?:达成|达到|新增|实现|投入|覆盖)|力争|有望', topic)):
+                continue
+            metric = {'label': label, 'value': value, 'evidence_index': index}
+            if period:
+                metric['period'] = period
+            # The caller validates actual source references before attaching this quote.
+            if not _metric_is_sourced(metric, paragraphs, [paragraph]):
+                continue
+            topical_start = re.sub(r'^(?:累计|平均|年均|月均|日均)', '', topic.casefold())
+            label_start = re.match(r'[a-z][a-z0-9_]+|[\u3400-\u9fff]{2}|[a-z]', topical_start)
+            topical = bool(label_start and label_start[0] in title)
+            explicit = _METRIC_LABEL.search(topic)
+            if not (explicit or topical or quote['period_after']):
+                continue
+            if not (explicit or re.search(_METRIC_UNIT + r'(?=$|\s|以上|以下|左右|之间)', value)):
+                continue
+            # Distinguish explicit topic matches first and use rate evidence for a broad title.
+            rank = (
+                topical,
+                bool(explicit or quote['period_after']),
+                bool(not topical and (quote['period_after'] or topic.endswith('率'))),
+                any(fragment in paragraph.casefold() for fragment in re.findall(r'[a-z][a-z0-9_]+', title)),
+            )
+            key = label, value, period
+            if key not in candidates or candidates[key][0] < rank:
+                candidates[key] = rank, metric
+    if not candidates:
+        return None
+    best = max(rank for rank, _ in candidates.values())
+    finalists = [metric for rank, metric in candidates.values() if rank == best]
+    return finalists[0] if len(finalists) == 1 else None
 
 
 def _gallery_pairs(content):

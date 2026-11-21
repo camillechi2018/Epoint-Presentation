@@ -532,7 +532,10 @@ def main():
     a=p.parse_args()
     if a.out.exists():p.error('输出文件已存在')
     try:
-        result=resolve(a.library or get_library(),json.loads(a.request.read_text(encoding='utf-8-sig')))
+        from structure_content import prepare
+        request, content_preparation = prepare(json.loads(a.request.read_text(encoding='utf-8-sig')), auto=True)
+        result=resolve(a.library or get_library(),request)
+        result['content_preparation'] = content_preparation
         a.out.parent.mkdir(parents=True,exist_ok=True);a.out.write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')
         print(json.dumps({'pages':len(result['pages']),'seed':result['seed'],'out':str(a.out)},ensure_ascii=False))
     except (ValueError,KeyError,FileNotFoundError) as exc:p.exit(2,str(exc)+'\n')
