@@ -171,7 +171,7 @@ _REPORT_SEPARATOR = r'\s*[，,、]\s*'
 _PARALLEL_REPORT = re.compile(
     rf'^(?P<heading>{_PARALLEL_LABEL})(?P<metric>累计{_METRIC_JOINER}{_METRIC_VALUE}'
     rf'{_REPORT_SEPARATOR}(?:本月|当月){_METRIC_JOINER}{_METRIC_VALUE}'
-    rf'{_REPORT_SEPARATOR}(?:环比|较上月){_METRIC_JOINER}(?:升|降)?{_METRIC_VALUE})'
+    rf'{_REPORT_SEPARATOR}(?:环比|较上月){_METRIC_JOINER}(?:升|降|持平)?{_METRIC_VALUE})'
     r'(?=$|\s*[。；;，,、！？!?])'
 )
 _REPORT_START = re.compile(rf'^{_PARALLEL_LABEL}(?:累计|本月|当月){_METRIC_JOINER}{_METRIC_VALUE}')
@@ -362,7 +362,7 @@ def adapt_body_input(contract, content, page_title):
             for slot, group in enumerate(groups):
                 prefix = f'groups[{slot}]'
                 texts[f'{prefix}.heading'] = group['heading']
-                texts[f'{prefix}.metric'] = group['metric']
+                texts[f'{prefix}.metric'] = re.sub(r'([，,、])(?=\s*(?:环比|较上月))', r'\1\n', group['metric'], count=1)
                 texts[f'{prefix}.body'] = '\n'.join(items[index] for index in group['indices'])
         elif kind == 'single_focus':
             index = content.get('thesis_index')
