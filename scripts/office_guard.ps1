@@ -28,8 +28,19 @@ function Start-EpointPowerPoint([string]$OwnerFile){
  if($owned -and $OwnerFile){
   @{pid=$process.Id;started=$process.StartTime.ToUniversalTime().Ticks.ToString();path=$process.Path;owned=$true} | ConvertTo-Json | Set-Content -LiteralPath $OwnerFile -Encoding UTF8
  }
- if($actualPath -ine $identity.executable -or $app.Name -ne 'Microsoft PowerPoint'){
-  if($owned){$app.Quit()}; throw 'OFFICE_BACKEND_IDENTITY_MISMATCH'
+ $pathMismatch=$actualPath -ine $identity.executable
+ $actualApplicationName=$null
+ if($pathMismatch -or ($actualApplicationName=$app.Name) -ne 'Microsoft PowerPoint'){
+  if($pathMismatch){
+   # The name check was skipped. Read it for diagnostics without masking the path mismatch.
+   try{$actualApplicationName=$app.Name}catch{}
+  }
+  $detail=@{
+   actual_application_name=$actualApplicationName
+   actual_executable_path=$actualPath
+   registered_executable_path=$identity.executable
+  } | ConvertTo-Json -Compress
+  if($owned){$app.Quit()}; throw "OFFICE_BACKEND_IDENTITY_MISMATCH: $detail"
  }
  $security=$app.AutomationSecurity;$alerts=$app.DisplayAlerts
  $app.AutomationSecurity=3
