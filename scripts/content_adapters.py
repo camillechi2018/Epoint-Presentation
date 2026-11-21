@@ -219,12 +219,47 @@ def _adapt_title_body_items(layout_id, content, page_title):
     return adapted, adapter_name
 
 
+def _adapt_declared_title_body_fields(contract, content, page_title):
+    """Fill the title/body targets in declared visual reading order."""
+    fields = contract['title_body_fields']
+    items = content.get('items')
+    title = content.get('title') or page_title
+    targets = fields['items']
+    if (content.get('type') not in contract.get('content_types', [])
+            or not isinstance(items, list) or len(items) != len(targets)
+            or len(items) not in contract.get('verified_counts', []) or not _has_text(title)
+            or not all(isinstance(item, dict) and all(_has_text(item.get(key))
+                       for key in ('title', 'body')) for item in items)):
+        return dict(content), None
+
+    page_fields = fields.get('page_fields', {})
+    for source in contract.get('required_content_fields', []):
+        if source not in page_fields or not _has_text(content.get(source)):
+            return dict(content), None
+    pairs = [(fields['page_title'], title)]
+    for target, item in zip(targets, items, strict=True):
+        pairs.extend((target[key], item[key]) for key in ('title', 'body'))
+    pairs.extend((target, content[source]) for source, target in page_fields.items()
+                 if _has_text(content.get(source)))
+    texts = dict(pairs)
+    if len(texts) != len(pairs):
+        return dict(content), None
+    adapted = dict(content, texts=texts, item_count=len(items))
+    if fields.get('generic_visual') is True:
+        adapted['generic_visual'] = True
+    return adapted, 'declared_title_body_fields'
+
+
 def _adapt_for_layout_impl(layout_id: str, content: dict, page_title: str | None = None, entry=None) -> tuple[dict, str | None]:
     """Return a copied payload; never split, invent, or summarize user facts."""
     if entry is not None:
         mapped, adapter = adapt_structural_fields(entry, content, page_title)
         if adapter:
             return mapped, adapter
+        contract = entry.get('matching_contract') or {}
+        if (entry.get('matching_activation') == 'pilot_verified' and contract.get('policy') == 'structural'
+                and 'title_body_fields' in contract and not content.get('texts')):
+            return _adapt_declared_title_body_fields(contract, content, page_title)
     if layout_id in ('content-blue-133', 'content-blue-230') and not content.get('texts'):
         items = content.get('items')
         title = content.get('title') or page_title
