@@ -33,11 +33,22 @@ def _metric_is_sourced(metric, paragraphs, source_refs):
     if type(index) is not int or not 0 <= index < len(paragraphs):
         return False
     support = paragraphs[index]
-    value = re.escape(metric['value'])
-    # A copied number must keep a directly attached sign, multiplier, unit or range.
-    complete = r'(?<![\d.+−-])' + value + r'(?![\d.%％万亿元㎡人次单倍]|百分点|[—–~～-]\s*\d)'
-    return (metric['label'] in support and re.search(complete, support) is not None
-            and ('period' not in metric or (_text(metric['period']) and metric['period'] in support)))
+    # Match a complete label-to-value quote, not two independent hits in a paragraph.
+    joiner = r'\s*(?:[:：=＝]|为|是|达到|达)?\s*'
+    label = re.escape(metric['label'])
+    value = (re.escape(metric['value'])
+             + r'(?![\d.]|\s*(?:[%％万亿元㎡人次单倍个]|百分点|千克|公斤|吨|公里|[—–~～-]\s*\d))')
+    period = metric.get('period')
+    if 'period' not in metric:
+        return re.search(label + joiner + value, support) is not None
+    if not _text(period):
+        return False
+    period = re.escape(period)
+    target = r'(?:\s*目标(?:为)?\s*[+−-]?\d[\d.,]*(?:[%％]|万元|元)?[，,、]\s*)?'
+    return any(re.search(pattern, support) is not None for pattern in (
+        period + joiner + label + joiner + value,
+        label + target + period + joiner + value,
+    ))
 
 
 def _gallery_pairs(content):
@@ -156,5 +167,6 @@ def adapt_body_input(contract, content, page_title):
                 texts[f'items[{slot}].body'] = evidence
     result = dict(content, texts=texts)
     if images:
+        result.pop('items')  # Native images and captions already cover each input item.
         result['images'] = images
     return result, f'{kind}_to_fields'
