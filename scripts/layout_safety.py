@@ -1,7 +1,7 @@
 """Apply explicit layout contracts in slide coordinates, including nested groups.
 
-Only named/identified decorations in a supplied contract may move. Semantic flow
-arrows are never guessed or moved automatically. Rendering QA is still required.
+Only named/identified decorations in a supplied contract may move or be removed.
+Semantic flow arrows are never guessed or moved automatically.
 """
 from pathlib import Path
 import argparse,json
@@ -64,6 +64,11 @@ def apply_constraints(p,rules):
                 sh.left=round((left*EMU_PER_PT-tx)/sx)
                 sh.name='decoration:after:'+anchor.name
                 changes.append(dict(shape_id=sh.shape_id,type='decoration_after_text',reserved_left_pt=left))
+            elif r['type']=='remove_decoration':
+                if any(item.has_text_frame and item.text.strip() for item in walk_shapes([sh])):
+                    raise ValueError('装饰清理规则不能移除原生正文文字')
+                sh._element.getparent().remove(sh._element)
+                changes.append(dict(shape_id=sh.shape_id,type='remove_decoration'))
             else:raise ValueError('未知布局约束 '+r['type'])
     if not changes:raise ValueError('演示稿中没有匹配布局约束的页面')
     return changes
