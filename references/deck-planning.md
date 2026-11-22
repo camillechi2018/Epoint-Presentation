@@ -12,6 +12,15 @@
 
 按整套选版而非逐页随机。记录每页入选组件、候选数、淘汰原因、结构家族和 `diversity_gap`。同一组件的蓝红色系和不同项数不算新结构。对连续重复可换候选；没有合格候选时保留正确结构并明确重复原因。
 
+## 原模板正文原子变体
+
+从同一份材料提炼页面的具体业务关系，将每条成果、步骤、或完整的问题与措施配对分别放入 `content.items`。用 `scripts/select_layout.py --atomic-variants --verified-only --allow-draft --theme <主题> --relation <具体关系> --item-count <实际项数> --brief` 查看可用字段。省略 `--relation` 可浏览各家族的具体关系和同义词。
+
+- 逐页请求使用 `content.type=atomic_items`、`page.information_relation` 及 `content.items`。关系取知识库 `atomic_variant.relation` 或其登记别名。也可用 `content.relation`。具体关系和字段都匹配时，普通含 `items` 的卡片、流程、对比等请求也能使用变体。
+- 每项按 `atomic_variant.item_fields` 提供真实内容，页面标题写在逐页请求的 `title`。共用说明等 `page_fields` 填在 `content.page` 或 `content` 同名字段。实际数组长度决定选用哪一种项数，显式项数必须一致。跨项连接或上下配对由变体的原生分组保持。
+- 无适合主题、项数或字段形态时，原子请求走可编辑要点托底。全部输入字段必须能完整放下，否则拆页或提供自由编排。源版仍可用原 ID 和生效绑定调用，已登记子 ID 也可明确指定。
+- 计划、试填及装配记录均包含子 ID、父 ID、实际使用项数和来源，可核对候选到最终成稿的一致性。
+
 当前多数提取组件为 `provisional`，不能以它作为无人值守生成全套 PPT 的依据。首批 14 页视觉初审条目标为 `visual_reviewed`；内部试排可显式传 `allow_draft=true`、`allow_visual_reviewed=true`，结果仍有 `manual_review_required=true`。先补字段语义、容量和实际渲染 QA，才能升为 `verified`。
 
 蓝红补充稿的 `supp-*` 版式已完成 38 个主题变体的短文案静态 PPTX 验收，其中目录已扩展为变项数，可在 `allow_draft=true` 下参与自动选版。蓝红六款目录均支持 2–8 项自动重排，按信息关系、可读容量及相邻页多样性选择；科技风五款目录支持 2–6 项。章节、封面和封底均按源结构字段填充。红色独有封面与章节仅在 `theme=red` 时入选。补充版式共 28 条记录，和原蓝红内容池合计 94 条简约版静态草稿记录；同一家族不同色系不算新结构。目录项长文案按[目录项长文案容量](directory-longcopy.md)和 `directory_long_copy_profile` 及各字段 `max_chars`、`max_width_units` 选版；其他字段按已实填的安全上限；超限时换版或拆页。

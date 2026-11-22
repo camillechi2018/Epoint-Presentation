@@ -603,7 +603,7 @@ def write_text_fields(shapes, bindings, texts, logo_enabled):
     for binding in bindings:
         field = binding['field']
         if field in texts and not (logo_enabled and field == 'brand'):
-            set_text(shapes[binding['shape_id']], texts[field])
+            set_text(shapes[binding['shape_id']], binding.get('render_prefix', '') + texts[field])
 
 
 def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=None,no_logo=False,
@@ -676,7 +676,7 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
     known={x['field'] for x in bindings}
     semantic_aliases={x['semantic_path']:x['field'] for x in bindings if x.get('semantic_path')}
     for alias,field in semantic_aliases.items():
-        if alias in texts:
+        if alias != field and alias in texts:
             if field in texts:raise ValueError('同一字段不能同时提供语义路径和旧字段名：'+field)
             texts[field]=texts.pop(alias)
     if m.get('role') in ('cover','section','closing'):

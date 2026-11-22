@@ -409,6 +409,7 @@
     "scripts/assemble_deck.ps1",
     "scripts/assemble_deck_worker.ps1",
     "scripts/assemble_native.py",
+    "scripts/atomic_body.py",
     "scripts/assembly_backend.py",
     "scripts/audit_component_color_independence.py",
     "scripts/audit_deck.py",

@@ -22,6 +22,7 @@ from assembly_backend import BACKENDS, select_backend
 from relation_match import STRUCTURAL_ROLE_ORDER as STRUCTURAL
 from body_header import body_components_enabled
 from content_adapters import matching_content, unmapped_title_body_fields
+import atomic_body
 
 
 def _load_workflow():
@@ -268,6 +269,8 @@ def execute_plan(request, plan, report, output: Path, *, catalog=None):
                         choice['body_header'] = filled['body_header']
                     choice['layout_id'] = candidate_id
                     choice['selection_label'] = selection_label(entries[candidate_id])
+                    choice.pop('atomic_variant', None)
+                    choice.update(atomic_body.trace(entries[candidate_id]))
                     if page.get('role') == 'section' and locked_section_layout_id is None:
                         locked_section_layout_id = candidate_id
                     break
@@ -282,6 +285,7 @@ def execute_plan(request, plan, report, output: Path, *, catalog=None):
                 choice['selection_label'] = '自由编排' if use_free else '技能排版'
                 choice['reason_code'] = 'NO_FIT_AFTER_TRIAL'
                 choice['layout_id'] = None
+                choice.pop('atomic_variant', None)
             else:
                 stamp = filled['source_stamp']
                 if not stamp:
@@ -290,19 +294,21 @@ def execute_plan(request, plan, report, output: Path, *, catalog=None):
         if choice['selection_mode'] == 'guided_composition':
             if page_out.exists():
                 raise RuntimeError('试填失败后遗留单页文件，拒绝覆盖')
-            guided = dict(content)
-            guided.setdefault('title', page.get('title', page['purpose']))
-            guided['type'] = fallback_type(guided)
-            guided['_deck_page_number'] = index
-            if guided['type'] == 'cards' and guided.get('variant', 'auto') == 'auto':
-                count = len(guided.get('items', []))
-                if count == 3:
-                    guided['variant'] = 'columns'
-                elif count == 6:
-                    guided['variant'] = 'stat_rows' if not used_guided_variants.get(('cards', 'stat_rows')) else 'grid'
-            if guided['type'] in STRUCTURAL:
-                raise ValueError('结构页不得由离线正文绘制器替代')
             try:
+                guided = (atomic_body.fallback_content(content, page.get('title'))
+                          if choice.get('atomic_input') else dict(content))
+                if not guided.get('title'):
+                    guided['title'] = page.get('title') or page['purpose']
+                guided['type'] = fallback_type(guided)
+                guided['_deck_page_number'] = index
+                if guided['type'] in STRUCTURAL:
+                    raise ValueError('结构页不得由离线正文绘制器替代')
+                if guided['type'] == 'cards' and guided.get('variant', 'auto') == 'auto':
+                    count = len(guided.get('items', []))
+                    if count == 3:
+                        guided['variant'] = 'columns'
+                    elif count == 6:
+                        guided['variant'] = 'stat_rows' if not used_guided_variants.get(('cards', 'stat_rows')) else 'grid'
                 if guided['type'] == content.get('type') == 'cards':
                     unused = unmapped_title_body_fields(content)
                     if unused:
@@ -352,6 +358,7 @@ def execute_plan(request, plan, report, output: Path, *, catalog=None):
                             if page.get('role') == 'directory' else None,
                             'selection_mode': choice['selection_mode'], 'selection_label': choice['selection_label'],
                             'source_stamp': stamp,
+                            **({'atomic_variant': choice['atomic_variant']} if choice.get('atomic_variant') else {}),
                             **({'body_header': choice['body_header']} if choice.get('body_header') else {}),
                             'data_source': page.get('data_source') or content.get('data_source'),
                             'image_sources': page.get('image_sources') or free_images or ([content['image_path']] if content.get('image_path') else None)})

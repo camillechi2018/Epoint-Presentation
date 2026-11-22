@@ -23,6 +23,8 @@ metadata:
 
 **正文。** 按关系、项数、数据与字段契约筛候选，读取选中组件的绑定、容量、媒体与审批状态。缺少输入事实、超出硬限制或会丢失原文时记录原因并试下一项。按请求上限实际试填后，仍不适配则选同风格的技能排版，再考虑带有理由和元素坐标的自由编排。只有成功提取并填充来源页才计入模板复用。详见[选版与试填](references/deck-planning.md)、[结构字段](references/structural-template-fields.md)、[正文托底排版](references/body-fallback-layouts.md)和[自由编排](references/free-composition.md)。
 
+**原模板原子变体。** 按材料整理具体业务关系与 `content.items`。先看知识库同关系下原子的字段与可用项数，再提交正文，不必指定组件 ID。技能用实际数组长度精确选择单项原子或已验收变体，试填时保留每项内的配对字段和原生分组。详见[原子变体输入和检索](references/deck-planning.md#原模板正文原子变体)。
+
 使用当前提交登记的能力，分别判断静态 PPTX、长文案、动效、配色和 HTML。草稿资产须显式允许并标记待审阅。三种风格遵循各自的页眉、锁定色、字体及 Logo 规则；任务字体缺失时暂停完整出稿。[品牌与颜色](references/theme-and-brand.md) · [离线品牌排版](references/offline-brand.md) · [动效](references/motion.md) · [HTML 输出](references/html-output.md)
 
 ## 从候选稿到交付

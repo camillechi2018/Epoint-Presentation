@@ -13,6 +13,7 @@ from content_adapters import (BODY_RELATIONS, BODY_INPUT_RELATIONS,
                               adapt_body_input, adapt_for_layout, matching_content)
 from capacity_preflight import missing_binding_paths, preflight, required_input_fields
 from body_header import body_components_enabled, contract_for, title_path
+import atomic_body
 
 
 def semantic_fit(page, entry):
@@ -278,7 +279,7 @@ def matches_structural_relation(entry, page, taxonomy):
         requested = canonical(CONTENT_RELATIONS.get(content.get('type')), taxonomy)
     return bool(requested and requested == entry.get('canonical_relation'))
 
-def eligible(e, p, request, taxonomy):
+def eligible(e, p, request, taxonomy, *, atomic_requested=False):
     reasons=[]
     requested_style=p.get('style_family',request.get('style_family'))
     if requested_style:
@@ -287,6 +288,8 @@ def eligible(e, p, request, taxonomy):
         reasons.append('style_family_not_selected')
     specified=p.get('layout_id')==e['id']
     if p.get('layout_id') and not specified: return ['other_layout']
+    atomic=e.get('atomic_variant')
+    if atomic_requested and not atomic and not specified:return ['atomic_variant_required']
     if e.get('status')!='approved' and not request.get('allow_draft'): reasons.append('draft')
     classification=e.get('classification_status')
     reviewed_draft=classification=='visual_reviewed' and request.get('allow_visual_reviewed') and request.get('allow_draft')
@@ -297,36 +300,36 @@ def eligible(e, p, request, taxonomy):
     relation=p.get('matching_relation') or p.get('information_relation')
     theme=p.get('theme',request.get('theme'))
     content=p.get('content') if isinstance(p.get('content'),dict) else {}
-    replaces_title = contract_for(e, theme, body_components_enabled(request)
-                                   and content.get('logo') is None)
-    matching_page = p
-    texts = content.get('texts')
-    if replaces_title and isinstance(texts, dict) and p.get('title'):
-        path = title_path(replaces_title)
-        if path not in texts:
-            matching_page = dict(p, content=dict(content, texts=dict(texts, **{path: p['title']})))
-    structural_match = matches_structural_discovery(e, matching_page, taxonomy, request['_root'])
-    structural_relation_match = matches_structural_relation(e, matching_page, taxonomy)
-    contract = e.get('matching_contract') or {}
-    if e.get('matching_policy') == 'data_contract':
-        payload = p.get('content') if isinstance(p.get('content'), dict) else {}
-        if payload.get('type') not in ('metrics', 'chart', 'data_table', 'table', 'template_fields'):
-            reasons.append('data_contract')
-    strict_content=p.get('content') if isinstance(p.get('content'),dict) else {}
-    strict_exact=(specified and isinstance(strict_content.get('texts'),dict) and bool(strict_content['texts'])
-                  and p.get('information_relation') in contract.get('exact_binding_relations',[]))
-    strict_match = (contract.get('policy') == 'semantic_strict'
-                    and (p.get('information_relation') == contract.get('required_relation') or strict_exact))
-    if (e.get('matching_contract') or {}).get('policy') == 'structural' and not structural_match:
-        reasons.append('structure_contract')
-    if not match_role(e,p.get('role'),relation,taxonomy) and not (structural_match or structural_relation_match or strict_match):reasons.append('role')
-    relation_matches = match_relation(e,relation,taxonomy)
-    if not relation_matches and (structural_match or structural_relation_match):
-        relation_matches = True
-    if not relation_matches and strict_match:
-        relation_matches = True
-    if not relation_matches:reasons.append('relation')
-    if not matches_strict_contract(e,p):reasons.append('semantic_invariant')
+    replaces_title = None
+    if atomic:
+        issue = atomic_body.eligibility(atomic, e, p, content, taxonomy, specified=specified)
+        if issue:
+            return reasons + [issue]
+    else:
+        replaces_title = contract_for(e, theme, body_components_enabled(request)
+                                       and content.get('logo') is None)
+        matching_page = p
+        texts = content.get('texts')
+        if replaces_title and isinstance(texts, dict) and p.get('title'):
+            path = title_path(replaces_title)
+            if path not in texts:
+                matching_page = dict(p, content=dict(content, texts=dict(texts, **{path: p['title']})))
+        structural_match = matches_structural_discovery(e, matching_page, taxonomy, request['_root'])
+        structural_relation_match = matches_structural_relation(e, matching_page, taxonomy)
+        contract = e.get('matching_contract') or {}
+        if e.get('matching_policy') == 'data_contract':
+            if content.get('type') not in ('metrics', 'chart', 'data_table', 'table', 'template_fields'):
+                reasons.append('data_contract')
+        strict_exact=(specified and isinstance(texts,dict) and bool(texts)
+                      and p.get('information_relation') in contract.get('exact_binding_relations',[]))
+        strict_match = (contract.get('policy') == 'semantic_strict'
+                        and (p.get('information_relation') == contract.get('required_relation') or strict_exact))
+        if contract.get('policy') == 'structural' and not structural_match:
+            reasons.append('structure_contract')
+        if not match_role(e,p.get('role'),relation,taxonomy) and not (structural_match or structural_relation_match or strict_match):reasons.append('role')
+        if not match_relation(e,relation,taxonomy) and not (structural_match or structural_relation_match or strict_match):
+            reasons.append('relation')
+        if not matches_strict_contract(e,p):reasons.append('semantic_invariant')
     if theme and theme not in e.get('themes',[]):reasons.append('theme')
     if p.get('format','pptx') in ('html','both') and e.get('html_support')!='verified':reasons.append('html_unavailable')
     if p.get('motion_required') and e.get('motion_support')!='verified':reasons.append('motion_unavailable')
@@ -336,7 +339,7 @@ def eligible(e, p, request, taxonomy):
     if title_chars is None and isinstance(p.get('title'),str):title_chars=len(p['title'])
     if title_chars is not None:
         if type(title_chars) is not int or title_chars<1:reasons.append('invalid_title_length')
-        elif e.get('title_pressure_status')=='tested_short_copy_only' and not replaces_title:
+        elif not atomic and e.get('title_pressure_status')=='tested_short_copy_only' and not replaces_title:
             rules=json.loads((asset_root(request['_root'],e)/e['layout_rules']).read_text(encoding='utf-8'))
             if title_chars>rules.get('title_pressure_test',{}).get('safe_title_chars',0):reasons.append('title_over_capacity')
         if isinstance(p.get('title'),str) and e.get('role') in STRUCTURAL_ROLE_ORDER:
@@ -351,12 +354,16 @@ def eligible(e, p, request, taxonomy):
 
                 if len(p['title'])>title_field.get('max_chars',9999) or len(lines)>title_field.get('max_lines',1) or any(visual_width_units(line)>title_field.get('max_width_units',100) for line in lines):
                     reasons.append('title_over_verified_width')
-    if need.get('item_count') is not None:
+    if atomic or need.get('item_count') is not None:
         rules_path=e.get('layout_rules')
         if not rules_path:reasons.append('count_rules_missing')
         else:
-            available_counts,_=count_profile(e,request['_root'])
-            if need['item_count'] not in available_counts:reasons.append('item_count_unverified')
+            available_counts,native_count=count_profile(e,request['_root'])
+            requested_count=need.get('item_count')
+            if atomic and (available_counts != [atomic['count']] or native_count != atomic['count']):
+                reasons.append('atomic_count_contract')
+            elif requested_count is not None and requested_count not in available_counts:
+                reasons.append('item_count_unverified')
     if e.get('role')=='directory' and isinstance(p.get('items'),list):
         items=p['items']
         rules=json.loads((request['_root']/e['layout_rules']).read_text(encoding='utf-8'))
@@ -398,12 +405,19 @@ def resolve(library,request,*,catalog=None):
     if type(seed) is not int:raise ValueError('seed必须是整数')
     pages=request.get('pages')
     if not isinstance(pages,list) or not pages:raise ValueError('pages必须是非空数组')
+    atomic_variants={e['id']:e['atomic_variant'] for e in catalog['layouts'] if e.get('atomic_variant')}
     rng=random.Random(seed);chosen=[];family_usage=Counter();layout_usage=Counter();section_layout_id=None
     for index,p in enumerate(pages,1):
         if not isinstance(p,dict) or not str(p.get('purpose','')).strip():raise ValueError(f'第{index}页缺少purpose')
         fallback_content = p.get('content')
         p,normalization=normalize_body_request(p);need=dict(p.get('needs') or {})
         content=p.get('content') if isinstance(p.get('content'),dict) else {}
+        explicit_atomic=p.get('layout_id') in atomic_variants
+        requested_atomic=atomic_body.requested(p,content,atomic_variants.values(),taxonomy)
+        atomic_items=requested_atomic or (explicit_atomic and 'items' in content)
+        if atomic_items:
+            need['item_count']=atomic_body.actual_count(p,content)
+            normalization.append('atomic_count_from_content_items')
         relation=p.get('information_relation')
         if relation and canonical(relation,taxonomy) is None:
             generic=CONTENT_RELATIONS.get(content.get('type'))
@@ -423,7 +437,7 @@ def resolve(library,request,*,catalog=None):
                              and not p.get('layout_id')
                              and uses_minimal_body_layout(content.get('type'), content.get('variant')))
         for e in ([] if minimal_requested else catalog['layouts']):
-            reasons=eligible(e,p,request,taxonomy)
+            reasons=eligible(e,p,request,taxonomy,atomic_requested=requested_atomic)
             if reasons: rejected.update(reasons)
             else:candidates.append(e)
         if p.get('role')=='section' and section_layout_id is not None:
@@ -434,7 +448,7 @@ def resolve(library,request,*,catalog=None):
             if p.get('role') in STRUCTURAL_ROLE_ORDER:
                 raise ValueError(f'第{index}页结构页没有合格版式；排除原因：{dict(rejected)}。')
             content = fallback_content if isinstance(fallback_content, dict) else {}
-            inferred = fallback_type(content) if content else None
+            inferred = 'bullets' if atomic_items else fallback_type(content) if content else None
             fallback_id = inferred if inferred in fallback_catalog() else inferred if inferred in ('bullets','cards','process','comparison','metrics') else None
             assessment=content.get('layout_assessment') if isinstance(content.get('layout_assessment'),dict) else {}
             wants_free=assessment.get('skill_suitable') is False and isinstance(content.get('free_layout'),dict)
@@ -451,7 +465,8 @@ def resolve(library,request,*,catalog=None):
                            'rejected_reasons':dict(rejected),
                            'theme':p.get('theme',request.get('theme')),'candidate_count':0,
                            'style_family':p.get('style_family',request.get('style_family')),
-                           'source_stamp':None,'manual_review_required':True})
+                           'source_stamp':None,'manual_review_required':True,
+                           **({'atomic_input':True,'input_item_count':need['item_count']} if atomic_items else {})})
             chosen[-1]['request_normalization']=normalization
             continue
         scored=[]
@@ -503,6 +518,7 @@ def resolve(library,request,*,catalog=None):
                 'field_status':'ready' if row[1]==0 else 'awaiting_mapping',
                 'capacity_preflight':row[13],
                 'source_preview':candidate.get('preview'),
+                **atomic_body.trace(candidate),
                 **({'asset_origin':'skill','source_preview_root':str(candidate_root)}
                    if candidate.get('asset_origin') == 'skill' else {})})
         layout_usage[e['id']]+=1;family_usage[fam]+=1
@@ -525,10 +541,14 @@ def resolve(library,request,*,catalog=None):
                                       'capacity_margin':best[13]['capacity_margin']},
                        'style_family':e.get('style_family') or 'legacy-blue-red',
                        'theme':p.get('theme',request.get('theme')),'candidate_count':len(candidates),
-                       'selection_reason':'指定组件' if p.get('layout_id') else '按主题、结构、字段完整性、容量风险与重复度排序；普通组件不按原稿业务标签排序',
+                       'selection_reason':('指定组件' if p.get('layout_id') else
+                                           '按业务关系、实际项数和字段容量匹配原子变体' if e.get('atomic_variant') else
+                                           '按主题、结构、字段完整性、容量风险与重复度排序；普通组件不按原稿业务标签排序'),
                        'diversity_gap':family_usage[fam]>1 and all(family_usage[x.get('family_id',x['id'])]>0 for x in candidates),
                        'classification_status':e.get('classification_status'),
-                       'manual_review_required':e.get('classification_status')!='verified' or e.get('status')!='approved'})
+                       'manual_review_required':e.get('classification_status')!='verified' or e.get('status')!='approved',
+                       **atomic_body.trace(e),
+                       **({'atomic_input':True,'input_item_count':need['item_count']} if atomic_items else {})})
         chosen[-1]['request_normalization']=normalization
     summary=summarize_selection(chosen)
     return {'schema_version':'1.0','library_version':catalog['version'],'seed':seed,

@@ -7,6 +7,7 @@ import re
 from relation_match import STRUCTURAL_ROLES, supports_input_structure
 from structure_content import titled_items
 from text_width import visual_width_units
+from atomic_body import mapped_texts as atomic_texts
 
 DECLARED_TITLE_BODY_ADAPTER = 'declared_title_body_fields'
 
@@ -1135,6 +1136,12 @@ def unmapped_title_body_fields(content, page_fields=()):
 
 
 def adapt_for_layout(layout_id: str, content: dict, page_title: str | None = None, entry=None) -> tuple[dict, str | None]:
+    atomic = (entry or {}).get('atomic_variant')
+    if atomic:
+        texts = atomic_texts(atomic, content, page_title)
+        if texts is None:
+            return dict(content), None
+        return dict(content, type='template_fields', texts=texts, item_count=atomic['count']), 'atomic_items_to_fields'
     contract = (entry or {}).get('matching_contract') or {}
     if contract.get('body_input'):
         return adapt_body_input(contract, content, page_title)
