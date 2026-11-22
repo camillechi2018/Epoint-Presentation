@@ -20,19 +20,19 @@
 
 ## 正文组件预览
 
-每种风格各选取 **16 张已验收正文组件**，拼成一张预览图，展示流程、对比、时间线、指标、表格等不同信息结构。蓝红两组对应相同组件的不同色系；实际选版仍以当次知识库的验收状态、字段和内容容量为准。图片中的文字与数字来自模板示例，不作为出稿事实。[查看组件 ID、来源与知识库提交](assets/style-previews/component-gallery-sources.json)。
+每种风格各选取 **16 张已验收正文组件**，拼成一张预览图，展示流程、对比、时间线、指标、表格等不同信息结构。蓝红两组对应相同组件的不同色系；实际选版仍以当次知识库的验收状态、字段和内容容量为准。图片中的文字与数字来自模板示例，不作为出稿事实。拼图通过 GitHub 加载。[查看组件 ID、来源与知识库提交](https://github.com/camillechi2018/Epoint-Presentation/blob/main/assets/style-previews/component-gallery-sources.json)。
 
 ### 蓝色系 · 蓝白简约
 
-![蓝色系 16 张正文组件拼图](assets/style-previews/component-gallery-blue-16.png)
+![蓝色系 16 张正文组件拼图](https://raw.githubusercontent.com/camillechi2018/Epoint-Presentation/main/assets/style-previews/component-gallery-blue-16.png)
 
 ### 红色系 · 红白简约
 
-![红色系 16 张正文组件拼图](assets/style-previews/component-gallery-red-16.png)
+![红色系 16 张正文组件拼图](https://raw.githubusercontent.com/camillechi2018/Epoint-Presentation/main/assets/style-previews/component-gallery-red-16.png)
 
 ### 科技风格 · 深蓝科技
 
-![科技风格 16 张正文组件拼图](assets/style-previews/component-gallery-tech-16.png)
+![科技风格 16 张正文组件拼图](https://raw.githubusercontent.com/camillechi2018/Epoint-Presentation/main/assets/style-previews/component-gallery-tech-16.png)
 
 ## 简要说明
 
