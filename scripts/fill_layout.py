@@ -684,6 +684,13 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
             path=b.get('semantic_path')
             if path and (b['field'] not in texts or not isinstance(texts[b['field']],str) or not texts[b['field']].strip()):
                 raise ValueError('结构页可编辑文字字段必须提供真实非空内容；不适用时请改选版式：'+path)
+    for pair in rules.get('paired_text_consistency',[]):
+        fields=pair['fields']
+        if len(fields)<2 or any(semantic_aliases.get(field,field) not in texts for field in fields):
+            raise ValueError('配对文字字段缺失：'+','.join(fields))
+        values=[texts[semantic_aliases.get(field,field)].strip() for field in fields]
+        if len(set(values))!=1:
+            raise ValueError('配对文字字段必须一致：'+','.join(fields))
     if rules.get('cardinality_mode') in ('directory_reflow','tech_grid_2x3') and m.get('role')=='directory':
         items=data.get('items')
         if not isinstance(items,list) or len(items) not in rules['supported_counts']:
