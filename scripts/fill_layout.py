@@ -466,6 +466,12 @@ def reflow_fixed_span(slide, rules, count):
                 shape.width = width
                 if count > native_count and sid in tight_margins:
                     shape.text_frame.margin_left = shape.text_frame.margin_right = Pt(3)
+        for index, sid in enumerate(config.get('standalone_separator_ids', [])):
+            shape = shapes[sid]
+            if index < count - 1:
+                shape.left = round(start + (index + 1) * (column_width + gutter) - gutter / 2)
+            else:
+                shape._element.getparent().remove(shape._element)
         if count > native_count and 'extra_number_shape_id' in config:
             replace_column_number(slide, duplicate[config['extra_number_shape_id']], count)
         if 'arc_shape_id' in config:
@@ -474,6 +480,38 @@ def reflow_fixed_span(slide, rules, count):
                 trim_right_arcs(arc, native_count - count)
             else:
                 append_right_arc(arc, native_count)
+    return {'mode':'repeatable','count':count,'source_count':native_count,'status':rules['validation_status']}
+
+
+def reflow_paired_rows(slide, rules, count):
+    native_count = rules['source_count']
+    if count != native_count:
+        config = rules['paired_rows_reflow']
+        shapes = {shape.shape_id: shape for shape in slide.shapes}
+        source_rows = len(config['row_anchor_ids'])
+        selected = repeatable_source_indices(rules, count)
+        left_rows = [index for index in selected if index < source_rows]
+        right_rows = [index - source_rows for index in selected if index >= source_rows]
+        if left_rows != right_rows or not left_rows:
+            raise ValueError('左右两组必须按相同项数重排')
+        anchors = [shapes[sid].top for sid in config['row_anchor_ids']]
+        top = anchors[0]
+        bottom = max(shapes[sid].top + shapes[sid].height for sid in config['body_shape_ids'][-1])
+        pitch = (bottom - top + Pt(config['band_gap_pt'])) // len(left_rows)
+        for index in range(source_rows):
+            ids = rules['units'][index] + rules['units'][source_rows + index]
+            if index not in left_rows:
+                for sid in ids:
+                    element = shapes[sid]._element
+                    element.getparent().remove(element)
+                continue
+            position = left_rows.index(index)
+            target = top + position * pitch
+            for sid in ids:
+                shapes[sid].top += target - anchors[index]
+            body_bottom = bottom if position == len(left_rows) - 1 else target + pitch - Pt(config['body_clearance_pt'])
+            for sid in config['body_shape_ids'][index]:
+                shapes[sid].height = body_bottom - shapes[sid].top
     return {'mode':'repeatable','count':count,'source_count':native_count,'status':rules['validation_status']}
 
 
@@ -856,7 +894,7 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
         if unreviewed:raise ValueError('该页含未分类的源稿图片，需先确认装饰用途或替换内容图片；内部结构测试可传 --internal-draft')
     rules=json.loads((component_root/m['layout_rules']).read_text(encoding='utf-8-sig'))
     item_count=data.get('item_count')
-    if (rules.get('expand_columns') or rules.get('fixed_span_reflow')) and item_count is not None and (
+    if any(rules.get(key) for key in ('expand_columns', 'fixed_span_reflow', 'paired_rows_reflow')) and item_count is not None and (
             type(item_count) is not int or item_count not in rules.get('supported_counts', [])):
         raise ValueError('项数不在支持范围')
     if item_count is not None and rules.get('cardinality_mode')=='fixed' and item_count not in rules.get('supported_counts',[]):
@@ -1284,6 +1322,9 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
     if rules.get('fixed_span_reflow'):
         count = rules['source_count'] if item_count is None else item_count
         early_cardinality = reflow_fixed_span(s, rules, count)
+    elif rules.get('paired_rows_reflow'):
+        count = rules['source_count'] if item_count is None else item_count
+        early_cardinality = reflow_paired_rows(s, rules, count)
     elif rules.get('expand_columns') and item_count is not None and item_count > rules['source_count']:
         early_cardinality = expand_centered_columns(s, rules, item_count)
     lookup={x.shape_id:x for x in walk(s.shapes)}
