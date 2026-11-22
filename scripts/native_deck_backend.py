@@ -19,6 +19,7 @@ from audit_logo import audit as audit_logo
 from audit_theme_integrity import slide_parts
 from delivery_gate import check_finished
 from normalize_fonts import normalize
+from optimize_masters import optimize
 from repair_svg_fallbacks import repair as repair_svg
 
 P = 'http://schemas.openxmlformats.org/presentationml/2006/main'
@@ -109,6 +110,9 @@ def assemble_and_check(assembly: dict, manifest: Path, output: Path,
     result = assemble_many(inputs, output, shared_background_media=background)
     stamp_source_pages(output, assembly['slides'])
     normalize(output, output, profile=assembly['font_profile'])
+    masters = optimize(output)
+    _write(output.with_suffix('.masters.json'), masters)
+    result['registered_masters'] = masters['masters_after']
     package = _basic_package_audit(output)
     _write(output.with_suffix('.package.json'), package)
     colors = audit_colors(output)

@@ -451,6 +451,7 @@
     "scripts/office_probe.ps1",
     "scripts/office_runtime.py",
     "scripts/opc_relationships.py",
+    "scripts/optimize_masters.py",
     "scripts/plan_deck.py",
     "scripts/read_material.py",
     "scripts/read_style_kit.py",

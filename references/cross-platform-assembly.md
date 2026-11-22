@@ -21,6 +21,8 @@ Windows 可将 `python3` 替换为本机可用的 `python`。统一入口会转�
 
 旧 `--native-experimental` 仍兼容，相当于 `--assembly-backend native`；与 `--assembly-backend powerpoint` 同时使用时报参数冲突。报告统一使用 `assembly_backend=native` 或 `powerpoint`，集成方应读取该字段的新取值。`--goal native-assemble` 保留为原生自检别名。原生自检仅检查模块与依赖，不能代替真实出稿。
 
+两种后端在完成各自的成稿修整后，合并母版、整套版式、主题及关联资源均等价的设计。页面沿用对应的版式，母版数量和移除的包部件数写入成稿旁的 `*.masters.json`。
+
 `--office-smoke` 只用于 Windows PowerPoint 后端；原生后端不忽略此参数，而是要求明确选择合适的后端。三个系统执行相同的知识库完整性、来源、字段容量、结构页、章节一致性、字体、颜色、Logo、媒体及最终包检查。
 
 ## 状态处理
