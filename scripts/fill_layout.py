@@ -519,7 +519,7 @@ def reflow_paired_rows(slide, rules, count):
 def reflow_registered_geometry(slide, rules, count):
     variant = rules['geometry_by_count'].get(str(count))
     if variant:
-        shapes = {shape.shape_id: shape for shape in slide.shapes}
+        shapes = {shape.shape_id: shape for shape in walk(slide.shapes)}
         for sid, bounds in variant['bounds_emu'].items():
             shape = shapes[int(sid)]
             shape.left, shape.top, shape.width, shape.height = bounds
