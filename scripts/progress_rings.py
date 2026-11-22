@@ -20,16 +20,20 @@ def apply_progress_rings(shapes, rules, texts, aliases):
         percent = progress_percentage(texts.get(aliases.get(field, field)))
         arc_id = rule['arc_shape_id']
         shape = shapes.get(arc_id)
+        label = shapes.get(rule['text_shape_id'])
+        if label is None or not label.has_text_frame:
+            raise ValueError(f"PROGRESS_RING_LABEL_MISSING: {rule['text_shape_id']}")
         geometry = shape._element.spPr.xpath('a:prstGeom[@prst="arc"]') if shape is not None else []
         if len(geometry) != 1:
             raise ValueError(f'PROGRESS_RING_ARC_MISSING: {arc_id}')
         guides = geometry[0].xpath('a:avLst/a:gd')
         if [guide.get('name') for guide in guides] != ['adj1', 'adj2']:
             raise ValueError(f'PROGRESS_RING_ARC_GUIDES: {arc_id}')
-        updates.append((shape, geometry[0], guides, field, percent))
+        updates.append((shape, label, geometry[0], guides, field, percent))
 
     result = []
-    for shape, geometry, guides, field, percent in updates:
+    for shape, label, geometry, guides, field, percent in updates:
+        label.text_frame.word_wrap = False
         sweep = FULL_TURN * percent // 100
         if percent == 100:
             geometry.set('prst', 'ellipse')
