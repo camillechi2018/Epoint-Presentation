@@ -107,6 +107,10 @@ STRUCTURAL_RELATION_GROUPS = {
 
 def structural_relation_compatible(entry, page):
     structure = (entry.get('matching_contract') or {}).get('structure_type')
+    content = page.get('content') if isinstance(page.get('content'), dict) else {}
+    if content.get('type') == 'template_fields' and content.get('structure_type') == structure:
+        # Explicit, field-complete structure is independent of source business vocabulary.
+        return True
     requested = page.get('matching_relation') or page.get('information_relation')
     return not requested or requested in STRUCTURAL_RELATION_GROUPS.get(structure, {requested})
 
