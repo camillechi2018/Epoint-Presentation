@@ -1407,28 +1407,65 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
                                   or '\\n' in label or '\\r' in label for label in categories):
             raise ValueError('图表类目名称超出已验证容量')
         max_categories=registered.get('categories_max',8);max_series=registered.get('series_max',4)
-        if not 1<=len(categories)<=max_categories or not 1<=len(series)<=max_series:raise ValueError(f'图表超容量：本组件最多{max_categories}类、{max_series}系列')
+        min_series=registered.get('series_min',1)
+        category_counts=registered.get('category_counts')
+        if not 1<=len(categories)<=max_categories or not 1<=len(series)<=max_series:
+            raise ValueError(f'图表超容量：本组件最多{max_categories}类、{max_series}系列')
+        if len(series)<min_series or (category_counts and len(categories) not in category_counts):
+            raise ValueError('图表系列或类目数超出已验证范围')
+        series_name_chars=registered.get('series_name_max_chars')
         cd=CategoryChartData();cd.categories=categories
         for ss in series:
+            if series_name_chars and (not isinstance(ss['name'],str) or not ss['name'].strip()
+                    or len(ss['name'])>series_name_chars or '\n' in ss['name'] or '\r' in ss['name']):
+                raise ValueError('图表系列名称超出已验证容量')
             if len(ss['values'])!=len(categories):raise ValueError('图表系列与分类数量不一致')
             if any(isinstance(v,bool) or not isinstance(v,(float,int)) or not math.isfinite(v) for v in ss['values']):raise ValueError('图表必须为有限数值')
-            if 'DOUGHNUT' in str(chart.chart_type) and (any(v<0 for v in ss['values']) or sum(ss['values'])<=0):raise ValueError('构成图需非负值且总数大于0')
             minimum_share = registered.get('minimum_slice_share')
-            if minimum_share and any(value / sum(ss['values']) < minimum_share for value in ss['values']):
-                raise ValueError('图表扇区小于已验证标签空间')
+            if minimum_share or 'DOUGHNUT' in str(chart.chart_type):
+                total = sum(ss['values'])
+                if any(v<0 for v in ss['values']) or total<=0:
+                    raise ValueError('构成图需非负值且总数大于0')
+                if minimum_share and any(value/total < minimum_share for value in ss['values']):
+                    raise ValueError('图表扇区小于已验证标签空间')
             limits = registered.get('value_range')
             if limits and any(not limits[0] <= value <= limits[1] for value in ss['values']):
                 raise ValueError('图表数值超出已验证容量')
             cd.add_series(ss['name'],ss['values'])
+        category_targets=registered.get('category_label_shape_ids')
+        if category_targets:
+            if len(category_targets)!=len(categories) or any(sid not in lookup for sid in category_targets):
+                raise ValueError('原生图表类目与正文标签槽位不匹配')
+            for sid,label in zip(category_targets,categories):
+                set_text(lookup[sid],label)
+        total_target=registered.get('total_shape_id')
+        if total_target is not None:
+            unit=c['unit']
+            total=sum(series[0]['values'])
+            if not unit.strip() or '\n' in unit or '\r' in unit or visual_width_units(unit)>8:
+                raise ValueError('环形图中心单位超出已验证容量')
+            if not 0<total<=9999 or total!=int(total):
+                raise ValueError('环形图中心合计须为 1 到 9999 的整数')
+            set_text(lookup[total_target],f'{int(total)}\n{unit}',preserve_paragraph_styles=True)
         chart.replace_data(cd)
         if 'DOUGHNUT' not in str(chart.chart_type) and 'PIE' not in str(chart.chart_type):
             ax=chart.value_axis;ax.major_unit=None;ax.maximum_scale=None;ax.minimum_scale=None
+            if registered.get('series_min',1)>1:
+                # Recompute any secondary axis for the new series as well.
+                for setting in chart._chartSpace.xpath('.//c:valAx/c:scaling/c:min | .//c:valAx/c:scaling/c:max | .//c:valAx/c:majorUnit'):
+                    setting.getparent().remove(setting)
         # Never carry the template's fictitious chart title into a filled report.
         if c.get('title') and registered.get('title_in_binding'):
             raise ValueError('请通过正文图表标题字段提供标题')
         if c.get('title'):
             chart.has_title=True;chart.chart_title.text_frame.text=c['title']
         else:chart.has_title=False
+    if rules.get('shared_chart_value_scale'):
+        maximum = max(value for chart in supplied for series in chart['series'] for value in series['values'])
+        for frame in chart_shapes.values():
+            axis = frame.chart.value_axis
+            axis.minimum_scale = 0
+            axis.maximum_scale = max(1, maximum * 1.18)
     paired=rules.get('paired_chart_consistency')
     if paired:
         chart_by_id={c['shape_id']:c for c in supplied}
