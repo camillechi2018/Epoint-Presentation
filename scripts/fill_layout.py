@@ -1491,7 +1491,10 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
             raise ValueError('图表系列或类目数超出已验证范围')
         series_name_chars=registered.get('series_name_max_chars')
         cd=CategoryChartData();cd.categories=categories
-        for ss in series:
+        series_formats = registered.get('series_number_formats')
+        if series_formats is not None and len(series_formats) != len(series):
+            raise ValueError('图表系列与登记的数值格式数量不一致')
+        for ss, number_format in zip(series, series_formats or [None]*len(series), strict=True):
             if series_name_chars and (not isinstance(ss['name'],str) or not ss['name'].strip()
                     or len(ss['name'])>series_name_chars or '\n' in ss['name'] or '\r' in ss['name']):
                 raise ValueError('图表系列名称超出已验证容量')
@@ -1507,7 +1510,7 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
             limits = registered.get('value_range')
             if limits and any(not limits[0] <= value <= limits[1] for value in ss['values']):
                 raise ValueError('图表数值超出已验证容量')
-            cd.add_series(ss['name'],ss['values'])
+            cd.add_series(ss['name'],ss['values'],number_format=number_format)
         category_targets=registered.get('category_label_shape_ids')
         if category_targets:
             if len(category_targets)!=len(categories) or any(sid not in lookup for sid in category_targets):
@@ -1524,6 +1527,11 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
                 raise ValueError('环形图中心合计须为 1 到 9999 的整数')
             set_text(lookup[total_target],f'{int(total)}\n{unit}',preserve_paragraph_styles=True)
         chart.replace_data(cd)
+        if series_formats:
+            # Keep the original percent axes explicit after replacing the Excel data.
+            for axis_format in chart._chartSpace.xpath('.//c:valAx/c:numFmt'):
+                if '%' in axis_format.get('formatCode',''):
+                    axis_format.set('sourceLinked','0')
         if 'DOUGHNUT' not in str(chart.chart_type) and 'PIE' not in str(chart.chart_type):
             ax=chart.value_axis;ax.major_unit=None;ax.maximum_scale=None;ax.minimum_scale=None
             if registered.get('series_min',1)>1:
