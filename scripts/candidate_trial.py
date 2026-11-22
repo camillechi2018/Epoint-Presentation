@@ -18,6 +18,11 @@ def try_candidate(library, entry, data, page, content_path, trial_path, output,
     layout_id = entry["id"]
     title = page.get("title")
     theme = data["theme"]
+    count = (page.get("needs") or {}).get("item_count")
+    propagate_count = ((entry.get("matching_contract") or {}).get("required_binding_paths_by_count")
+                       and count is not None and data.get("item_count") is None)
+    if propagate_count:
+        data = dict(data, item_count=count)
     candidate, adapter = adapt_for_layout(layout_id, data, title, entry=entry)
     record = {"layout_id": layout_id, "status": "rejected", "content_adapter": adapter}
     if entry.get('asset_origin') == 'skill':
@@ -52,7 +57,7 @@ def try_candidate(library, entry, data, page, content_path, trial_path, output,
     wrap = capacity["wrap_suggestions"]
     if wrap and isinstance(candidate.get("texts"), dict):
         candidate = dict(candidate, texts=dict(candidate["texts"], **wrap))
-    if adapter or wrap:
+    if adapter or wrap or propagate_count:
         trial_path.write_text(json.dumps(candidate, ensure_ascii=False, indent=None if diagnostics else 2),
                               encoding="utf-8")
         content_path = trial_path

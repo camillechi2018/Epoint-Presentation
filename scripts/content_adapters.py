@@ -419,6 +419,11 @@ def classify_trial_failure(message: str) -> str:
     return 'TRIAL_REJECTED'
 
 
+def structural_required_paths(contract, item_count):
+    return contract.get('required_binding_paths_by_count', {}).get(
+        str(item_count), contract.get('required_binding_paths', []))
+
+
 def adapt_structural_fields(entry, content, page_title=None, diagnostics=False):
     """Map explicit generic fields without creating missing facts or relationships."""
     import re
@@ -433,7 +438,7 @@ def adapt_structural_fields(entry, content, page_title=None, diagnostics=False):
     structure = contract.get('structure_type')
     if content.get('structure_type') != structure and not supports_input_structure(content.get('type'), structure):
         return packed(dict(content), None)
-    required_paths = contract.get('required_binding_paths', [])
+    required_paths = structural_required_paths(contract, content.get('item_count'))
     optional_paths = contract.get('optional_binding_paths', [])
     paths = list(required_paths) + [path for path in optional_paths if path not in required_paths]
     items = content.get('items', [])

@@ -299,6 +299,25 @@ def apply_tech_pillars(slide,rules,count):
     set_text(shapes[rules['computed_count_shape_id']],str(count))
     return {'mode':'tech_six_pillars','count':count,'source_count':6,
             'source_slots':[i+1 for i in selected],'status':rules['validation_status']}
+def trim_right_arcs(shape, removed_count):
+    geometry = shape._element.spPr.find('a:custGeom', NS)
+    path = geometry.find('a:pathLst/a:path', NS)
+    move, *curves = list(path)
+    skip = 2 * removed_count
+    if not (0 < skip < len(curves)) or any(not node.tag.endswith('}cubicBezTo') for node in curves):
+        raise ValueError('重复列弧线与来源结构不一致')
+    start = curves[skip - 1][-1]
+    move[0].set('x', start.get('x'))
+    move[0].set('y', start.get('y'))
+    path.set('w', start.get('x'))
+    for curve in curves[:skip]:
+        path.remove(curve)
+    for list_name in ('a:cxnLst', 'a:gdLst'):
+        elements = geometry.find(list_name, NS)
+        for element in list(elements):
+            elements.remove(element)
+
+
 def apply_cardinality(slide,rules,count,items=None,theme=None):
     if rules.get('cardinality_mode') == 'paragraphs':
         return {'mode': 'paragraphs', 'count': count, 'source_count': rules['source_count'],
@@ -420,8 +439,21 @@ def apply_cardinality(slide,rules,count,items=None,theme=None):
     delta=(source_count-count)*spacing//2
     for group in groups[:count]:
         for sid in group:all_shapes[sid].left+=delta
-    arrow=all_shapes[rules['arrow_shape_id']]
-    arrow.left+=delta;arrow.width-=(source_count-count)*spacing
+    if count != source_count and 'centered_reflow' in rules:
+        geometry = rules['centered_reflow']
+        for sid in geometry['resize_shape_ids']:
+            shape = all_shapes[sid]
+            shape.left += delta
+            shape.width -= (source_count - count) * spacing
+        for sid in geometry.get('left_label_ids', []):
+            all_shapes[sid].left += delta
+        for sid in geometry.get('right_label_ids', []):
+            all_shapes[sid].left -= delta
+        if 'arc_shape_id' in geometry:
+            trim_right_arcs(all_shapes[geometry['arc_shape_id']], source_count - count)
+    elif 'centered_reflow' not in rules:
+        arrow=all_shapes[rules['arrow_shape_id']]
+        arrow.left+=delta;arrow.width-=(source_count-count)*spacing
     return {'mode':'repeatable','count':count,'source_count':source_count,'status':rules['validation_status']}
 def apply_project_schedule(slide,rules,tasks):
     shapes={s.shape_id:s for s in slide.shapes}
