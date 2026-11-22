@@ -1,4 +1,4 @@
-"""Restore PNG fallbacks lost while PowerPoint merges SVG artwork."""
+"""Restore picture fallbacks and generated Logo identity after PowerPoint assembly."""
 from __future__ import annotations
 
 import argparse
@@ -16,13 +16,19 @@ from layout_safety import walk_shapes as walk
 from tech_background import restore_tech_background_fallback
 
 
-def missing_primary(slide):
+def picture_blips(slide):
     for shape in walk(slide.shapes):
         if shape.shape_type != MSO_SHAPE_TYPE.PICTURE:
             continue
         blips = shape._element.xpath('.//a:blip')
-        if blips and not blips[0].get(qn('r:embed')):
+        if blips:
             yield shape, blips[0]
+
+
+def missing_primary(slide):
+    for shape, blip in picture_blips(slide):
+        if not blip.get(qn('r:embed')):
+            yield shape, blip
 
 
 def repair(input_path: Path, manifest_path: Path | None, check: bool = False) -> dict:
@@ -38,8 +44,11 @@ def repair(input_path: Path, manifest_path: Path | None, check: bool = False) ->
         if len(sources) != len(presentation.slides):
             raise ValueError('组装清单页数与成稿不一致')
     for index, slide in enumerate(presentation.slides, 1):
-        absent = list(missing_primary(slide))
-        if not absent:
+        repairs = [(s,b,'missing_primary') for s,b in missing_primary(slide)]
+        logos = [(s,b) for s,b in picture_blips(slide)
+                 if sources is not None and b.get(qn('r:embed')) and s.name.startswith('brand:logo:')
+                 and s.name not in ('brand:logo:source','brand:logo:plate')]
+        if not repairs and not logos:
             continue
         source_shapes = {}
         if sources is not None:
@@ -52,8 +61,20 @@ def repair(input_path: Path, manifest_path: Path | None, check: bool = False) ->
                 source_path = manifest_path.parent / source_path
             original = Presentation(source_path).slides[0]
             source_shapes = {shape.shape_id: shape for shape in walk(original.shapes)}
-        for shape, blip in absent:
-            record = {'slide': index, 'shape_id': shape.shape_id, 'name': shape.name}
+        for shape, blip in logos:
+            matched = [item for item in source_shapes.values()
+                       if item.shape_type == MSO_SHAPE_TYPE.PICTURE and item.name == shape.name]
+            if len(matched) != 1:
+                raise ValueError(f'第 {index} 页技能 Logo 的来源图片不唯一')
+            source_shapes[shape.shape_id] = matched[0]
+            try:
+                current = shape.image.blob
+            except (KeyError, ValueError):
+                current = None
+            if current != matched[0].image.blob:
+                repairs.append((shape,blip,'logo_identity'))
+        for shape, blip, reason in repairs:
+            record = {'slide': index, 'shape_id': shape.shape_id, 'name': shape.name, 'reason': reason}
             if sources is not None:
                 source = source_shapes.get(shape.shape_id)
                 if source is None or source.shape_type != MSO_SHAPE_TYPE.PICTURE:

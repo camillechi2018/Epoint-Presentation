@@ -14,6 +14,8 @@ from progress_rings import apply_progress_rings
 import argparse,json,math,re,subprocess
 from pptx import Presentation
 from pptx.chart.data import CategoryChartData, XyChartData
+from pptx.enum.chart import XL_CHART_TYPE
+from pptx.oxml import parse_xml
 from pptx.oxml.xmlchemy import OxmlElement
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pptx.enum.shapes import MSO_SHAPE
@@ -37,6 +39,20 @@ _VARIABLE_COUNT_MODES = (
     'directory_grid_3x2',
     'directory_reflow',
 )
+
+
+def replace_3d_pie_data(chart, data):
+    """Replace the one pie series while retaining the native 3D plot and styling."""
+    original, = chart._chartSpace.xpath('./c:chart/c:plotArea/c:pie3DChart/c:ser')
+    generated = parse_xml(data.xml_bytes(XL_CHART_TYPE.PIE))
+    replacement, = generated.xpath('./c:chart/c:plotArea/c:pieChart/c:ser')
+    original._remove_tx()
+    original._remove_cat()
+    original._remove_val()
+    original._insert_tx(replacement.tx)
+    original._insert_cat(replacement.cat)
+    original._insert_val(replacement.val)
+    chart.part.chart_workbook.update_from_xlsx_blob(data.xlsx_blob)
 
 
 def set_text(sh,text,*,preserve_paragraph_styles=False):
@@ -1474,6 +1490,11 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
         if m.get('collection')=='new-template-content' and any(not isinstance(c.get(k),str) or not c[k].strip() for k in ['unit','period','source']):raise ValueError('原稿图表组件必须提供unit、period、source')
         series=c['series'];chart=chart_shapes[c['shape_id']].chart
         registered=next((x for x in binding_data.get('objects',{}).get('charts',[]) if x['shape_id']==c['shape_id']),{})
+        pie_3d=bool(chart._chartSpace.xpath('./c:chart/c:plotArea/c:pie3DChart'))
+        if pie_3d and (not registered.get('native_3d_pie') or len(series)!=1):
+            raise ValueError('原生三维饼图须登记且仅支持单系列')
+        chart_type='' if pie_3d else str(chart.chart_type)
+        circular=pie_3d or 'DOUGHNUT' in chart_type or 'PIE' in chart_type
         xy = registered.get('data_mode') == 'xy'
         if xy:
             if not chart._chartSpace.xpath('./c:chart/c:plotArea/c:scatterChart') or 'categories' in c:
@@ -1522,10 +1543,12 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
                 raise ValueError(f'图表系列与{position_kind}数量不一致')
             if any(isinstance(v,bool) or not isinstance(v,(float,int)) or not math.isfinite(v) for v in ss['values']):raise ValueError('图表必须为有限数值')
             minimum_share = registered.get('minimum_slice_share')
-            if minimum_share or 'DOUGHNUT' in str(chart.chart_type):
+            if minimum_share or pie_3d or 'DOUGHNUT' in chart_type:
                 total = sum(ss['values'])
                 if any(v<0 for v in ss['values']) or total<=0:
                     raise ValueError('构成图需非负值且总数大于0')
+                if registered.get('fractions_sum_to_one') and not math.isclose(total,1.0,abs_tol=1e-8):
+                    raise ValueError('百分比构成图须提供合计为 1 的比例值')
                 if minimum_share and any(value/total < minimum_share for value in ss['values']):
                     raise ValueError('图表扇区小于已验证标签空间')
             limits = registered.get('value_range')
@@ -1552,13 +1575,16 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
             if not 0<total<=9999 or total!=int(total):
                 raise ValueError('环形图中心合计须为 1 到 9999 的整数')
             set_text(lookup[total_target],f'{int(total)}\n{unit}',preserve_paragraph_styles=True)
-        chart.replace_data(cd)
+        if pie_3d:
+            replace_3d_pie_data(chart,cd)
+        else:
+            chart.replace_data(cd)
         if series_formats:
             # Keep the original percent axes explicit after replacing the Excel data.
             for axis_format in chart._chartSpace.xpath('.//c:valAx/c:numFmt'):
                 if '%' in axis_format.get('formatCode',''):
                     axis_format.set('sourceLinked','0')
-        if 'DOUGHNUT' not in str(chart.chart_type) and 'PIE' not in str(chart.chart_type):
+        if not circular:
             ax=chart.value_axis;ax.major_unit=None;ax.maximum_scale=None;ax.minimum_scale=None
             if registered.get('series_min',1)>1:
                 # Recompute any secondary axis for the new series as well.
