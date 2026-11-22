@@ -12,7 +12,7 @@ from fallback_rules import fallback_type, fallback_catalog, uses_minimal_body_la
 from content_adapters import (BODY_RELATIONS, BODY_INPUT_RELATIONS,
                               adapt_body_input, adapt_for_layout, matching_content)
 from capacity_preflight import missing_binding_paths, preflight, required_input_fields
-from content_adapters import structural_required_paths
+from content_adapters import normalize_binding_path_aliases, structural_required_paths
 from library_location import text_binding_path
 from body_header import body_components_enabled, contract_for, title_path
 import atomic_body
@@ -331,12 +331,13 @@ def eligible(e, p, request, taxonomy, *, atomic_requested=False):
     else:
         replaces_title = contract_for(e, theme, body_components_enabled(request)
                                        and content.get('logo') is None)
-        matching_page = p
-        texts = content.get('texts')
+        normalized = normalize_binding_path_aliases(e.get('matching_contract') or {}, content)
+        matching_page = p if normalized is content else dict(p, content=normalized)
+        texts = normalized.get('texts')
         if replaces_title and isinstance(texts, dict) and p.get('title'):
             path = title_path(replaces_title)
             if path not in texts:
-                matching_page = dict(p, content=dict(content, texts=dict(texts, **{path: p['title']})))
+                matching_page = dict(p, content=dict(normalized, texts=dict(texts, **{path: p['title']})))
         structural_match = matches_structural_discovery(e, matching_page, taxonomy, request['_root'])
         structural_relation_match = matches_structural_relation(e, matching_page, taxonomy)
         contract = e.get('matching_contract') or {}

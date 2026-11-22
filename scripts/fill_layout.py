@@ -39,12 +39,13 @@ _VARIABLE_COUNT_MODES = (
 )
 
 
-def set_text(sh,text):
-    tf=sh.text_frame;p0=deepcopy(tf.paragraphs[0]._p)
+def set_text(sh,text,*,preserve_paragraph_styles=False):
+    tf=sh.text_frame
+    templates=[deepcopy(p._p) for p in tf.paragraphs] if preserve_paragraph_styles else [deepcopy(tf.paragraphs[0]._p)]
     for c in list(tf._txBody):
         if c.tag.endswith('}p'):tf._txBody.remove(c)
-    for line in text.split('\n'):
-        p=deepcopy(p0);first=p.find('a:r',NS);props=deepcopy(first.find('a:rPr',NS)) if first is not None and first.find('a:rPr',NS) is not None else None
+    for index,line in enumerate(text.split('\n')):
+        p=deepcopy(templates[min(index,len(templates)-1)]);first=p.find('a:r',NS);props=deepcopy(first.find('a:rPr',NS)) if first is not None and first.find('a:rPr',NS) is not None else None
         pp=p.find('a:pPr',NS)
         if pp is None:pp=OxmlElement('a:pPr');p.insert(0,pp)
         pp.set('hangingPunct','0');pp.set('eaLnBrk','1')
@@ -525,7 +526,14 @@ def reflow_registered_geometry(slide, rules, count):
         shapes = {shape.shape_id: shape for shape in walk(slide.shapes)}
         for sid, bounds in variant['bounds_emu'].items():
             shape = shapes[int(sid)]
-            shape.left, shape.top, shape.width, shape.height = bounds
+            if variant.get('group_child_width_emu'):
+                # Preserve the parent coordinate system while updating nested transforms.
+                xfrm = shape._element.xpath('./p:xfrm | ./p:spPr/a:xfrm | ./p:grpSpPr/a:xfrm')[0]
+                xfrm.off.x, xfrm.off.y, xfrm.ext.cx, xfrm.ext.cy = bounds
+            else:
+                shape.left, shape.top, shape.width, shape.height = bounds
+        for sid, width in variant.get('group_child_width_emu', {}).items():
+            shapes[int(sid)]._element.xfrm.chExt.cx = width
         for sid, coordinates in variant.get('path_x', {}).items():
             paths = shapes[int(sid)]._element.xpath('.//a:path')
             if len(paths) != 1:
@@ -538,6 +546,10 @@ def reflow_registered_geometry(slide, rules, count):
         for sid in variant['remove_shape_ids']:
             element = shapes[sid]._element
             element.getparent().remove(element)
+    count_label_id = rules.get('geometry_count_label_shape_id')
+    if count_label_id is not None:
+        label = next(shape for shape in walk(slide.shapes) if shape.shape_id == count_label_id)
+        set_text(label, str(count))
     return {'mode': 'repeatable', 'count': count, 'source_count': rules['source_count'],
             'status': rules['validation_status']}
 
@@ -850,6 +862,7 @@ def validate_text_field(binding, value):
             'allowed_values': '字段当前仅支持指定值：',
             'max_lines': '字段超过允许行数：',
             'max_chars_per_line': '单段文字超出容量，请精简：',
+            'paragraph_max_chars': '指定段落超出容量，请精简：',
             'max_width_units': '字段超出视觉宽度，请精简或换版：',
         }
         raise ValueError(messages[issues[0]] + field)
@@ -901,17 +914,22 @@ def fill_source_paragraphs(shape, text):
 def write_text_fields(shapes, bindings, texts, logo_enabled):
     # Clear template copy first. Multiple bindings can refer to the same shape.
     locked_roles = ('brand_locked', 'decoration_locked', 'source_decorative_locked')
+    styled_shapes = {binding['shape_id'] for binding in bindings
+                     if (binding.get('preserve_paragraph_styles') or binding.get('preserve_source_text_styles'))
+                     and binding['field'] in texts}
     for binding in bindings:
         shape_id = binding['shape_id']
-        if binding.get('semantic_role') not in locked_roles and shape_id in shapes:
-            if binding.get('preserve_source_text_styles') and binding['field'] in texts:
-                continue
+        if binding.get('semantic_role') not in locked_roles and shape_id in shapes and shape_id not in styled_shapes:
             set_text(shapes[shape_id], '')
     for binding in bindings:
         field = binding['field']
         if field in texts and not (logo_enabled and field == 'brand'):
-            replace = fill_source_paragraphs if binding.get('preserve_source_text_styles') else set_text
-            replace(shapes[binding['shape_id']], binding.get('render_prefix', '') + texts[field])
+            shape = shapes[binding['shape_id']]
+            value = binding.get('render_prefix', '') + texts[field]
+            if binding.get('preserve_source_text_styles'):
+                fill_source_paragraphs(shape, value)
+            else:
+                set_text(shape, value, preserve_paragraph_styles=binding.get('preserve_paragraph_styles', False))
 
 
 def expand_shared_text_paths(texts, bindings, paths):
@@ -926,7 +944,6 @@ def expand_shared_text_paths(texts, bindings, paths):
         if any(value != supplied[0] for value in supplied[1:]):
             raise ValueError('共享文字字段的内容不一致：'+path)
         texts.update(dict.fromkeys(fields, supplied[0]))
-
 
 def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=None,no_logo=False,
          *,body_header_title=None,catalog_entry=None):
@@ -1180,6 +1197,9 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
         if b['field'] in texts and (texts[b['field']] is None or
                                    isinstance(texts[b['field']],str) and not texts[b['field']].strip()):
             texts.pop(b['field'])
+    for binding in optional_fields:
+        if 'default_text' in binding:
+            texts.setdefault(binding['field'], binding['default_text'])
     required_fields={x['field'] for x in bindings if x.get('required',True) is not False and x.get('semantic_role') not in ('brand_locked','decoration_locked','source_decorative_locked','computed_item_count') and x['shape_id'] not in removed_ids and x['field'] not in removed_fields}-{'brand'}
     if set(texts)-known:raise ValueError('未知字段 '+str(set(texts)-known))
     if rules.get('cardinality_mode') == 'paragraphs':
@@ -1454,21 +1474,74 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
         if m.get('collection')=='new-template-content' and any(not isinstance(c.get(k),str) or not c[k].strip() for k in ['unit','period','source']):raise ValueError('原稿图表组件必须提供unit、period、source')
         categories=c['categories'];series=c['series'];chart=chart_shapes[c['shape_id']].chart
         registered=next((x for x in binding_data.get('objects',{}).get('charts',[]) if x['shape_id']==c['shape_id']),{})
+        if registered.get('count_matches_categories'):
+            chart_count = rules['source_count'] if item_count is None else item_count
+            if len(categories) != chart_count or chart_count not in rules['verified_counts']:
+                raise ValueError('图表类别与已验证项数不一致')
+        category_chars = registered.get('category_max_chars')
+        if category_chars and any(not isinstance(label,str) or not label.strip() or len(label)>category_chars
+                                  or '\\n' in label or '\\r' in label for label in categories):
+            raise ValueError('图表类目名称超出已验证容量')
         max_categories=registered.get('categories_max',8);max_series=registered.get('series_max',4)
-        if not 1<=len(categories)<=max_categories or not 1<=len(series)<=max_series:raise ValueError(f'图表超容量：本组件最多{max_categories}类、{max_series}系列')
+        min_series=registered.get('series_min',1)
+        category_counts=registered.get('category_counts')
+        if not 1<=len(categories)<=max_categories or not 1<=len(series)<=max_series:
+            raise ValueError(f'图表超容量：本组件最多{max_categories}类、{max_series}系列')
+        if len(series)<min_series or (category_counts and len(categories) not in category_counts):
+            raise ValueError('图表系列或类目数超出已验证范围')
+        series_name_chars=registered.get('series_name_max_chars')
         cd=CategoryChartData();cd.categories=categories
         for ss in series:
+            if series_name_chars and (not isinstance(ss['name'],str) or not ss['name'].strip()
+                    or len(ss['name'])>series_name_chars or '\n' in ss['name'] or '\r' in ss['name']):
+                raise ValueError('图表系列名称超出已验证容量')
             if len(ss['values'])!=len(categories):raise ValueError('图表系列与分类数量不一致')
             if any(isinstance(v,bool) or not isinstance(v,(float,int)) or not math.isfinite(v) for v in ss['values']):raise ValueError('图表必须为有限数值')
-            if 'DOUGHNUT' in str(chart.chart_type) and (any(v<0 for v in ss['values']) or sum(ss['values'])<=0):raise ValueError('构成图需非负值且总数大于0')
+            minimum_share = registered.get('minimum_slice_share')
+            if minimum_share or 'DOUGHNUT' in str(chart.chart_type):
+                total = sum(ss['values'])
+                if any(v<0 for v in ss['values']) or total<=0:
+                    raise ValueError('构成图需非负值且总数大于0')
+                if minimum_share and any(value/total < minimum_share for value in ss['values']):
+                    raise ValueError('图表扇区小于已验证标签空间')
+            limits = registered.get('value_range')
+            if limits and any(not limits[0] <= value <= limits[1] for value in ss['values']):
+                raise ValueError('图表数值超出已验证容量')
             cd.add_series(ss['name'],ss['values'])
+        category_targets=registered.get('category_label_shape_ids')
+        if category_targets:
+            if len(category_targets)!=len(categories) or any(sid not in lookup for sid in category_targets):
+                raise ValueError('原生图表类目与正文标签槽位不匹配')
+            for sid,label in zip(category_targets,categories):
+                set_text(lookup[sid],label)
+        total_target=registered.get('total_shape_id')
+        if total_target is not None:
+            unit=c['unit']
+            total=sum(series[0]['values'])
+            if not unit.strip() or '\n' in unit or '\r' in unit or visual_width_units(unit)>8:
+                raise ValueError('环形图中心单位超出已验证容量')
+            if not 0<total<=9999 or total!=int(total):
+                raise ValueError('环形图中心合计须为 1 到 9999 的整数')
+            set_text(lookup[total_target],f'{int(total)}\n{unit}',preserve_paragraph_styles=True)
         chart.replace_data(cd)
         if 'DOUGHNUT' not in str(chart.chart_type) and 'PIE' not in str(chart.chart_type):
             ax=chart.value_axis;ax.major_unit=None;ax.maximum_scale=None;ax.minimum_scale=None
+            if registered.get('series_min',1)>1:
+                # Recompute any secondary axis for the new series as well.
+                for setting in chart._chartSpace.xpath('.//c:valAx/c:scaling/c:min | .//c:valAx/c:scaling/c:max | .//c:valAx/c:majorUnit'):
+                    setting.getparent().remove(setting)
         # Never carry the template's fictitious chart title into a filled report.
+        if c.get('title') and registered.get('title_in_binding'):
+            raise ValueError('请通过正文图表标题字段提供标题')
         if c.get('title'):
             chart.has_title=True;chart.chart_title.text_frame.text=c['title']
         else:chart.has_title=False
+    if rules.get('shared_chart_value_scale'):
+        maximum = max(value for chart in supplied for series in chart['series'] for value in series['values'])
+        for frame in chart_shapes.values():
+            axis = frame.chart.value_axis
+            axis.minimum_scale = 0
+            axis.maximum_scale = max(1, maximum * 1.18)
     paired=rules.get('paired_chart_consistency')
     if paired:
         chart_by_id={c['shape_id']:c for c in supplied}
