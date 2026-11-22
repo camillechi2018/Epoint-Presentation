@@ -16,19 +16,20 @@ from render_offline_brand import PROFILE, add_body_background, add_content_title
 
 
 class BodyBrandEffectsTests(unittest.TestCase):
-    def test_filled_longcopy_cards_require_the_shared_background(self):
+    def test_filled_body_components_require_the_shared_background_and_shadowless_rule(self):
         library = Path(__file__).resolve().parents[1] / 'assets' / 'minimal-template-pack'
-        layouts = {'content-body-cards-two-longcopy': 2, 'content-body-cards-five-longcopy': 5,
-                   'content-blue-six-longcopy': 6}
-        for layout, count in layouts.items():
+        layouts = ('content-body-cards-two-longcopy', 'content-body-cards-three-longcopy',
+                   'content-body-cards-five-longcopy', 'content-blue-six-longcopy',
+                   'content-body-parallel-metrics-two', 'content-body-parallel-metrics-four',
+                   'content-body-single-focus', 'content-body-text-hierarchy')
+        for layout in layouts:
             for theme in ('blue', 'red'):
                 with self.subTest(layout=layout, theme=theme), tempfile.TemporaryDirectory() as directory:
                     root = Path(directory)
                     request, deck, plan = root / 'content.json', root / 'cards.pptx', root / 'plan.json'
-                    texts = {}
-                    for i in range(count):
-                        texts[f'items[{i}].heading'] = f'任务{i + 1}'
-                        texts[f'items[{i}].body'] = f'记录第{i + 1}项核对结果。'
+                    bindings = library.parent / 'body-components' / 'layouts' / layout / f'body-{theme}-bindings.json'
+                    texts = {field['semantic_path']: f'核对{i}' for i, field in
+                             enumerate(read_json(bindings)['fields'], start=1)}
                     request.write_text(json.dumps({'theme': theme, 'texts': texts}), encoding='utf-8')
                     fill(library, layout, request, deck, allow_draft=True, body_header_title='任务安排')
                     page = {'role': 'body', 'selection_mode': 'source_template', 'layout_id': layout,
@@ -40,16 +41,22 @@ class BodyBrandEffectsTests(unittest.TestCase):
                     layers = list(pres.slides[0].shapes)[:3]
                     self.assertEqual([shape.name for shape in layers],
                                      ['brand:canvas', 'brand:atmosphere:1', 'brand:atmosphere:2'])
-                    for shape in layers:
-                        shape._element.getparent().remove(shape._element)
+                    # A missing second ellipse must block delivery even if the canvas remains.
+                    ellipse = layers[-1]._element
+                    ellipse.getparent().remove(ellipse)
+                    rule = next(shape for shape in pres.slides[0].shapes if shape.name == 'brand:content-rule')
+                    rule._element.xpath('./p:style/a:effectRef')[0].set('idx', '1')
                     pres.save(deck)
-                    self.assertEqual([issue['code'] for issue in audit(plan, deck)['issues']],
-                                     ['new_drawn_background'])
+                    self.assertEqual({issue['code'] for issue in audit(plan, deck)['issues']},
+                                     {'new_drawn_background', 'body_rule_shadow'})
 
     def test_atmosphere_stays_scoped_to_registered_themes_and_components(self):
         self.assertFalse(uses_component_atmosphere(frame(), 'content-blue-six-longcopy', 'deep-blue-tech'))
         for theme in ('blue', 'red'):
-            self.assertFalse(uses_component_atmosphere(frame(), 'content-body-gallery-four', theme))
+            for layout in ('content-body-gallery-four', 'content-body-gallery-five',
+                           'content-body-metric-evidence', 'content-body-report-table'):
+                with self.subTest(layout=layout, theme=theme):
+                    self.assertFalse(uses_component_atmosphere(frame(), layout, theme))
 
     def test_card_background_and_rule_after_template_assembly(self):
         profile = read_json(PROFILE)

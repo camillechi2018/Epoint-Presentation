@@ -6,7 +6,7 @@ Skill 内置 `assets/brand/brand-baseline.json`、`assets/brand/logo-config.json
 
 离线模式默认采用**无阴影**的平面图形语言：卡片、流程框、指标框、分隔线、图标容器和标题装饰均不添加投影或内阴影。用留白、边框、色块和字号层级区分信息。`offline-core.json` 将 `visual_effects.shadows` 固定为 `none`；渲染脚本会清除新建图形继承的 PowerPoint 主题效果引用，并在保存后检查是否残留阴影。用户明确要求特定阴影效果时，再为该项目单独设计和验收，不改变此默认规则。
 
-蓝红简约新绘正文与二项、三项、五项和六项长文卡片共用可编辑矩形画布，其上按 `offline-core.json.content_atmosphere` 放置两枚可编辑的半透明椭圆，以 220 pt 柔化边缘。科技风新绘正文和登记为 `skill_tech` 的知识库纯正文共用 `assets/layouts/tech-content-header.pptx` 中的母版背景。该资产同时提供原生顶部装饰图形组。新绘科技正文使用居中白色标题、右上角白色 Logo 和 `#05193A` 卡片表面。PowerPoint 组装后核对公共背景图片及顶部图形。
+蓝红简约新绘正文和 `offline-core.json.content_atmosphere.component_layouts` 登记的组件共用可编辑矩形画布，其上按 `offline-core.json.content_atmosphere` 放置两枚可编辑的半透明椭圆，以 220 pt 柔化边缘。科技风新绘正文和登记为 `skill_tech` 的知识库纯正文共用 `assets/layouts/tech-content-header.pptx` 中的母版背景。该资产同时提供原生顶部装饰图形组。新绘科技正文使用居中白色标题、右上角白色 Logo 和 `#05193A` 卡片表面。PowerPoint 组装后核对公共背景图片及顶部图形。
 
 Git 知识库获取或校验失败时，完整出稿停止。若用户只需正文局部草稿，可保留错误原因，按本次材料建立内容页计划，再用 `scripts/render_offline_brand.py` 输出基础可编辑 PPTX。命令：
 
