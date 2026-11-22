@@ -31,4 +31,4 @@ metadata:
 
 1. 每页 `content` 齐备、完整稿预检为 `ready` 时，在同一条预检命令加 `--execute-out <成稿.pptx>`。Windows 默认核实微软 PowerPoint 并做限时保存、重开、导出检查；失败时报告阻断。macOS/Linux 默认用原生后端生成候选。安装、升级或解释器问题见[运行环境与自检](references/cross-platform-runtime.md)，显式选择后端见[跨平台组装](references/cross-platform-assembly.md)。
 2. 将结构页的 `layout_id`、`library_commit` 和 `source_stamp` 对应到最终页，核对组装关系、字体、Logo 可见尺寸和组件颜色。最终保存后执行 `scripts/audit_component_color_independence.py --input <成稿.pptx> --report <报告.json>`。逐页来源和质量检查见[来源与验收](references/source-and-qa.md)。
-3. 生成候选时退出码为 3，报告为 `candidate_created`、`deliverable=false`。PowerPoint 实际打开并逐页导出、证据与最终文件哈希一致后，进入 `pending_visual_review`。打开逐页导出图，对照来源预览核对文字换行、遮挡、字体、Logo、颜色和页面顺序，再记录交付结论。详见[Office 后端与交付状态](references/office-delivery-safety.md)。
+3. 生成候选时退出码为 3，报告为 `candidate_created`、`deliverable=false`。PowerPoint 实际打开并逐页导出、证据与最终文件哈希一致后，进入 `pending_visual_review`。打开逐页导出图，对照来源预览核对文字换行、遮挡、字体、Logo、颜色和页面顺序。色块上的标题、描述、编号和标签逐项按同主题原版对应位置核对字色。原子变体按父组件对应的文字角色和实际底色核对，再记录交付结论。[色块文字验收](references/source-and-qa.md#色块文字验收) · [Office 后端与交付状态](references/office-delivery-safety.md)
