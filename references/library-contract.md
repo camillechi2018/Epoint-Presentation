@@ -33,3 +33,5 @@
 带 `period_axis_schedule` 规则的分组排期保留原生任务行。阶段填写在 `items[].tasks[].stages[]`，单项目一行的 P194 使用 `items[].stages[]`。月轴用 `start_month`、`end_month`，季度轴用 `start_quarter`、`end_quarter`。区间包含首尾，同一行各段按升序排列且互不重叠。P192 的 `stages[].value` 同时决定百分比文字和已完成进度的位置。
 
 带 `progress_rings` 规则的组件使用同一字段填充进度文字和原生进度环。P153 的 `items[].progress.value` 接受 0–100 的整数百分比，如 `65%`，`0%` 显示底轨，`100%` 显示完整圆环。
+
+`shared_text_paths` 列出的语义字段可对应多个原生文字框。P245 每步只填写一个标题，左栏与右侧卡片同步更新，各自沿用原版字色和步骤编号。

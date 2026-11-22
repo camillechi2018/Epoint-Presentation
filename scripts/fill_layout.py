@@ -655,6 +655,20 @@ def write_text_fields(shapes, bindings, texts, logo_enabled):
             replace(shapes[binding['shape_id']], binding.get('render_prefix', '') + texts[field])
 
 
+def expand_shared_text_paths(texts, bindings, paths):
+    """Populate reviewed text positions that display one semantic field."""
+    for path in paths:
+        fields = [binding['field'] for binding in bindings if binding.get('semantic_path') == path]
+        if len(set(fields)) < 2:
+            raise ValueError('共享文字字段缺少对应的版式对象：'+path)
+        supplied = [texts[field] for field in fields if field in texts]
+        if not supplied:
+            continue
+        if any(value != supplied[0] for value in supplied[1:]):
+            raise ValueError('共享文字字段的内容不一致：'+path)
+        texts.update(dict.fromkeys(fields, supplied[0]))
+
+
 def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=None,no_logo=False,
          *,body_header_title=None,catalog_entry=None):
     lib=Path(lib).resolve();out=Path(out).resolve();content=Path(content).resolve()
@@ -732,6 +746,7 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
         if alias != field and alias in texts:
             if field in texts:raise ValueError('同一字段不能同时提供语义路径和旧字段名：'+field)
             texts[field]=texts.pop(alias)
+    expand_shared_text_paths(texts,bindings,rules.get('shared_text_paths',[]))
     if m.get('role') in ('cover','section','closing'):
         for b in bindings:
             path=b.get('semantic_path')
