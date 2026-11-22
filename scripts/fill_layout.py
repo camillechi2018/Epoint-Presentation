@@ -689,6 +689,9 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
         if not body_header or logo_config is not None or data.get('logo') is not None:
             raise ValueError('BODY_HEADER_CONFIGURATION_UNSUPPORTED')
         source_rel, source_page = layout_source(m, theme, body_contract=body_header)
+        body_constraints = (component_root/source_rel).parent/'constraints.json'
+        if body_constraints.is_file():
+            constraint_file = body_constraints
     commit=data.get('library_commit')
     source_stamp=None
     if commit is not None:
