@@ -11,6 +11,7 @@ from library_location import asset_root, binding_path_key
 from content_adapters import adapt_for_layout
 from text_width import binding_text_issues, visual_width_units
 from body_header import checked_title, contract_for
+from month_schedule import month_ranges
 
 
 @lru_cache(maxsize=8)
@@ -230,6 +231,12 @@ def preflight(library: Path, entry: dict, content: dict, page_title: str | None,
     rules_file = library / rules_rel if rules_rel else None
     rules = json.loads(rules_file.read_text(encoding='utf-8-sig')) if rules_file and rules_file.is_file() else {}
     rules_sha = hashlib.sha256(rules_file.read_bytes()).hexdigest() if rules_file and rules_file.is_file() else None
+    if schedule := rules.get('month_axis_schedule'):
+        try:
+            month_ranges(schedule, content.get('items'))
+        except ValueError as exc:
+            code, _, reason = str(exc).partition(': ')
+            hard.append({'field': 'items.stages', 'rule': code, 'detail': reason})
     title_pressure = rules.get('title_pressure_test') or {}
     safe_title_chars = title_pressure.get('safe_title_chars')
     if not contract and isinstance(safe_title_chars, int) and page_title and len(page_title) > safe_title_chars:

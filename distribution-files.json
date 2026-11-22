@@ -425,6 +425,7 @@
     "scripts/brand_palette.py",
     "scripts/candidate_trial.py",
     "scripts/capacity_preflight.py",
+    "scripts/month_schedule.py",
     "scripts/content_adapters.py",
     "scripts/delivery_gate.py",
     "scripts/delivery_status.py",

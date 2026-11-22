@@ -6,6 +6,7 @@ from pathlib import Path
 from copy import deepcopy
 from text_width import binding_text_issues, directory_text_over_capacity, visual_width_units
 from body_header import attach_header, checked_title, contract_for, verify_asset
+from month_schedule import month_ranges, place_month_bars
 
 import argparse,json,math,re,subprocess
 from pptx import Presentation
@@ -707,6 +708,8 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
     item_count=data.get('item_count')
     if item_count is not None and rules.get('cardinality_mode')=='fixed' and item_count not in rules.get('supported_counts',[]):
         raise ValueError('固定项数组件不支持该项数；请重新选版')
+    month_schedule = rules.get('month_axis_schedule')
+    intervals = month_ranges(month_schedule, data.get('items')) if month_schedule else None
     if (item_count is not None and rules.get('cardinality_mode') in _VARIABLE_COUNT_MODES
             and rules.get('validation_status') != 'verified'
             and item_count not in rules.get('verified_counts', []) and not internal):
@@ -1344,6 +1347,8 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
     brand_slot=next((lookup[b['shape_id']] for b in bindings if b['field']=='brand'),None) if logo_enabled else None
     cardinality_result=apply_cardinality(s,rules,item_count,data.get('items'),theme)
     schedule_result=apply_project_schedule(s,rules,data['tasks']) if rules.get('cardinality_mode')=='project_schedule' else None
+    if intervals is not None:
+        schedule_result = place_month_bars(s, month_schedule, intervals)
     header_result = None
     replace_source_logo = bool(source_logo_present and logo_enabled and m.get('replace_source_logo'))
     if body_header:
