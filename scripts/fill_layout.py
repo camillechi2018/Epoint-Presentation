@@ -593,17 +593,63 @@ def validate_text_field(binding, value):
         raise ValueError(messages[issues[0]] + field)
 
 
+def fill_source_paragraphs(shape, text):
+    """Keep per-line formatting and the source styling of a leading label."""
+    frame = shape.text_frame
+    if frame.text == text:
+        return
+    originals = [deepcopy(paragraph._p) for paragraph in frame.paragraphs]
+    for paragraph in frame.paragraphs:
+        frame._txBody.remove(paragraph._p)
+    for index, line in enumerate(text.split('\n')):
+        paragraph = deepcopy(originals[min(index, len(originals) - 1)])
+        runs = [node for node in paragraph if node.tag.endswith('}r')]
+        segments = [(node.findtext('a:t', namespaces=NS) or '', node.find('a:rPr', NS)) for node in runs]
+        source_text = ''.join(value for value, _ in segments)
+        source_label = re.match(r'^[^：:]{1,18}[：:]', source_text)
+        new_label = re.match(r'^[^：:]{1,18}[：:]', line)
+        first = segments[0][1] if segments else None
+        replacement = [(line, first)]
+        if source_label and new_label and len(line) > new_label.end():
+            offset = source_label.end()
+            body = first
+            for value, style in segments:
+                if offset < len(value):
+                    body = style
+                    break
+                offset -= len(value)
+            replacement = [(line[:new_label.end()], first), (line[new_label.end():], body)]
+        properties = paragraph.find('a:pPr', NS)
+        if properties is not None and properties.get('algn') in {'just', 'dist', 'justLow', 'thaiDist'}:
+            properties.set('algn', 'l')
+        for node in list(paragraph):
+            if node.tag.rsplit('}', 1)[-1] not in ('pPr', 'endParaRPr'):
+                paragraph.remove(node)
+        for value, style in replacement:
+            run = OxmlElement('a:r')
+            if style is not None:
+                run.append(deepcopy(style))
+            part = OxmlElement('a:t')
+            part.text = value
+            run.append(part)
+            paragraph.insert_element_before(run, 'a:endParaRPr')
+        frame._txBody.append(paragraph)
+
+
 def write_text_fields(shapes, bindings, texts, logo_enabled):
     # Clear template copy first. Multiple bindings can refer to the same shape.
     locked_roles = ('brand_locked', 'decoration_locked', 'source_decorative_locked')
     for binding in bindings:
         shape_id = binding['shape_id']
         if binding.get('semantic_role') not in locked_roles and shape_id in shapes:
+            if binding.get('preserve_source_text_styles') and binding['field'] in texts:
+                continue
             set_text(shapes[shape_id], '')
     for binding in bindings:
         field = binding['field']
         if field in texts and not (logo_enabled and field == 'brand'):
-            set_text(shapes[binding['shape_id']], binding.get('render_prefix', '') + texts[field])
+            replace = fill_source_paragraphs if binding.get('preserve_source_text_styles') else set_text
+            replace(shapes[binding['shape_id']], binding.get('render_prefix', '') + texts[field])
 
 
 def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=None,no_logo=False,
