@@ -7,6 +7,7 @@ from copy import deepcopy
 from text_width import binding_text_issues, directory_text_over_capacity, visual_width_units
 from body_header import attach_header, checked_title, contract_for, verify_asset
 from month_schedule import month_ranges, place_month_bars
+from period_schedule import schedule_intervals, place_period_bars
 from progress_rings import apply_progress_rings
 
 import argparse,json,math,re,subprocess
@@ -711,6 +712,8 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
         raise ValueError('固定项数组件不支持该项数；请重新选版')
     month_schedule = rules.get('month_axis_schedule')
     intervals = month_ranges(month_schedule, data.get('items')) if month_schedule else None
+    period_schedule = rules.get('period_axis_schedule')
+    period_intervals = schedule_intervals(period_schedule, data.get('items')) if period_schedule else None
     if (item_count is not None and rules.get('cardinality_mode') in _VARIABLE_COUNT_MODES
             and rules.get('validation_status') != 'verified'
             and item_count not in rules.get('verified_counts', []) and not internal):
@@ -1350,6 +1353,8 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
     schedule_result=apply_project_schedule(s,rules,data['tasks']) if rules.get('cardinality_mode')=='project_schedule' else None
     if intervals is not None:
         schedule_result = place_month_bars(s, month_schedule, intervals)
+    if period_intervals is not None:
+        schedule_result = place_period_bars(s, period_schedule, period_intervals)
     progress_rings = rules.get('progress_rings')
     progress_ring_result = (apply_progress_rings(lookup, progress_rings, texts, semantic_aliases)
                             if progress_rings else None)

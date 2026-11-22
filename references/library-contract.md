@@ -30,4 +30,6 @@
 正文绑定可以声明 `preserve_source_text_styles`。替换时逐段保留来源段落的格式，按目标文字中的短标签拆分行首标签与正文的样式。此规则适用于经过试填的多段正文槽位。
 带 `month_axis_schedule` 规则的年度排期使用固定原生行和阶段。可编辑阶段标题来自 `items[].stages[].label`，每段的 `start_month`、`end_month` 为 1–12 的整数，包含首尾月。同一行按月升序，阶段之间可留空月。试填按月轴边界调整原生条带的位置和宽度。
 
+带 `period_axis_schedule` 规则的分组排期保留原生任务行。阶段填写在 `items[].tasks[].stages[]`，单项目一行的 P194 使用 `items[].stages[]`。月轴用 `start_month`、`end_month`，季度轴用 `start_quarter`、`end_quarter`。区间包含首尾，同一行各段按升序排列且互不重叠。P192 的 `stages[].value` 同时决定百分比文字和已完成进度的位置。
+
 带 `progress_rings` 规则的组件使用同一字段填充进度文字和原生进度环。P153 的 `items[].progress.value` 接受 0–100 的整数百分比，如 `65%`，`0%` 显示底轨，`100%` 显示完整圆环。

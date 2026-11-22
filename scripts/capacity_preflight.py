@@ -12,6 +12,7 @@ from content_adapters import adapt_for_layout
 from text_width import binding_text_issues, visual_width_units
 from body_header import checked_title, contract_for
 from month_schedule import month_ranges
+from period_schedule import schedule_intervals
 from progress_rings import progress_percentage
 
 
@@ -238,6 +239,12 @@ def preflight(library: Path, entry: dict, content: dict, page_title: str | None,
         except ValueError as exc:
             code, _, reason = str(exc).partition(': ')
             hard.append({'field': 'items.stages', 'rule': code, 'detail': reason})
+    if schedule := rules.get('period_axis_schedule'):
+        try:
+            schedule_intervals(schedule, content.get('items'))
+        except ValueError as exc:
+            code, _, reason = str(exc).partition(': ')
+            hard.append({'field': 'items', 'rule': code, 'detail': reason})
     if rings := rules.get('progress_rings'):
         aliases = {binding.get('semantic_path'): binding['field'] for binding in bindings}
         for ring in rings:
