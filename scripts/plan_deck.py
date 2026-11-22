@@ -13,6 +13,7 @@ from content_adapters import (BODY_RELATIONS, BODY_INPUT_RELATIONS,
                               adapt_body_input, adapt_for_layout, matching_content)
 from capacity_preflight import missing_binding_paths, preflight, required_input_fields
 from content_adapters import structural_required_paths
+from library_location import text_binding_path
 from body_header import body_components_enabled, contract_for, title_path
 
 
@@ -93,7 +94,7 @@ def binding_gap(entry, page, root, theme, *, binding_rel=None):
     if contract.get('required_binding_paths_by_count') and content.get('item_count') is None:
         content = dict(content, item_count=(page.get('needs') or {}).get('item_count'))
     content, _ = adapt_for_layout(entry['id'], content, page.get('title'), entry=entry)
-    binding_rel = binding_rel or entry[binding_path_key(entry, theme)]
+    binding_rel = binding_rel or text_binding_path(entry, theme, content.get('item_count'))
     fields = json.loads((asset_root(root, entry) / binding_rel).read_text(encoding='utf-8-sig'))['fields']
     if contract.get('required_binding_paths_by_count'):
         inactive = set(contract['required_binding_paths']) - set(
@@ -492,7 +493,10 @@ def resolve(library,request,*,catalog=None):
             requested_count=need.get('item_count')
             _,native_count=count_profile(e,root) if requested_count is not None else ([],None)
             count_fit=1 if requested_count is not None and requested_count==native_count else 0
-            capacity_check=preflight(root,e,content,p.get('title'),p.get('theme',request.get('theme')),
+            capacity_content = content
+            if e.get('bindings_by_count') and content.get('item_count') is None:
+                capacity_content = dict(content, item_count=requested_count)
+            capacity_check=preflight(root,e,capacity_content,p.get('title'),p.get('theme',request.get('theme')),
                                      body_header_pilot=body_components_enabled(request))
             gap=binding_gap(e,p,root,p.get('theme',request.get('theme')),
                             binding_rel=capacity_check['binding_path'])

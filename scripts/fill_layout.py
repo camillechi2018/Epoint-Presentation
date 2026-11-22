@@ -1,5 +1,5 @@
 """Fill one editable template; fail before writing on missing facts or capacity errors."""
-from library_location import asset_root, binding_path_key, get_library, layout_source, load_catalog, source_locator
+from library_location import asset_root, get_library, layout_source, load_catalog, source_locator, text_binding_path
 from normalize_fonts import normalize
 from font_profile import resolve as resolve_font_profile
 from pathlib import Path
@@ -316,6 +316,67 @@ def trim_right_arcs(shape, removed_count):
         elements = geometry.find(list_name, NS)
         for element in list(elements):
             elements.remove(element)
+
+
+def expand_centered_columns(slide, rules, count):
+    config = rules['expand_columns']
+    source_count = rules['source_count']
+    units = rules['units']
+    shapes = {shape.shape_id: shape for shape in slide.shapes}
+    pitch = rules['spacing_emu']
+    offset = config['clone_id_offset']
+    anchor = shapes[config['anchor_shape_id']]
+    left = anchor.left + (anchor.width - pitch) // 2
+    root_ids = {sid + offset for sid in units[-1]}
+    original_ids = {int(node.get('id')) for node in slide._element.xpath('.//p:cNvPr')}
+    if count != source_count + 1 or root_ids & original_ids:
+        raise ValueError('新增列配置与来源对象不一致')
+    nested_id = max(root_ids | original_ids) + 1
+    movable = [shapes[sid] for unit in units for sid in unit]
+    for sid in units[-1]:
+        source = shapes[sid]
+        element = deepcopy(source._element)
+        root, *children = element.xpath('.//p:cNvPr')
+        root.set('id', str(sid + offset))
+        for node in children:
+            node.set('id', str(nested_id))
+            nested_id += 1
+        source._element.addnext(element)
+        clone = slide.shapes._shape_factory(element)
+        clone.left += pitch
+        movable.append(clone)
+    for shape in movable:
+        shape.left = left + round((shape.left - left) * source_count / count)
+        width = round(shape.width * source_count / count)
+        if shape.shape_type == 6 and config.get('preserve_group_width'):
+            shape.left -= (shape.width - width) // 2
+        else:
+            shape.width = width
+        sid = shape.shape_id - offset if shape.shape_id in root_ids else shape.shape_id
+        if sid in config.get('tight_margin_shape_ids', []):
+            shape.text_frame.margin_left = Pt(3)
+            shape.text_frame.margin_right = Pt(3)
+    if 'arc_shape_id' in rules['centered_reflow']:
+        shape = shapes[rules['centered_reflow']['arc_shape_id']]
+        geometry = shape._element.spPr.find('a:custGeom', NS)
+        path = geometry.find('a:pathLst/a:path', NS)
+        move, *curves = list(path)
+        width = int(path.get('w'))
+        step = width // source_count
+        if len(curves) != 2 * source_count:
+            raise ValueError('重复列弧线与来源结构不一致')
+        for index, curve in enumerate(curves[:2], 1):
+            clone = deepcopy(curve)
+            for point in clone:
+                point.set('x', str(int(point.get('x')) + step))
+            path.insert(index, clone)
+        path.set('w', str(width + step))
+        move[0].set('x', str(width + step))
+        for tag in ('a:cxnLst', 'a:gdLst'):
+            container = geometry.find(tag, NS)
+            for child in list(container):
+                container.remove(child)
+    return {'mode':'repeatable','count':count,'source_count':source_count,'status':rules['validation_status']}
 
 
 def apply_cardinality(slide,rules,count,items=None,theme=None):
@@ -677,7 +738,7 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
     if (out==source or out.is_relative_to(lib/'layouts') or out.is_relative_to(lib/'diagrams')
             or out.is_relative_to(lib/'master') or (component_root != lib and out.is_relative_to(component_root))):
         raise ValueError('输出不能覆盖模板库资产')
-    binding_rel = body_header['bindings'] if body_header else m[binding_path_key(m, theme)]
+    binding_rel = body_header['bindings'] if body_header else text_binding_path(m, theme, data.get('item_count'))
     binding_path = (component_root/binding_rel).resolve()
     if not binding_path.is_relative_to(component_root):
         raise ValueError('绑定文件越出库根目录')
@@ -691,6 +752,9 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
         if unreviewed:raise ValueError('该页含未分类的源稿图片，需先确认装饰用途或替换内容图片；内部结构测试可传 --internal-draft')
     rules=json.loads((component_root/m['layout_rules']).read_text(encoding='utf-8-sig'))
     item_count=data.get('item_count')
+    if rules.get('expand_columns') and item_count is not None and (
+            type(item_count) is not int or item_count not in rules.get('supported_counts', [])):
+        raise ValueError('项数不在支持范围')
     if item_count is not None and rules.get('cardinality_mode')=='fixed' and item_count not in rules.get('supported_counts',[]):
         raise ValueError('固定项数组件不支持该项数；请重新选版')
     if (item_count is not None and rules.get('cardinality_mode') in _VARIABLE_COUNT_MODES
@@ -1109,6 +1173,9 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
         if logo_shape is None or logo_shape.shape_type!=13:raise ValueError('来源 Logo 图片未找到，停止填充')
         if logo_enabled:logo_shape.name='brand:logo:source'
         else:logo_shape._element.getparent().remove(logo_shape._element)
+    expanded_cardinality = None
+    if rules.get('expand_columns') and item_count is not None and item_count > rules['source_count']:
+        expanded_cardinality = expand_centered_columns(s, rules, item_count)
     lookup={x.shape_id:x for x in walk(s.shapes)}
     write_text_fields(lookup, bindings, texts, logo_enabled)
     for fit in rules.get('text_box_expand_pt',[]):
@@ -1335,7 +1402,7 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
     normal_body_weight_result=apply_normal_body_weight(s,rules,bindings)
     page_background_result=apply_page_background_role(s,rules,theme,p.slide_width,p.slide_height)
     brand_slot=next((lookup[b['shape_id']] for b in bindings if b['field']=='brand'),None) if logo_enabled else None
-    cardinality_result=apply_cardinality(s,rules,item_count,data.get('items'),theme)
+    cardinality_result=expanded_cardinality or apply_cardinality(s,rules,item_count,data.get('items'),theme)
     schedule_result=apply_project_schedule(s,rules,data['tasks']) if rules.get('cardinality_mode')=='project_schedule' else None
     header_result = None
     replace_source_logo = bool(source_logo_present and logo_enabled and m.get('replace_source_logo'))
