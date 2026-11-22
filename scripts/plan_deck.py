@@ -420,7 +420,7 @@ def summarize_selection(pages):
     return summary
 
 
-def resolve(library,request,*,catalog=None):
+def resolve(library,request,*,catalog=None,candidate_summary_limit=12):
     root=Path(library).resolve()
     if catalog is None:
         catalog=load(root)
@@ -525,7 +525,7 @@ def resolve(library,request,*,catalog=None):
                            penalty-fit*2-count_fit,-impact,rng.random(),fit,count_fit,e,capacity_check))
         scored.sort(key=lambda row:row[:10]);best=scored[0];e=best[12];fam=e.get('family_id',e['id'])
         candidate_summaries=[]
-        for row in scored[:12]:
+        for row in scored[:candidate_summary_limit]:
             candidate=row[12]
             binding_rel = row[13]['binding_path']
             candidate_root=asset_root(root,candidate)

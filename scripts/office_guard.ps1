@@ -51,3 +51,15 @@ function Stop-EpointPowerPoint($session){
  if($session -and $session.owned){$session.app.Quit()}
  elseif($session){$session.app.AutomationSecurity=$session.security;$session.app.DisplayAlerts=$session.alerts}
 }
+function Open-EpointEmptyPresentation($app, [string]$SeedPresentation){
+ if(-not $SeedPresentation -or -not (Test-Path -LiteralPath $SeedPresentation -PathType Leaf)){
+  throw 'OFFICE_EMPTY_PRESENTATION_MISSING'
+ }
+ # Initialize the background document through PowerPoint's Open path.
+ $deck=$app.Presentations.Open([IO.Path]::GetFullPath($SeedPresentation),0,0,0)
+ if($deck.Slides.Count -ne 0){
+  $deck.Close()
+  throw 'OFFICE_EMPTY_PRESENTATION_HAS_SLIDES'
+ }
+ return $deck
+}

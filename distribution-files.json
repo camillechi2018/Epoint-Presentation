@@ -429,6 +429,7 @@
     "scripts/period_schedule.py",
     "scripts/progress_rings.py",
     "scripts/content_adapters.py",
+    "scripts/cover_gallery.py",
     "scripts/delivery_gate.py",
     "scripts/delivery_status.py",
     "scripts/distribution.py",

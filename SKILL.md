@@ -9,7 +9,7 @@ metadata:
 
 ## 从材料到逐页请求
 
-默认在文案定型前读取原文并检索同主题知识库。Word 案例可直接用 `scripts/run.py --material <原文.docx> --out <报告.json> --plan-out <选版.json> --execute-out <成稿.pptx>`。沿用已选主题，使用 `--theme` 可指定红版或科技风。入口从原文分段、辨认信息关系和项数，检索已校验组件的必需字段及容量，再编排文字。比较页必须能从材料区分两侧；流程所需的动作、对象和标签必须有原文依据。记录来源段落、初选清单和最终实际出稿。正文页的讲者备注保留相应 Word 原文。其他材料经事实提取后，在逐页草稿定型前同样核对候选结构与真实字段；已有逐页请求继续使用原入口。
+默认在文案定型前读取原文并检索同主题知识库。Word 案例可用 `scripts/run.py --material <原文.docx> --theme <主题> --out <报告.json> --cover-gallery-out <封面候选.png>` 准备逐页请求和封面预览。入口从原文分段、辨认信息关系和项数，检索已校验组件的必需字段及容量，再编排文字。比较页必须能从材料区分两侧；流程所需的动作、对象和标签必须有原文依据。记录来源段落、初选清单和最终实际出稿。正文页的讲者备注保留相应 Word 原文。其他材料经事实提取后，在逐页草稿定型前同样核对候选结构与真实字段；已有逐页请求可直接预览。
 
 1. 用 `scripts/run.py --read-material --input <原文件> --out <事实清单.json>` 读取 Word、Excel、PPTX、HTML、TXT 或 Markdown。PDF 和 PNG/JPEG 先用平台提取文字或 OCR，再加 `--extraction <平台提取.json>`。核对页码、表格、图片、公式缓存和识别疑点。除非用户指定视觉参考，旧演示稿只提供内容。详见[材料接入](references/material-ingestion.md)。
 2. 依据事实清单形成逐页草稿，保留原段、来源、图片及真实信息关系。选版入口自动整理并列短标题、单项指标、多指标分组和层级，也可用 `scripts/run.py --structure-content --request <草稿.json> --out <逐页请求.json> --report <整理报告.json>` 单独核对整理结果。缺少可靠依据的内容按原结构进入选版或技能排版。详见[材料结构化](references/content-structuring.md)。
@@ -21,7 +21,9 @@ metadata:
 
 运行 `scripts/run.py --request <逐页请求.json> --out <预检报告.json> --plan-out <逐页计划.json>`。记录知识库来源、提交号和失败原因，后续入口使用同一 `--library`。显式离线加 `--offline`。依次使用已校验的远端快照、完整缓存和内置最小包；使用最小包时说明正文候选覆盖。完整性异常保留文件、来源和哈希证据，只使用验证通过的来源，无合格来源时阻断完整稿。[知识库数据契约](references/library-contract.md)
 
-**结构页。** 完整稿按顺序使用已校验模板的封面、目录、章节页和封底。每页提供真实字段；目录项数可确定时与章节数一致。首个章节页实填后锁定 `layout_id`，后续章节沿用。遇到超限，先调整内容或整套章节版式；仍无合格模板则停止完整出稿。明确只做局部正文时设 `complete_deck:false`。[封面选择](references/cover-selection.md) · [目录长文案容量](references/directory-longcopy.md)
+**封面选择。** 整套风格确认后、完整 PPTX 首次出稿前，生成并展示当前风格的带编号封面缩略图，提供按图号选择和“自动选择”。用户选定后写入封面的 `layout_id`，按该版绑定准备真实文字。已有明确封面、用户未另选或预览无法展示时，沿用原请求。操作步骤见[出稿前选封面](references/cover-selection.md#出稿前选封面)。
+
+**结构页。** 完整稿按顺序使用已校验模板的封面、目录、章节页和封底。每页提供真实字段；目录项数可确定时与章节数一致。首个章节页实填后锁定 `layout_id`，后续章节沿用。遇到超限，先调整内容或整套章节版式；仍无合格模板则停止完整出稿。明确只做局部正文时设 `complete_deck:false`。[目录长文案容量](references/directory-longcopy.md)
 
 **正文。** 按关系、项数、数据与字段契约筛候选，读取选中组件的绑定、容量、媒体与审批状态。缺少输入事实、超出硬限制或会丢失原文时记录原因并试下一项。按请求上限实际试填后，仍不适配则选同风格的技能排版，再考虑带有理由和元素坐标的自由编排。只有成功提取并填充来源页才计入模板复用。详见[选版与试填](references/deck-planning.md)、[结构字段](references/structural-template-fields.md)、[正文托底排版](references/body-fallback-layouts.md)和[自由编排](references/free-composition.md)。
 
@@ -33,6 +35,6 @@ metadata:
 
 蓝红通用页眉的分割线须显式关闭主题阴影。蓝红新绘正文和已登记组件共用可编辑画布和两层柔边弥散背景。登记的组件包括长文卡片（二、三、五、六项）、并列指标（两组、四组）、「单一论点与两条依据」、「背景、方法与目标」、「指标与原文证据」、四图与五图图集，以及「报告条目与原文依据」。整稿保存后按页核对分割线和背景图层，异常时阻止出稿。见[正文页眉与背景验收](references/source-and-qa.md#正文页眉与背景验收)。
 
-1. 每页 `content` 齐备、完整稿预检为 `ready` 时，在同一条预检命令加 `--execute-out <成稿.pptx>`。Windows 默认核实微软 PowerPoint 并做限时保存、重开、导出检查；失败时报告阻断。macOS/Linux 默认用原生后端生成候选。安装、升级或解释器问题见[运行环境与自检](references/cross-platform-runtime.md)，显式选择后端见[跨平台组装](references/cross-platform-assembly.md)。
+1. 每页 `content` 齐备、完整稿预检为 `ready` 时，使用正式请求和同一知识库执行 `scripts/run.py --request <正式请求.json> --library <知识库路径> --out <出稿报告.json> --plan-out <选版.json> --execute-out <成稿.pptx>`。Windows 默认核实微软 PowerPoint 并做限时保存、重开、导出检查；失败时报告阻断。macOS/Linux 默认用原生后端生成候选。安装、升级或解释器问题见[运行环境与自检](references/cross-platform-runtime.md)，显式选择后端见[跨平台组装](references/cross-platform-assembly.md)。
 2. 将结构页的 `layout_id`、`library_commit` 和 `source_stamp` 对应到最终页，核对组装关系、字体、Logo 可见尺寸和组件颜色。最终保存后执行 `scripts/audit_component_color_independence.py --input <成稿.pptx> --report <报告.json>`。逐页来源和质量检查见[来源与验收](references/source-and-qa.md)。
 3. 生成候选时退出码为 3，报告为 `candidate_created`、`deliverable=false`。PowerPoint 实际打开并逐页导出、证据与最终文件哈希一致后，进入 `pending_visual_review`。打开逐页导出图，对照来源预览核对文字换行、遮挡、字体、Logo、颜色和页面顺序。色块上的标题、描述、编号和标签逐项按同主题原版对应位置核对字色。原子变体按父组件对应的文字角色和实际底色核对，再记录交付结论。[色块文字验收](references/source-and-qa.md#色块文字验收) · [Office 后端与交付状态](references/office-delivery-safety.md)

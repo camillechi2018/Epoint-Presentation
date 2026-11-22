@@ -1,4 +1,4 @@
-﻿param([ValidateSet('inspect','smoke','render')][string]$Mode='inspect',[string]$Report,[string]$OwnerFile,[string]$InputPath,[string]$RenderDirectory)
+﻿param([ValidateSet('inspect','smoke','render')][string]$Mode='inspect',[string]$Report,[string]$OwnerFile,[string]$InputPath,[string]$RenderDirectory,[string]$SeedPresentation)
 $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'office_guard.ps1')
 $session=$null;$deck=$null
@@ -10,7 +10,7 @@ try {
  if($Mode -eq 'smoke'){
   $InputPath=Join-Path (Split-Path $Report -Parent) 'smoke.pptx'
   $RenderDirectory=Join-Path (Split-Path $Report -Parent) 'smoke-render'
-  $deck=$app.Presentations.Add(0)
+  $deck=Open-EpointEmptyPresentation $app $SeedPresentation
   $slide=$deck.Slides.Add(1,12)
   $slide.Shapes.AddTextbox(1,20,20,300,80).TextFrame.TextRange.Text='Epoint Office smoke test'
   $deck.SaveAs($InputPath,24);$deck.Close();$deck=$null

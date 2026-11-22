@@ -194,6 +194,23 @@ def preflight(request, *, library=None, offline=False, native_experimental=False
     return result
 
 
+def preview_covers(library, request, catalog, output, *, theme, style_family):
+    from cover_gallery import build_cover_gallery
+
+    cover = next((page for page in request.get('pages', []) if page.get('role') == 'cover'), None)
+    if cover is None:
+        warning = '逐页请求中没有封面页。'
+    else:
+        try:
+            cover = dict(cover, theme=theme, style_family=style_family)
+            plan = resolve(library, dict(request, pages=[cover]), catalog=catalog,
+                           candidate_summary_limit=None)
+            return build_cover_gallery(library, plan['pages'][0], output)
+        except (OSError, ValueError) as exc:
+            warning = safe_message(exc)
+    return {'status': 'unavailable', 'image_path': None, 'candidates': [], 'warnings': [warning]}
+
+
 def _skill_version():
     text = (SKILL / 'SKILL.md').read_text(encoding='utf-8-sig')
     match = re.search(r'version:\s*["\']?([^"\'\s]+)', text)
@@ -466,7 +483,9 @@ def main():
     ap.add_argument('--theme', choices=STYLES, help='Word 出稿主题，默认蓝色')
     ap.add_argument('--out', type=Path, required=True)
     ap.add_argument('--plan-out', type=Path)
-    ap.add_argument('--execute-out', type=Path, help='所有页面均有 content 时填充并组装完整 PPTX')
+    output_stage = ap.add_mutually_exclusive_group()
+    output_stage.add_argument('--execute-out', type=Path, help='所有页面均有 content 时填充并组装完整 PPTX')
+    output_stage.add_argument('--cover-gallery-out', type=Path, help='输出出稿前的带编号封面候选缩略图 PNG')
     ap.add_argument('--library', type=Path, help='测试或固定版本时指定已下载知识库')
     ap.add_argument('--offline', action='store_true')
     ap.add_argument('--assembly-backend', choices=BACKENDS, default='auto',
@@ -478,8 +497,14 @@ def main():
         select_backend(args.assembly_backend, legacy_native=args.native_experimental)
     except ValueError as exc:
         ap.error(str(exc))
-    if args.out.exists() or args.plan_out and args.plan_out.exists() or args.execute_out and args.execute_out.exists():
+    outputs = [path for path in (args.out, args.plan_out, args.execute_out, args.cover_gallery_out)
+               if path is not None]
+    if any(path.exists() for path in outputs):
         ap.error('输出文件已存在')
+    if len(set(path.resolve() for path in outputs)) != len(outputs):
+        ap.error('各输出须使用不同文件')
+    if args.cover_gallery_out and args.cover_gallery_out.suffix.lower() != '.png':
+        ap.error('封面缩略图输出须为 PNG 文件')
     if args.theme and args.request:
         ap.error('逐页请求使用文件中声明的主题')
     request = ({'theme': args.theme or 'blue'} if args.material
@@ -525,7 +550,8 @@ def main():
         report['can_make_complete_deck'] = False
         report['delivery_status'] = 'blocked'
         report['warnings'].append('任务字体缺失：' + ', '.join(font_check['missing']))
-    if report['status'] == 'ready' and (args.plan_out or args.execute_out) and request.get('pages'):
+    needs_plan = bool((args.plan_out or args.execute_out) and request.get('pages'))
+    if report['status'] == 'ready' and (needs_plan or args.cover_gallery_out):
         stage = 'planning'
         try:
             _load_workflow()
@@ -534,11 +560,16 @@ def main():
             plan_request['allow_provisional'] = request.get('asset_policy') == 'provisional_manual'
             library = Path(report['library_path'])
             catalog = load_catalog(library)
-            plan = resolve(library, plan_request, catalog=catalog)
-            plan['library_commit'] = report['library_commit']
-            plan['library_source'] = report['library_source']
-            plan['complete_deck'] = request.get('complete_deck', True)
-            if args.execute_out:
+            if args.cover_gallery_out:
+                report['cover_gallery'] = preview_covers(
+                    library, plan_request, catalog, args.cover_gallery_out,
+                    theme=report['theme'], style_family=report['style_family'])
+            if needs_plan:
+                plan = resolve(library, plan_request, catalog=catalog)
+                plan['library_commit'] = report['library_commit']
+                plan['library_source'] = report['library_source']
+                plan['complete_deck'] = request.get('complete_deck', True)
+            if needs_plan and args.execute_out:
                 stage = 'execution'
                 previous_profile = os.environ.get('EPOINT_FONT_PROFILE')
                 os.environ['EPOINT_FONT_PROFILE'] = font_check['profile']['id']
@@ -556,8 +587,9 @@ def main():
                 if report['execution'].get('render_error_code'):
                     report['warnings'].append('候选 PPTX 已生成并通过静态审计；渲染待处理：'
                                               + report['execution']['render_error_code'])
-            report['selection_summary'] = plan['selection_summary']
-            if args.plan_out:
+            if needs_plan:
+                report['selection_summary'] = plan['selection_summary']
+            if needs_plan and args.plan_out:
                 args.plan_out.parent.mkdir(parents=True, exist_ok=True)
                 args.plan_out.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding='utf-8')
                 report['plan_path'] = str(args.plan_out.resolve())

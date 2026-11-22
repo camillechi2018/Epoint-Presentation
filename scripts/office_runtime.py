@@ -61,6 +61,15 @@ def run_worker(script, args, report_dir, *, timeout=180):
     return result
 
 
+def _empty_presentation(folder):
+    from pptx import Presentation
+
+    seed = folder / 'empty-start.pptx'
+    with seed.open('xb') as stream:
+        Presentation().save(stream)
+    return seed
+
+
 def probe(*, smoke=False, directory=None):
     if os.name != 'nt':
         return {'status': 'unavailable', 'error_code': 'OFFICE_BACKEND_UNAVAILABLE'}
@@ -68,11 +77,15 @@ def probe(*, smoke=False, directory=None):
     folder.mkdir(parents=True, exist_ok=True)
     report = folder / 'backend.json'
     try:
-        run_worker(SCRIPTS / 'office_probe.ps1', ['-Mode', 'smoke' if smoke else 'inspect', '-Report', report],
-                   folder, timeout=45 if smoke else 15)
+        args = ['-Mode', 'smoke' if smoke else 'inspect', '-Report', report]
+        if smoke:
+            args.extend(['-SeedPresentation', _empty_presentation(folder)])
+        run_worker(SCRIPTS / 'office_probe.ps1', args, folder, timeout=45 if smoke else 15)
         data = json.loads(report.read_text(encoding='utf-8-sig'))
         if smoke:
-            if data.get('status') != 'passed' or not data.get('opened'):
+            saved = folder / 'smoke.pptx'
+            if (data.get('status') != 'passed' or not data.get('opened') or data.get('slide_count') != 1
+                    or data.get('output_sha256') != hashlib.sha256(saved.read_bytes()).hexdigest()):
                 raise RuntimeError('OFFICE_SMOKE_TEST_FAILED')
             verify_images(folder / 'smoke-render', 1)
             data['status'] = 'available'
@@ -112,7 +125,8 @@ def assemble(manifest, output, render_directory, python_exe, font_profile, *, ti
     Path(output).resolve().parent.mkdir(parents=True, exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix='office-assembly-', dir=Path(output).resolve().parent))
     run_worker(SCRIPTS / 'assemble_deck_worker.ps1', ['-Manifest', manifest, '-OutputPath', output,
-               '-PythonExe', python_exe, '-FontProfile', font_profile], work, timeout=timeout)
+               '-PythonExe', python_exe, '-FontProfile', font_profile,
+               '-SeedPresentation', _empty_presentation(work)], work, timeout=timeout)
     evidence = render(output, render_directory, timeout=timeout) if render_directory else None
     from delivery_status import assess
     plan = json.loads(Path(manifest).read_text(encoding='utf-8-sig'))

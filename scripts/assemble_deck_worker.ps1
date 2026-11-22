@@ -4,7 +4,8 @@
  [string]$RenderDirectory='',
  [string]$PythonExe='python',
  [string]$FontProfile='windows',
- [string]$OwnerFile
+ [string]$OwnerFile,
+ [Parameter(Mandatory=$true)][string]$SeedPresentation
 )
 $ErrorActionPreference='Stop'
 $mf=(Resolve-Path -LiteralPath $Manifest).Path;$base=Split-Path $mf -Parent
@@ -18,7 +19,7 @@ if($RenderDirectory){$RenderDirectory=[IO.Path]::GetFullPath($RenderDirectory);N
 $officeSession=Start-EpointPowerPoint $OwnerFile
 $app=$officeSession.app;$result=$null;$records=@()
 try{
- $result=$app.Presentations.Add(0)
+ $result=Open-EpointEmptyPresentation $app $SeedPresentation
  foreach($item in $inputs){
   $src=$null
   try{
