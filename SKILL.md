@@ -31,7 +31,7 @@ metadata:
 
 ## 从候选稿到交付
 
-蓝红通用页眉的分割线须显式关闭主题阴影。蓝红三栏长文卡片与新绘正文共用可编辑的底层画布和两层柔边弥散背景。整稿保存后逐页检查分割线效果和背景图层，异常时阻止出稿。见[正文页眉与背景验收](references/source-and-qa.md#正文页眉与背景验收)。
+蓝红通用页眉的分割线须显式关闭主题阴影。蓝红二项、三项、五项和六项长文卡片与新绘正文共用可编辑的底层画布和两层柔边弥散背景。整稿保存后逐页检查分割线效果和背景图层，异常时阻止出稿。见[正文页眉与背景验收](references/source-and-qa.md#正文页眉与背景验收)。
 
 1. 每页 `content` 齐备、完整稿预检为 `ready` 时，在同一条预检命令加 `--execute-out <成稿.pptx>`。Windows 默认核实微软 PowerPoint 并做限时保存、重开、导出检查；失败时报告阻断。macOS/Linux 默认用原生后端生成候选。安装、升级或解释器问题见[运行环境与自检](references/cross-platform-runtime.md)，显式选择后端见[跨平台组装](references/cross-platform-assembly.md)。
 2. 将结构页的 `layout_id`、`library_commit` 和 `source_stamp` 对应到最终页，核对组装关系、字体、Logo 可见尺寸和组件颜色。最终保存后执行 `scripts/audit_component_color_independence.py --input <成稿.pptx> --report <报告.json>`。逐页来源和质量检查见[来源与验收](references/source-and-qa.md)。

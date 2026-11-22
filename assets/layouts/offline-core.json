@@ -39,7 +39,12 @@
     "enabled": true,
     "themes": ["blue", "red"],
     "applies_to": ["guided_composition", "free_composition"],
-    "component_layouts": ["content-body-cards-three-longcopy"],
+    "component_layouts": [
+      "content-body-cards-two-longcopy",
+      "content-body-cards-three-longcopy",
+      "content-body-cards-five-longcopy",
+      "content-blue-six-longcopy"
+    ],
     "description": "蓝红简约新绘正文和登记的正文组件共用底层画布与两个可编辑柔边椭圆。",
     "blur_pt": 220,
     "circles_by_theme": {
