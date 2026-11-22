@@ -11,7 +11,7 @@
         "themes": {
           "blue": {
             "asset": "layouts/content-blue-six-longcopy/body-blue.pptx",
-            "sha256": "d389287a7bb59d629033c16cafbee830d2cfdef3fb991fcc56c1b5d5ac61779d",
+            "sha256": "392adca7f5d8653abbce0ab3c637954c648d53928e16209824df8c83937d8fdf",
             "bindings": "layouts/content-blue-six-longcopy/body-blue-bindings.json",
             "bindings_sha256": "3d56dbf79b09db551bb63b559982bbc107a590f19ed817efc0a968bcd292aa49",
             "title_input": {
@@ -31,7 +31,7 @@
           },
           "red": {
             "asset": "layouts/content-blue-six-longcopy/body-red.pptx",
-            "sha256": "5e3b3b965468da49007d2246ed884f117c2b27c4b04132f6fa9f9c98aad623c5",
+            "sha256": "ff39656963716abf11b93c195e7f23f5be46585ee1168cac9d951908a094b2b0",
             "bindings": "layouts/content-blue-six-longcopy/body-red-bindings.json",
             "bindings_sha256": "3d56dbf79b09db551bb63b559982bbc107a590f19ed817efc0a968bcd292aa49",
             "title_input": {
@@ -178,7 +178,7 @@
         "themes": {
           "blue": {
             "asset": "layouts/content-body-gallery-four/body-blue.pptx",
-            "sha256": "e59ae5c0f3611a4d81985d8844bc97d403989c9f41e96622c5c8969864989359",
+            "sha256": "b34a88daa18578e779b6466141e31d1bf796f538c84fca218bb38febfdb1b9fb",
             "bindings": "layouts/content-body-gallery-four/body-blue-bindings.json",
             "bindings_sha256": "87334658bbb4c3e283712c9ea3ff7f3608c99bab1fbbaf47e6eb333329f81319",
             "title_input": {
@@ -198,7 +198,7 @@
           },
           "red": {
             "asset": "layouts/content-body-gallery-four/body-red.pptx",
-            "sha256": "ffe7c50774280563babeee79ac426232e957a6a924415f48d12ae6bbd636b7a1",
+            "sha256": "bf8e6972ebdb124cb648d5a0399375556d341685793d7e3d17b5ab6663a957c9",
             "bindings": "layouts/content-body-gallery-four/body-red-bindings.json",
             "bindings_sha256": "87334658bbb4c3e283712c9ea3ff7f3608c99bab1fbbaf47e6eb333329f81319",
             "title_input": {
@@ -328,7 +328,7 @@
         "themes": {
           "deep-blue-tech": {
             "asset": "layouts/content-body-gallery-four-tech/body-deep-blue-tech.pptx",
-            "sha256": "839cbbcda8b2d5c395bf0166cc0c86bef05052b3575345aaba7772fedd6bd0a1",
+            "sha256": "fb4db9a94999b37877da54bf1aa0e9898cc8573cc302db1b4b7a7ace63915c81",
             "bindings": "layouts/content-body-gallery-four-tech/body-deep-blue-tech-bindings.json",
             "bindings_sha256": "452e215f1e83ca1447a9db9092117c72f5cda2d92242b901cf8ecab73310f0e2",
             "tech": {
@@ -468,7 +468,7 @@
         "themes": {
           "blue": {
             "asset": "layouts/content-body-gallery-five/body-blue.pptx",
-            "sha256": "69fca3e6b2c46e24b7ee407ca2549edf8efc754118a1720ed56fd41bf7d77c83",
+            "sha256": "694f6f036c8ced8a59fa370abb9f20c922342d30b95de89c4e5778be4d3a9761",
             "bindings": "layouts/content-body-gallery-five/body-blue-bindings.json",
             "bindings_sha256": "b24016a0a946fc69a40a0a229bfdf6bd36e2041d57e2893343b3288a0de9b555",
             "title_input": {
@@ -488,7 +488,7 @@
           },
           "red": {
             "asset": "layouts/content-body-gallery-five/body-red.pptx",
-            "sha256": "588840843b3e6fc5bd77b3d09ca0c83ca84473aa1ffc931757c69b0c84951db0",
+            "sha256": "95cd69c95e9193151534ecd32845b347b3b6b49a7c78851e7607dbe15e38f5c2",
             "bindings": "layouts/content-body-gallery-five/body-red-bindings.json",
             "bindings_sha256": "b24016a0a946fc69a40a0a229bfdf6bd36e2041d57e2893343b3288a0de9b555",
             "title_input": {
@@ -625,7 +625,7 @@
         "themes": {
           "deep-blue-tech": {
             "asset": "layouts/content-body-gallery-five-tech/body-deep-blue-tech.pptx",
-            "sha256": "d071a12e122afc857e7b1877c96c8790e7b47373085486a0df81d6474c0096a7",
+            "sha256": "d7cd7ce0fc21daafc9f19ceaea4c1d2aa51e3866e4ae956b03de040d277e6bec",
             "bindings": "layouts/content-body-gallery-five-tech/body-deep-blue-tech-bindings.json",
             "bindings_sha256": "40dcc1a73b0236c7d58e2dc54757547f0ff84786f8eb09a5b8983695756160f5",
             "tech": {
@@ -772,7 +772,7 @@
         "themes": {
           "blue": {
             "asset": "layouts/content-body-metric-evidence/body-blue.pptx",
-            "sha256": "f103c9d4658022fdd892991bc75ddffd6b6740becc981fdea36293c314726e92",
+            "sha256": "841be25115816b6736587561243c5040a04f55314150786c05862c789aec496e",
             "bindings": "layouts/content-body-metric-evidence/body-blue-bindings.json",
             "bindings_sha256": "7bae278e0bf367cfc421fa3ffec461a078f72e8f99c925b40075265eb21bb228",
             "title_input": {
@@ -792,7 +792,7 @@
           },
           "red": {
             "asset": "layouts/content-body-metric-evidence/body-red.pptx",
-            "sha256": "cfe4de139844acefd75056287abba78e53c0850c30a1d7f3ec9e33c17dcb9e18",
+            "sha256": "d67b9c573c3f2c4c76424707ac52011e270c1591c76e7126e04b1ae0ac3f427c",
             "bindings": "layouts/content-body-metric-evidence/body-red-bindings.json",
             "bindings_sha256": "7bae278e0bf367cfc421fa3ffec461a078f72e8f99c925b40075265eb21bb228",
             "title_input": {
@@ -905,7 +905,7 @@
         "themes": {
           "deep-blue-tech": {
             "asset": "layouts/content-body-metric-evidence-tech/body-deep-blue-tech.pptx",
-            "sha256": "26d2a1cf3a579b812556a17ca98b656da49feabf7492c6602d6f8955225d95be",
+            "sha256": "b853f6c4f96462209bde3b0bb2ff722b7a83b56d09e59810944664a2f2eb3263",
             "bindings": "layouts/content-body-metric-evidence-tech/body-deep-blue-tech-bindings.json",
             "bindings_sha256": "5eec341e85806cd7e7e1092ce9e2c4848fee67c8597f525d2e92a1766f18195c",
             "tech": {
@@ -1028,7 +1028,7 @@
         "themes": {
           "blue": {
             "asset": "layouts/content-body-single-focus/body-blue.pptx",
-            "sha256": "b4cdcaa721651d6b8b8dc80a4de898497331706257f60bc0f1f5024dd6a1854a",
+            "sha256": "187fe96a2e0330e547f9e7070bcef4578fbe3066cd894b773ad137b78af1fff7",
             "bindings": "layouts/content-body-single-focus/body-blue-bindings.json",
             "bindings_sha256": "6d20f5f50f3178ec8d773cd43d3142721f773e9c59bbdb98a5f4cbc13e4dc541",
             "title_input": {
@@ -1048,7 +1048,7 @@
           },
           "red": {
             "asset": "layouts/content-body-single-focus/body-red.pptx",
-            "sha256": "2641b70e59993252ef00fb7b74f23dadaf2bd17427369f5640cf096b33d05fd5",
+            "sha256": "f763f01f1a9d1a4dd1f49813e11480f27606007ada8df842b6fda0eb5b90ade8",
             "bindings": "layouts/content-body-single-focus/body-red-bindings.json",
             "bindings_sha256": "6d20f5f50f3178ec8d773cd43d3142721f773e9c59bbdb98a5f4cbc13e4dc541",
             "title_input": {
@@ -1151,7 +1151,7 @@
         "themes": {
           "deep-blue-tech": {
             "asset": "layouts/content-body-single-focus-tech/body-deep-blue-tech.pptx",
-            "sha256": "f9ed9af650651e51a705b04b5916541f578ce932c6511422c1781589f39ba3a9",
+            "sha256": "32b2d97105c1159514aa810a0e5fbed4d2cd07fdb96800cfae796eb472e11434",
             "bindings": "layouts/content-body-single-focus-tech/body-deep-blue-tech-bindings.json",
             "bindings_sha256": "4714c28c2144fe59425fd9c60f85b578562715959b522b120bb8e6a1ff60f2de",
             "tech": {
@@ -1264,7 +1264,7 @@
         "themes": {
           "deep-blue-tech": {
             "asset": "layouts/content-body-cards-six-longcopy-tech/body-deep-blue-tech.pptx",
-            "sha256": "10e9173b639990d73598c39ee2e2d3943741b6965cf552a94ca05a49af887059",
+            "sha256": "a95256b06bf54d5dcd55e0de04c96ebc08479d89c590986f0ad065d8cc266551",
             "bindings": "layouts/content-body-cards-six-longcopy-tech/body-deep-blue-tech-bindings.json",
             "bindings_sha256": "eb7ab46cfac81ba659051323ddd57b113d51b534c8a093889caa793cbcf44be6",
             "tech": {
@@ -1419,7 +1419,7 @@
         "themes": {
           "deep-blue-tech": {
             "asset": "layouts/content-body-cards-four-tech/body-deep-blue-tech.pptx",
-            "sha256": "4e996629f6fc5656e129da7dada5a2ecc18370ce59ac2e267358adf7c4f551a0",
+            "sha256": "865912ea0a8e0b42d1c70deded55d1373f54d5e5c4b1355c099f0d1a87c71f3a",
             "bindings": "layouts/content-body-cards-four-tech/body-deep-blue-tech-bindings.json",
             "bindings_sha256": "d0ecba68dfe50f199b699db3a82e9446f75c1d79a828abd6c5fd73288a15caf2",
             "tech": {
@@ -1562,7 +1562,7 @@
         "themes": {
           "blue": {
             "asset": "layouts/content-body-cards-two-longcopy/body-blue.pptx",
-            "sha256": "fad3aa606226e1146d20125e3f78444e383e384217ee7aa575a1d26d39c13fa9",
+            "sha256": "ea4daee106b7610db2611d37c03d3da09be26ac7cc78c19e3901de9a522635bd",
             "bindings": "layouts/content-body-cards-two-longcopy/body-blue-bindings.json",
             "bindings_sha256": "1f61dfc22ae7f08cda66a75c989486619e28eafdd8fd55a1b8c74fea0d449726",
             "title_input": {
@@ -1582,7 +1582,7 @@
           },
           "red": {
             "asset": "layouts/content-body-cards-two-longcopy/body-red.pptx",
-            "sha256": "3e327526903267b5f8983dea8857db7093c8ee4e0cd609af8bc664782789070e",
+            "sha256": "afcd67353ff290931543c2187e1cd2d56122f9589ca7712e63dbd2e8c1d0281d",
             "bindings": "layouts/content-body-cards-two-longcopy/body-red-bindings.json",
             "bindings_sha256": "1f61dfc22ae7f08cda66a75c989486619e28eafdd8fd55a1b8c74fea0d449726",
             "title_input": {
@@ -1703,7 +1703,7 @@
         "themes": {
           "blue": {
             "asset": "layouts/content-body-cards-three-longcopy/body-blue.pptx",
-            "sha256": "0c2043216a6a66763c0964aa3280306a535d39d8383360a3967022344eaacc67",
+            "sha256": "1fd7784bfdd5f9ffecca73780fcd69ea7719fa9aededaa94757d3bf270c37895",
             "bindings": "layouts/content-body-cards-three-longcopy/body-blue-bindings.json",
             "bindings_sha256": "ffd616b669917cd57ad4b91177666d9f22f709b557b0ab69fbf2b27ed08733f1",
             "title_input": {
@@ -1723,7 +1723,7 @@
           },
           "red": {
             "asset": "layouts/content-body-cards-three-longcopy/body-red.pptx",
-            "sha256": "ecb03fc775d19212059610c16343e22ebce915698e02d4e2e44a714c1c3d3294",
+            "sha256": "90019315ce28682bb561738bd56cf15aece447f003553a5b36bf37f1867acf19",
             "bindings": "layouts/content-body-cards-three-longcopy/body-red-bindings.json",
             "bindings_sha256": "ffd616b669917cd57ad4b91177666d9f22f709b557b0ab69fbf2b27ed08733f1",
             "title_input": {
@@ -1851,7 +1851,7 @@
         "themes": {
           "deep-blue-tech": {
             "asset": "layouts/content-body-cards-three-longcopy-tech/body-deep-blue-tech.pptx",
-            "sha256": "0e173f48263bde3480c8fdc836522935ee5fc9d69f2593ccc96aa97b8de2c90d",
+            "sha256": "760a94fb978a93cb28e46bae0bdda8754e601f23bb5e407553dc0438e2dede85",
             "bindings": "layouts/content-body-cards-three-longcopy-tech/body-deep-blue-tech-bindings.json",
             "bindings_sha256": "0e7a017f99d69f2bc669dd51d0a2cda24c7e1d6a1dd6e7991dcd23a5efe67ec1",
             "tech": {
@@ -1989,7 +1989,7 @@
         "themes": {
           "blue": {
             "asset": "layouts/content-body-cards-five-longcopy/body-blue.pptx",
-            "sha256": "97d66c79ee74bfdefc56b6c28700a5f895bd43fc7b20a461dfaaecbebf6ce568",
+            "sha256": "37e9e7b9aaec0e798b57d4b27b2d36fc0a33a26c2451e28d3602a649c204b87d",
             "bindings": "layouts/content-body-cards-five-longcopy/body-blue-bindings.json",
             "bindings_sha256": "626212fd176cc58e15c2865080b65928382a8556b422f4fe597fa2b51b43c6f1",
             "title_input": {
@@ -2009,7 +2009,7 @@
           },
           "red": {
             "asset": "layouts/content-body-cards-five-longcopy/body-red.pptx",
-            "sha256": "b1a7046600c153609a53a914592fbbdef8a120d251fd58b892f4ee0fd6eb06ae",
+            "sha256": "4e900d855b7529313e265d3f37f8fce2fb7835592cc963f1de4413b3905a22b9",
             "bindings": "layouts/content-body-cards-five-longcopy/body-red-bindings.json",
             "bindings_sha256": "626212fd176cc58e15c2865080b65928382a8556b422f4fe597fa2b51b43c6f1",
             "title_input": {
@@ -2149,7 +2149,7 @@
         "themes": {
           "deep-blue-tech": {
             "asset": "layouts/content-body-cards-five-longcopy-tech/body-deep-blue-tech.pptx",
-            "sha256": "cedd3b5503741d93aef4a071d183bde9cc09003c1eb6a087f3016da93402891e",
+            "sha256": "47edd18dc73838fd2f5a6a429575d2cbd11a349056579aa35c28bdfdb9db1658",
             "bindings": "layouts/content-body-cards-five-longcopy-tech/body-deep-blue-tech-bindings.json",
             "bindings_sha256": "1eaf69cef00ad3451c3882491887e37cfbec941682b1080a186d52b82e095f31",
             "tech": {
@@ -2299,7 +2299,7 @@
         "themes": {
           "blue": {
             "asset": "layouts/content-body-text-hierarchy/body-blue.pptx",
-            "sha256": "7b036b24ec182a7535088cb81e8bc6f60685e3059b9b8ee8ef85353a2155eaf3",
+            "sha256": "8f8d3726045d4a75b51fa1f479f045367ac52e183e4bf82cb8474b1d1839fc49",
             "bindings": "layouts/content-body-text-hierarchy/body-blue-bindings.json",
             "bindings_sha256": "60cb0bdb6fba9775608a1c74c2d9d47c11079feacd487aebf23c78e06e91a149",
             "title_input": {
@@ -2319,7 +2319,7 @@
           },
           "red": {
             "asset": "layouts/content-body-text-hierarchy/body-red.pptx",
-            "sha256": "f21859095e633a5ea857eff584d00b7716a68d687ad5c463c19f6b6bb4d6ef86",
+            "sha256": "a97c3d889ede603a80391616b34656d3801041fa4fcca7a22adcdb67db562b33",
             "bindings": "layouts/content-body-text-hierarchy/body-red-bindings.json",
             "bindings_sha256": "60cb0bdb6fba9775608a1c74c2d9d47c11079feacd487aebf23c78e06e91a149",
             "title_input": {
@@ -2425,7 +2425,7 @@
         "themes": {
           "deep-blue-tech": {
             "asset": "layouts/content-body-text-hierarchy-tech/body-deep-blue-tech.pptx",
-            "sha256": "455b945213eb3b65139eff99997016f4b843a2a6f202da38a15e6b7e194a7e65",
+            "sha256": "20ec2a73ed3cd4e1a777c5df7be760f47c047ab53d49fbb4cc4ef8585617d257",
             "bindings": "layouts/content-body-text-hierarchy-tech/body-deep-blue-tech-bindings.json",
             "bindings_sha256": "0b5345cd9b721f5ad089ba6197c0e6a24d2922528b09566ea507ad8890c55df5",
             "tech": {
@@ -2541,7 +2541,7 @@
         "themes": {
           "blue": {
             "asset": "layouts/content-body-report-table/body-blue.pptx",
-            "sha256": "537e61ccdcc7890a2c90b6d7e4a990923524f14684718b6ecee4ef0e083df3ce",
+            "sha256": "a3d559b3fd895c6e352fd37b1948c04514970a8edde7d68d626dbddc0a4e4912",
             "bindings": "layouts/content-body-report-table/body-blue-bindings.json",
             "bindings_sha256": "005f77b52b096e656c3dfab92c06635a71dabd076862fa646dea8d46e929188c",
             "title_input": {
@@ -2561,7 +2561,7 @@
           },
           "red": {
             "asset": "layouts/content-body-report-table/body-red.pptx",
-            "sha256": "5939280789fd504d3c618b3ee61433a89d83e629b619fc349f9c11c0d279d0f0",
+            "sha256": "23578c87a4763cb16acd8d73033635c1e4c422b31266e4d1bf563dc38ea5bdc2",
             "bindings": "layouts/content-body-report-table/body-red-bindings.json",
             "bindings_sha256": "005f77b52b096e656c3dfab92c06635a71dabd076862fa646dea8d46e929188c",
             "title_input": {
@@ -2668,7 +2668,7 @@
         "themes": {
           "deep-blue-tech": {
             "asset": "layouts/content-body-report-table-tech/body-deep-blue-tech.pptx",
-            "sha256": "b9ed3236187c587f0bc00ae620c205fc09a965ed449bc0e0246329481978fbc6",
+            "sha256": "72a55ae6cfe5b6f72ec18bbb8fa88365ff263e6c6ca94a9dcf186b65abd0f287",
             "bindings": "layouts/content-body-report-table-tech/body-deep-blue-tech-bindings.json",
             "bindings_sha256": "313449306ce40262d8e11a1de67171c126275800c6cdbc34438c9e30eb83a617",
             "tech": {
@@ -2785,7 +2785,7 @@
         "themes": {
           "blue": {
             "asset": "layouts/content-body-parallel-metrics-four/body-blue.pptx",
-            "sha256": "880eae3c80d64ae5cdb125fafd3271daa3d829d5af55d6dede708ce335e15d81",
+            "sha256": "3035f172645d73d14255c7ba621a5b8d9777062cda81a516456eac7272c10e6f",
             "bindings": "layouts/content-body-parallel-metrics-four/body-blue-bindings.json",
             "bindings_sha256": "01f4e80226fd8f961818c86f6afd37d94cbf6254ce728b07182e580c799c7d31",
             "title_input": {
@@ -2805,7 +2805,7 @@
           },
           "red": {
             "asset": "layouts/content-body-parallel-metrics-four/body-red.pptx",
-            "sha256": "41c9be14759f1c3a4a166c28366ab86c0492424d80bf0fa756c2f2d6398ae7af",
+            "sha256": "a4fbd7ccf99ac93991e383b45169c7e2d8c369c0e0f2d3bb42c6333f9437e2e5",
             "bindings": "layouts/content-body-parallel-metrics-four/body-red-bindings.json",
             "bindings_sha256": "01f4e80226fd8f961818c86f6afd37d94cbf6254ce728b07182e580c799c7d31",
             "title_input": {
@@ -2923,7 +2923,7 @@
         "themes": {
           "deep-blue-tech": {
             "asset": "layouts/content-body-parallel-metrics-four-tech/body-deep-blue-tech.pptx",
-            "sha256": "ce47f06fcbd44140c733e013c08f0fbb6e1c019afd82b0bd395348cb813b6348",
+            "sha256": "a52710d65e754a3e20fa8664663091a01b325015e5cdd7059d80419b8e3d1f1b",
             "bindings": "layouts/content-body-parallel-metrics-four-tech/body-deep-blue-tech-bindings.json",
             "bindings_sha256": "772bdc8db09cb22115b17467c2280cc8b1e7d3179658fa3f37e9a58767f9c6f4",
             "tech": {
@@ -3051,7 +3051,7 @@
         "themes": {
           "blue": {
             "asset": "layouts/content-body-parallel-metrics-two/body-blue.pptx",
-            "sha256": "7b495077418cac053ebbdf9be63ffa10f6a535c72d759fdcf137745ca479ddd7",
+            "sha256": "27fb5b46a6177ccfa2e43c015bb6acf278fdcaaf11e4f99d0ed73e08ed9d46fb",
             "bindings": "layouts/content-body-parallel-metrics-two/body-blue-bindings.json",
             "bindings_sha256": "01177ad5e5b5f0fb4a71817e5c71b35c83e42f9397235bd4a465620eadaa6a82",
             "title_input": {
@@ -3071,7 +3071,7 @@
           },
           "red": {
             "asset": "layouts/content-body-parallel-metrics-two/body-red.pptx",
-            "sha256": "4e19bc564e5fb580e1b4cff38287cf57a32baca874966a6fc8fd4e213a4d33ec",
+            "sha256": "1c1e6fd3144d6b6f598914f82281a093f53930290ff7417316ea95361914380e",
             "bindings": "layouts/content-body-parallel-metrics-two/body-red-bindings.json",
             "bindings_sha256": "01177ad5e5b5f0fb4a71817e5c71b35c83e42f9397235bd4a465620eadaa6a82",
             "title_input": {
@@ -3183,7 +3183,7 @@
         "themes": {
           "deep-blue-tech": {
             "asset": "layouts/content-body-parallel-metrics-two-tech/body-deep-blue-tech.pptx",
-            "sha256": "1a4144b76ecbaedb0092ac3a467656ba5941f2f281429cd57d1dabc203fd10ea",
+            "sha256": "4cfce04bc54eaacf3c7c9e6191fcbaefce922757539a065a73e81a7eef4fac22",
             "bindings": "layouts/content-body-parallel-metrics-two-tech/body-deep-blue-tech-bindings.json",
             "bindings_sha256": "dbee3a588e99595783be500c9de85ef1cbbc53a77a12324b74b473ad84be7b5c",
             "tech": {
