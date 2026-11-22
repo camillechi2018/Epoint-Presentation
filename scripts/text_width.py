@@ -18,6 +18,9 @@ def binding_text_issues(value, limits, *, width_units=None):
     line_limit = limits.get('max_lines')
     if isinstance(line_limit, int) and value.count('\n') + 1 > line_limit:
         issues.append('max_lines')
+    per_line_limit = limits.get('max_chars_per_line')
+    if isinstance(per_line_limit, int) and any(len(line) > per_line_limit for line in value.split('\n')):
+        issues.append('max_chars_per_line')
     width_limit = limits.get('max_width_units')
     if isinstance(width_limit, (int, float)):
         if width_units is None:

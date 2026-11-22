@@ -379,6 +379,15 @@ def expand_centered_columns(slide, rules, count):
     return {'mode':'repeatable','count':count,'source_count':source_count,'status':rules['validation_status']}
 
 
+def repeatable_source_indices(rules, count):
+    geometry = rules.get('centered_reflow', {})
+    selected = geometry.get('source_indices_by_count', {}).get(str(count), list(range(count)))
+    if (len(selected) != count or len(set(selected)) != count
+            or any(type(index) is not int or not 0 <= index < rules['source_count'] for index in selected)):
+        raise ValueError('重复列项数与来源单元映射不一致')
+    return selected
+
+
 def apply_cardinality(slide,rules,count,items=None,theme=None):
     if rules.get('cardinality_mode') == 'paragraphs':
         return {'mode': 'paragraphs', 'count': count, 'source_count': rules['source_count'],
@@ -493,13 +502,18 @@ def apply_cardinality(slide,rules,count,items=None,theme=None):
     groups=rules['units'];source_count=rules['source_count']
     if len(groups)!=source_count:raise ValueError('数量规则与来源结构不一致')
     all_shapes={s.shape_id:s for s in slide.shapes};spacing=rules['spacing_emu']
-    for group in groups[count:]:
+    selected = repeatable_source_indices(rules, count)
+    delta=(source_count-count)*spacing//2
+    positions = {source: position for position, source in enumerate(selected)}
+    for index, group in enumerate(groups):
         for sid in group:
             if sid not in all_shapes:raise ValueError(f'数量规则缺失形状 {sid}')
-            node=all_shapes[sid]._element;node.getparent().remove(node)
-    delta=(source_count-count)*spacing//2
-    for group in groups[:count]:
-        for sid in group:all_shapes[sid].left+=delta
+            shape = all_shapes[sid]
+            if index in positions:
+                shape.left += delta + (positions[index] - index) * spacing
+            else:
+                node = shape._element
+                node.getparent().remove(node)
     if count != source_count and 'centered_reflow' in rules:
         geometry = rules['centered_reflow']
         for sid in geometry['resize_shape_ids']:
@@ -681,6 +695,7 @@ def validate_text_field(binding, value):
             'max_chars': '超出容量，请拆页或精简：',
             'allowed_values': '字段当前仅支持指定值：',
             'max_lines': '字段超过允许行数：',
+            'max_chars_per_line': '单段文字超出容量，请精简：',
             'max_width_units': '字段超出视觉宽度，请精简或换版：',
         }
         raise ValueError(messages[issues[0]] + field)
@@ -921,6 +936,9 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
             removed_ids={sid for index,unit in enumerate(rules['units']) if index not in selected for sid in unit}
         elif rules.get('cardinality_mode')=='directory_reflow':
             removed_ids={sid for unit in rules['directory_units'][item_count:] for sid in unit['shape_ids']}
+        elif rules.get('cardinality_mode') == 'repeatable' and item_count <= rules['source_count']:
+            selected = set(repeatable_source_indices(rules, item_count))
+            removed_ids = {sid for index, unit in enumerate(rules['units']) if index not in selected for sid in unit}
         else:removed_ids={sid for unit in rules['units'][item_count:] for sid in unit}
     removed_fields=set()
     if rules.get('cardinality_mode')=='directory_reflow' and item_count is not None:
