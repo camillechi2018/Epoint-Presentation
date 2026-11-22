@@ -515,6 +515,29 @@ def reflow_paired_rows(slide, rules, count):
     return {'mode':'repeatable','count':count,'source_count':native_count,'status':rules['validation_status']}
 
 
+def reflow_registered_geometry(slide, rules, count):
+    variant = rules['geometry_by_count'].get(str(count))
+    if variant:
+        shapes = {shape.shape_id: shape for shape in slide.shapes}
+        for sid, bounds in variant['bounds_emu'].items():
+            shape = shapes[int(sid)]
+            shape.left, shape.top, shape.width, shape.height = bounds
+        for sid, coordinates in variant.get('path_x', {}).items():
+            paths = shapes[int(sid)]._element.xpath('.//a:path')
+            if len(paths) != 1:
+                raise ValueError('重排路径与源组件不一致')
+            points = [child[0] for child in paths[0] if len(child)]
+            if len(points) != len(coordinates):
+                raise ValueError('重排路径与源组件不一致')
+            for point, x in zip(points, coordinates):
+                point.set('x', str(x))
+        for sid in variant['remove_shape_ids']:
+            element = shapes[sid]._element
+            element.getparent().remove(element)
+    return {'mode': 'repeatable', 'count': count, 'source_count': rules['source_count'],
+            'status': rules['validation_status']}
+
+
 def apply_cardinality(slide,rules,count,items=None,theme=None):
     if rules.get('cardinality_mode') == 'paragraphs':
         return {'mode': 'paragraphs', 'count': count, 'source_count': rules['source_count'],
@@ -1058,7 +1081,9 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
     removed_ids=set()
     if rules.get('cardinality_mode') in _VARIABLE_COUNT_MODES and item_count is not None:
         if type(item_count) is not int or item_count not in rules['supported_counts']:raise ValueError('项数不在支持范围')
-        if rules.get('cardinality_mode') in ('tech_six_pillars','process_terminal'):
+        if rules.get('geometry_by_count'):
+            removed_ids = set(rules['geometry_by_count'].get(str(item_count), {}).get('remove_shape_ids', []))
+        elif rules.get('cardinality_mode') in ('tech_six_pillars','process_terminal'):
             selected=set(rules['source_indices_by_count'][str(item_count)])
             removed_ids={sid for index,unit in enumerate(rules['units']) if index not in selected for sid in unit}
         elif rules.get('cardinality_mode')=='directory_reflow':
@@ -1319,7 +1344,10 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
         if logo_enabled:logo_shape.name='brand:logo:source'
         else:logo_shape._element.getparent().remove(logo_shape._element)
     early_cardinality = None
-    if rules.get('fixed_span_reflow'):
+    if rules.get('geometry_by_count'):
+        count = rules['source_count'] if item_count is None else item_count
+        early_cardinality = reflow_registered_geometry(s, rules, count)
+    elif rules.get('fixed_span_reflow'):
         count = rules['source_count'] if item_count is None else item_count
         early_cardinality = reflow_fixed_span(s, rules, count)
     elif rules.get('paired_rows_reflow'):
