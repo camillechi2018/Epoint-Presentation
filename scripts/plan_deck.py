@@ -457,7 +457,8 @@ def resolve(library,request,*,catalog=None):
             raise ValueError(f'第{index}页item_count必须是正整数')
         p['needs']=need
         rejected=Counter();candidates=[]
-        minimal_requested = (p.get('role') not in STRUCTURAL_ROLE_ORDER
+        relation_inferred = (p.get('content_preparation') or {}).get('operation') == 'infer_body_relation'
+        minimal_requested = (not relation_inferred and p.get('role') not in STRUCTURAL_ROLE_ORDER
                              and not p.get('layout_id')
                              and uses_minimal_body_layout(content.get('type'), content.get('variant')))
         for e in ([] if minimal_requested else catalog['layouts']):

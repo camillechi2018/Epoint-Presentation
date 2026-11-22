@@ -9,13 +9,15 @@ metadata:
 
 ## 从材料到逐页请求
 
+默认在文案定型前读取原文并检索同主题知识库。Word 案例可直接用 `scripts/run.py --material <原文.docx> --out <报告.json> --plan-out <选版.json> --execute-out <成稿.pptx>`。沿用已选主题，使用 `--theme` 可指定红版或科技风。入口从原文分段、辨认信息关系和项数，检索已校验组件的必需字段及容量，再编排文字。比较页必须能从材料区分两侧；流程所需的动作、对象和标签必须有原文依据。记录来源段落、初选清单和最终实际出稿。正文页的讲者备注保留相应 Word 原文。其他材料经事实提取后，在逐页草稿定型前同样核对候选结构与真实字段；已有逐页请求继续使用原入口。
+
 1. 用 `scripts/run.py --read-material --input <原文件> --out <事实清单.json>` 读取 Word、Excel、PPTX、HTML、TXT 或 Markdown。PDF 和 PNG/JPEG 先用平台提取文字或 OCR，再加 `--extraction <平台提取.json>`。核对页码、表格、图片、公式缓存和识别疑点。除非用户指定视觉参考，旧演示稿只提供内容。详见[材料接入](references/material-ingestion.md)。
 2. 依据事实清单形成逐页草稿，保留原段、来源、图片及真实信息关系。选版入口自动整理并列短标题、单项指标、多指标分组和层级，也可用 `scripts/run.py --structure-content --request <草稿.json> --out <逐页请求.json> --report <整理报告.json>` 单独核对整理结果。缺少可靠依据的内容按原结构进入选版或技能排版。详见[材料结构化](references/content-structuring.md)。
 3. 沿用用户已确认的整套风格。未指定时展示[三种风格预览](assets/style-previews/index.html)，让用户选择蓝色、红色或科技风；用户明确采用默认值时用蓝色。记录 `theme`、`style_family` 和任务 `font_profile`。科技风显式使用 `deep-blue-tech`。运行 `scripts/read_style_kit.py --theme <主题>` 并打开对应样图，按[风格选择](references/style-selection.md)执行。
 
 ## 选稿与试填
 
-正文候选同时读取原模板知识库与技能内置组件。内置正文沿用相同的主题、字段、项数和容量规则，成稿单独记录技能资产来源。
+正文候选同时读取原模板知识库与技能内置组件。相邻正文第二次使用同一版式前，先试不同模板，再实填同主题的技能排版，核对可编辑原文。自动出稿在无法安全替换时报告冲突页码。结构页沿用已确认的整套风格。
 
 运行 `scripts/run.py --request <逐页请求.json> --out <预检报告.json> --plan-out <逐页计划.json>`。记录知识库来源、提交号和失败原因，后续入口使用同一 `--library`。显式离线加 `--offline`。依次使用已校验的远端快照、完整缓存和内置最小包；使用最小包时说明正文候选覆盖。完整性异常保留文件、来源和哈希证据，只使用验证通过的来源，无合格来源时阻断完整稿。[知识库数据契约](references/library-contract.md)
 
