@@ -24,13 +24,13 @@ def contract_for(entry, theme, enabled):
             or entry.get('role') in ('cover', 'directory', 'section', 'closing')):
         return None
     contract = entry.get('body_component_contract')
-    if not isinstance(contract, dict) or contract.get('version') not in (2, 3):
+    if not isinstance(contract, dict) or contract.get('version') not in (2, 3, 4):
         return None
     themes = contract.get('themes')
     value = themes.get(theme) if isinstance(themes, dict) else None
     if not isinstance(value, dict):
         return None
-    if contract['version'] == 3 and theme == 'deep-blue-tech' and value.get('background') != 'skill_tech':
+    if contract['version'] in (3, 4) and theme == 'deep-blue-tech' and value.get('background') != 'skill_tech':
         return None
     return value
 
@@ -110,12 +110,15 @@ def attach_header(presentation, slide, contract, theme, title, logo_enabled):
     if logo_enabled:
         add_logo(slide, layout, palette, content_header=True, tech_header=bool(tech))
     report = {'frame_id': 'deep-blue-tech-content-header' if tech else 'legacy-blue-red-content-header',
-              'version': 2, 'asset': contract['asset'], 'asset_sha256': contract['sha256'],
+              'version': 2, 'asset': contract['asset'], 'asset_page': contract.get('asset_page', 1),
+              'asset_sha256': contract['sha256'],
               'removed_shape_ids': contract['removed_shape_ids']}
     if tech:
         report.update(title_variant=tech['variant'], logo_anchor=tech['logo_anchor'])
     if contract.get('background') == 'skill_tech':
         report.update(version=3, background='skill_tech')
+    if 'asset_page' in contract:
+        report['version'] = 4
     return report
 
 

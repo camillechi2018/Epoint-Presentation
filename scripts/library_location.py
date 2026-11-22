@@ -64,7 +64,10 @@ def binding_path_key(entry, theme):
 def layout_source(entry, theme, *, body_contract=None):
     """Return the source path and one-based page for a catalog entry."""
     if body_contract is not None:
-        return body_contract['asset'], 1
+        page = body_contract.get('asset_page', 1)
+        if type(page) is not int or page < 1:
+            raise ValueError('BODY_HEADER_ASSET_PAGE_INVALID')
+        return body_contract['asset'], page
     ready = entry.get('ready_source_by_theme', {}).get(theme)
     if ready:
         return ready, 1
