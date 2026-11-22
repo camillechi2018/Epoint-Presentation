@@ -318,6 +318,27 @@ def trim_right_arcs(shape, removed_count):
             elements.remove(element)
 
 
+def append_right_arc(shape, source_count):
+    geometry = shape._element.spPr.find('a:custGeom', NS)
+    path = geometry.find('a:pathLst/a:path', NS)
+    move, *curves = list(path)
+    width = int(path.get('w'))
+    step = width // source_count
+    if len(curves) != 2 * source_count:
+        raise ValueError('重复列弧线与来源结构不一致')
+    for index, curve in enumerate(curves[:2], 1):
+        clone = deepcopy(curve)
+        for point in clone:
+            point.set('x', str(int(point.get('x')) + step))
+        path.insert(index, clone)
+    path.set('w', str(width + step))
+    move[0].set('x', str(width + step))
+    for tag in ('a:cxnLst', 'a:gdLst'):
+        container = geometry.find(tag, NS)
+        for child in list(container):
+            container.remove(child)
+
+
 def expand_centered_columns(slide, rules, count):
     config = rules['expand_columns']
     source_count = rules['source_count']
@@ -357,25 +378,7 @@ def expand_centered_columns(slide, rules, count):
             shape.text_frame.margin_left = Pt(3)
             shape.text_frame.margin_right = Pt(3)
     if 'arc_shape_id' in rules['centered_reflow']:
-        shape = shapes[rules['centered_reflow']['arc_shape_id']]
-        geometry = shape._element.spPr.find('a:custGeom', NS)
-        path = geometry.find('a:pathLst/a:path', NS)
-        move, *curves = list(path)
-        width = int(path.get('w'))
-        step = width // source_count
-        if len(curves) != 2 * source_count:
-            raise ValueError('重复列弧线与来源结构不一致')
-        for index, curve in enumerate(curves[:2], 1):
-            clone = deepcopy(curve)
-            for point in clone:
-                point.set('x', str(int(point.get('x')) + step))
-            path.insert(index, clone)
-        path.set('w', str(width + step))
-        move[0].set('x', str(width + step))
-        for tag in ('a:cxnLst', 'a:gdLst'):
-            container = geometry.find(tag, NS)
-            for child in list(container):
-                container.remove(child)
+        append_right_arc(shapes[rules['centered_reflow']['arc_shape_id']], source_count)
     return {'mode':'repeatable','count':count,'source_count':source_count,'status':rules['validation_status']}
 
 
@@ -447,19 +450,30 @@ def reflow_fixed_span(slide, rules, count):
             columns = list(enumerate(groups))
             columns.insert(config['extra_target_index'], (source, duplicate))
         fixed_width = set(config.get('fixed_width_when_reduced', []))
+        fixed_width_all = set(config.get('fixed_width_shape_ids', []))
         tight_margins = set(config.get('tight_margins_when_expanded', []))
+        separators = set(config.get('separator_shape_ids', []))
         for position, (source, group) in enumerate(columns):
             left = start + position * (column_width + gutter)
             scale = column_width / widths[source]
             for sid, shape in group.items():
                 center = shape.left - lefts[source] + shape.width / 2
-                width = shape.width if count < native_count and sid in fixed_width else round(shape.width * scale)
+                preserve_width = sid in fixed_width_all or (count < native_count and sid in fixed_width)
+                width = shape.width if preserve_width else round(shape.width * scale)
                 shape.left = round(left + center * scale - width / 2)
+                if sid in separators:
+                    shape.left = round(left - gutter / 2)
                 shape.width = width
                 if count > native_count and sid in tight_margins:
                     shape.text_frame.margin_left = shape.text_frame.margin_right = Pt(3)
         if count > native_count and 'extra_number_shape_id' in config:
             replace_column_number(slide, duplicate[config['extra_number_shape_id']], count)
+        if 'arc_shape_id' in config:
+            arc = shapes[config['arc_shape_id']]
+            if count < native_count:
+                trim_right_arcs(arc, native_count - count)
+            else:
+                append_right_arc(arc, native_count)
     return {'mode':'repeatable','count':count,'source_count':native_count,'status':rules['validation_status']}
 
 
