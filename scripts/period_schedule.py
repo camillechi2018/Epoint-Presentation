@@ -63,7 +63,7 @@ def place_progress_row(shapes, config, left, right, percent, axis_left, axis_rig
         shapes[config[key]] for key in ('bar_id','progress_id','marker_id','rate_id','label_id','lane_id'))
     if progress_percentage(label.text) != percent:
         raise ValueError('PERIOD_SCHEDULE_RATE_MISMATCH: 标注百分比须与任务进度一致')
-    center_y = lane.top + Pt(10.5)
+    center_y = lane.top + Pt(13)
     tip = left + round((right-left)*percent/100)
     for line,length in ((track,right-left),(progress,tip-left)):
         line.left, line.width, line.top, line.height = left, length, center_y, 0
@@ -72,7 +72,7 @@ def place_progress_row(shapes, config, left, right, percent, axis_left, axis_rig
     marker.width, marker.height = Pt(16), Pt(16)
     marker.left, marker.top = tip-Pt(8), center_y-Pt(8)
     label.left = tip+Pt(9) if tip+Pt(9)+label.width <= axis_right else tip-Pt(9)-label.width
-    label.top = lane.top+Pt(1)
+    label.top = lane.top-Pt(3)
     label.text_frame.word_wrap = False
     note.left, note.top, note.width = axis_left, lane.top+Pt(18), axis_right-axis_left
     if icon_id := config.get('note_icon_id'):
