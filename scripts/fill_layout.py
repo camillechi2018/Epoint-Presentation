@@ -388,6 +388,81 @@ def repeatable_source_indices(rules, count):
     return selected
 
 
+def replace_column_number(slide, old, number):
+    shape = slide.shapes.add_textbox(old.left, old.top, old.width, old.height)
+    shape.line.color.rgb = RGBColor(255, 255, 255)
+    shape.line.width = Pt(1)
+    frame = shape.text_frame
+    frame.margin_left = frame.margin_right = frame.margin_top = frame.margin_bottom = Pt(0)
+    frame.vertical_anchor = MSO_ANCHOR.MIDDLE
+    paragraph = frame.paragraphs[0]
+    paragraph.alignment = PP_ALIGN.CENTER
+    run = paragraph.add_run()
+    run.text = str(number)
+    run.font.name = 'Arial'
+    run.font.size = Pt(15)
+    run.font.bold = True
+    run.font.color.rgb = RGBColor(255, 255, 255)
+    old._element.getparent().remove(old._element)
+
+
+def reflow_fixed_span(slide, rules, count):
+    config = rules['fixed_span_reflow']
+    native_count = rules['source_count']
+    if count != native_count:
+        shapes = {shape.shape_id: shape for shape in slide.shapes}
+        units = rules['units']
+        groups = [{sid: shapes[sid] for sid in unit} for unit in units]
+        anchors = [shapes[sid] for sid in config['anchor_shape_ids']]
+        lefts = [shape.left for shape in anchors]
+        widths = [shape.width for shape in anchors]
+        start, end = lefts[0], lefts[-1] + widths[-1]
+        gutter = lefts[1] - start - widths[0] if config['preserve_gutter'] else 0
+        column_width = (end - start - (count - 1) * gutter) / count
+        if count < native_count:
+            selected = repeatable_source_indices(rules, count)
+            for source, group in enumerate(groups):
+                if source not in selected:
+                    for shape in group.values():
+                        shape._element.getparent().remove(shape._element)
+            columns = [(source, groups[source]) for source in selected]
+        else:
+            source = config['extra_source_index']
+            offset = config['clone_id_offset']
+            taken_ids = {int(node.get('id')) for node in slide._element.xpath('.//p:cNvPr')}
+            root_ids = {sid + offset for sid in groups[source]}
+            if count != native_count + 1 or root_ids & taken_ids:
+                raise ValueError('新增列配置与来源对象不一致')
+            next_id = max(taken_ids | root_ids) + 1
+            duplicate = {}
+            for sid, shape in groups[source].items():
+                element = deepcopy(shape._element)
+                root, *children = element.xpath('.//p:cNvPr')
+                root.set('id', str(sid + offset))
+                for node in children:
+                    node.set('id', str(next_id))
+                    next_id += 1
+                shape._element.addnext(element)
+                duplicate[sid] = slide.shapes._shape_factory(element)
+            columns = list(enumerate(groups))
+            columns.insert(config['extra_target_index'], (source, duplicate))
+        fixed_width = set(config.get('fixed_width_when_reduced', []))
+        tight_margins = set(config.get('tight_margins_when_expanded', []))
+        for position, (source, group) in enumerate(columns):
+            left = start + position * (column_width + gutter)
+            scale = column_width / widths[source]
+            for sid, shape in group.items():
+                center = shape.left - lefts[source] + shape.width / 2
+                width = shape.width if count < native_count and sid in fixed_width else round(shape.width * scale)
+                shape.left = round(left + center * scale - width / 2)
+                shape.width = width
+                if count > native_count and sid in tight_margins:
+                    shape.text_frame.margin_left = shape.text_frame.margin_right = Pt(3)
+        if count > native_count and 'extra_number_shape_id' in config:
+            replace_column_number(slide, duplicate[config['extra_number_shape_id']], count)
+    return {'mode':'repeatable','count':count,'source_count':native_count,'status':rules['validation_status']}
+
+
 def apply_cardinality(slide,rules,count,items=None,theme=None):
     if rules.get('cardinality_mode') == 'paragraphs':
         return {'mode': 'paragraphs', 'count': count, 'source_count': rules['source_count'],
@@ -767,7 +842,7 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
         if unreviewed:raise ValueError('该页含未分类的源稿图片，需先确认装饰用途或替换内容图片；内部结构测试可传 --internal-draft')
     rules=json.loads((component_root/m['layout_rules']).read_text(encoding='utf-8-sig'))
     item_count=data.get('item_count')
-    if rules.get('expand_columns') and item_count is not None and (
+    if (rules.get('expand_columns') or rules.get('fixed_span_reflow')) and item_count is not None and (
             type(item_count) is not int or item_count not in rules.get('supported_counts', [])):
         raise ValueError('项数不在支持范围')
     if item_count is not None and rules.get('cardinality_mode')=='fixed' and item_count not in rules.get('supported_counts',[]):
@@ -1191,9 +1266,12 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
         if logo_shape is None or logo_shape.shape_type!=13:raise ValueError('来源 Logo 图片未找到，停止填充')
         if logo_enabled:logo_shape.name='brand:logo:source'
         else:logo_shape._element.getparent().remove(logo_shape._element)
-    expanded_cardinality = None
-    if rules.get('expand_columns') and item_count is not None and item_count > rules['source_count']:
-        expanded_cardinality = expand_centered_columns(s, rules, item_count)
+    early_cardinality = None
+    if rules.get('fixed_span_reflow'):
+        count = rules['source_count'] if item_count is None else item_count
+        early_cardinality = reflow_fixed_span(s, rules, count)
+    elif rules.get('expand_columns') and item_count is not None and item_count > rules['source_count']:
+        early_cardinality = expand_centered_columns(s, rules, item_count)
     lookup={x.shape_id:x for x in walk(s.shapes)}
     write_text_fields(lookup, bindings, texts, logo_enabled)
     for fit in rules.get('text_box_expand_pt',[]):
@@ -1420,7 +1498,7 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
     normal_body_weight_result=apply_normal_body_weight(s,rules,bindings)
     page_background_result=apply_page_background_role(s,rules,theme,p.slide_width,p.slide_height)
     brand_slot=next((lookup[b['shape_id']] for b in bindings if b['field']=='brand'),None) if logo_enabled else None
-    cardinality_result=expanded_cardinality or apply_cardinality(s,rules,item_count,data.get('items'),theme)
+    cardinality_result=early_cardinality or apply_cardinality(s,rules,item_count,data.get('items'),theme)
     schedule_result=apply_project_schedule(s,rules,data['tasks']) if rules.get('cardinality_mode')=='project_schedule' else None
     header_result = None
     replace_source_logo = bool(source_logo_present and logo_enabled and m.get('replace_source_logo'))
