@@ -424,6 +424,21 @@ def structural_required_paths(contract, item_count):
         str(item_count), contract.get('required_binding_paths', []))
 
 
+def normalize_binding_path_aliases(contract, content):
+    profiles = contract.get('binding_path_aliases_by_count', {})
+    count = content.get('item_count')
+    count = contract.get('default_item_count') if count is None else count
+    aliases = profiles.get(str(count), {})
+    texts = content.get('texts')
+    if not aliases or not isinstance(texts, dict) or not aliases.keys() & texts.keys():
+        return content
+    # Leave conflicting names visible so the normal field checks reject them.
+    return dict(content, texts={
+        aliases[slot] if slot in aliases and aliases[slot] not in texts else slot: value
+        for slot, value in texts.items()
+    })
+
+
 def adapt_structural_fields(entry, content, page_title=None, diagnostics=False):
     """Map explicit generic fields without creating missing facts or relationships."""
     import re
@@ -1143,12 +1158,13 @@ def adapt_for_layout(layout_id: str, content: dict, page_title: str | None = Non
     contract = (entry or {}).get('matching_contract') or {}
     if contract.get('body_input'):
         return adapt_body_input(contract, content, page_title)
-    mapped, adapter = _adapt_for_layout_impl(layout_id, content, page_title, entry)
+    normalized = normalize_binding_path_aliases(contract, content)
+    mapped, adapter = _adapt_for_layout_impl(layout_id, normalized, page_title, entry)
     if (adapter and entry and entry.get('matching_activation') == 'pilot_verified'
             and content.get('type') != 'template_fields'
             and _unmapped_pilot_fields(entry, content, mapped, adapter)):
         return dict(content), None
-    return mapped, adapter
+    return mapped, adapter or ('registered_binding_path_aliases' if normalized is not content else None)
 
 
 def field_source_evidence(content: dict, mapped: dict) -> dict:

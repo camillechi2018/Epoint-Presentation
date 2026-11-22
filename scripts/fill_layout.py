@@ -6,6 +6,7 @@ from pathlib import Path
 from copy import deepcopy
 from text_width import binding_text_issues, directory_text_over_capacity, visual_width_units
 from body_header import attach_header, checked_title, contract_for, verify_asset
+from content_adapters import normalize_binding_path_aliases
 
 import argparse,json,math,re,subprocess
 from pptx import Presentation
@@ -874,6 +875,7 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
     if m is None or m['id']!=layout:raise ValueError('未知组件 '+layout)
     if m['status']!='approved' and not allow_draft:raise ValueError('组件尚未批准；内部使用必须显式 --allow-draft')
     data=json.loads(content.read_text(encoding='utf-8-sig'))
+    data=normalize_binding_path_aliases(m.get('matching_contract') or {},data)
     theme=data.get('theme','blue')
     if theme not in m.get('themes',[]):raise ValueError('该组件不支持所选主题：'+str(theme))
     source_rel, source_page = layout_source(m, theme)
