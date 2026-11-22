@@ -47,7 +47,11 @@
       "content-body-parallel-metrics-two",
       "content-body-parallel-metrics-four",
       "content-body-single-focus",
-      "content-body-text-hierarchy"
+      "content-body-text-hierarchy",
+      "content-body-metric-evidence",
+      "content-body-gallery-four",
+      "content-body-gallery-five",
+      "content-body-report-table"
     ],
     "description": "蓝红简约新绘正文和登记的正文组件共用底层画布与两个可编辑柔边椭圆。",
     "blur_pt": 220,
