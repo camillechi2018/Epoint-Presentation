@@ -36,12 +36,13 @@ _VARIABLE_COUNT_MODES = (
 )
 
 
-def set_text(sh,text):
-    tf=sh.text_frame;p0=deepcopy(tf.paragraphs[0]._p)
+def set_text(sh,text,*,preserve_paragraph_styles=False):
+    tf=sh.text_frame
+    templates=[deepcopy(p._p) for p in tf.paragraphs] if preserve_paragraph_styles else [deepcopy(tf.paragraphs[0]._p)]
     for c in list(tf._txBody):
         if c.tag.endswith('}p'):tf._txBody.remove(c)
-    for line in text.split('\n'):
-        p=deepcopy(p0);first=p.find('a:r',NS);props=deepcopy(first.find('a:rPr',NS)) if first is not None and first.find('a:rPr',NS) is not None else None
+    for index,line in enumerate(text.split('\n')):
+        p=deepcopy(templates[min(index,len(templates)-1)]);first=p.find('a:r',NS);props=deepcopy(first.find('a:rPr',NS)) if first is not None and first.find('a:rPr',NS) is not None else None
         pp=p.find('a:pPr',NS)
         if pp is None:pp=OxmlElement('a:pPr');p.insert(0,pp)
         pp.set('hangingPunct','0');pp.set('eaLnBrk','1')
@@ -522,7 +523,14 @@ def reflow_registered_geometry(slide, rules, count):
         shapes = {shape.shape_id: shape for shape in walk(slide.shapes)}
         for sid, bounds in variant['bounds_emu'].items():
             shape = shapes[int(sid)]
-            shape.left, shape.top, shape.width, shape.height = bounds
+            if variant.get('group_child_width_emu'):
+                # Preserve the parent coordinate system while updating nested transforms.
+                xfrm = shape._element.xpath('./p:xfrm | ./p:spPr/a:xfrm | ./p:grpSpPr/a:xfrm')[0]
+                xfrm.off.x, xfrm.off.y, xfrm.ext.cx, xfrm.ext.cy = bounds
+            else:
+                shape.left, shape.top, shape.width, shape.height = bounds
+        for sid, width in variant.get('group_child_width_emu', {}).items():
+            shapes[int(sid)]._element.xfrm.chExt.cx = width
         for sid, coordinates in variant.get('path_x', {}).items():
             paths = shapes[int(sid)]._element.xpath('.//a:path')
             if len(paths) != 1:
@@ -847,6 +855,7 @@ def validate_text_field(binding, value):
             'allowed_values': '字段当前仅支持指定值：',
             'max_lines': '字段超过允许行数：',
             'max_chars_per_line': '单段文字超出容量，请精简：',
+            'paragraph_max_chars': '指定段落超出容量，请精简：',
             'max_width_units': '字段超出视觉宽度，请精简或换版：',
         }
         raise ValueError(messages[issues[0]] + field)
@@ -855,14 +864,17 @@ def validate_text_field(binding, value):
 def write_text_fields(shapes, bindings, texts, logo_enabled):
     # Clear template copy first. Multiple bindings can refer to the same shape.
     locked_roles = ('brand_locked', 'decoration_locked', 'source_decorative_locked')
+    styled_shapes = {binding['shape_id'] for binding in bindings
+                     if binding.get('preserve_paragraph_styles') and binding['field'] in texts}
     for binding in bindings:
         shape_id = binding['shape_id']
-        if binding.get('semantic_role') not in locked_roles and shape_id in shapes:
+        if binding.get('semantic_role') not in locked_roles and shape_id in shapes and shape_id not in styled_shapes:
             set_text(shapes[shape_id], '')
     for binding in bindings:
         field = binding['field']
         if field in texts and not (logo_enabled and field == 'brand'):
-            set_text(shapes[binding['shape_id']], binding.get('render_prefix', '') + texts[field])
+            set_text(shapes[binding['shape_id']], binding.get('render_prefix', '') + texts[field],
+                     preserve_paragraph_styles=binding.get('preserve_paragraph_styles', False))
 
 
 def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=None,no_logo=False,
