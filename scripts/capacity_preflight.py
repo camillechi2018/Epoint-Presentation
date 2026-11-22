@@ -12,6 +12,7 @@ from content_adapters import adapt_for_layout
 from text_width import binding_text_issues, visual_width_units
 from body_header import checked_title, contract_for
 from month_schedule import month_ranges
+from progress_rings import progress_percentage
 
 
 @lru_cache(maxsize=8)
@@ -237,6 +238,15 @@ def preflight(library: Path, entry: dict, content: dict, page_title: str | None,
         except ValueError as exc:
             code, _, reason = str(exc).partition(': ')
             hard.append({'field': 'items.stages', 'rule': code, 'detail': reason})
+    if rings := rules.get('progress_rings'):
+        aliases = {binding.get('semantic_path'): binding['field'] for binding in bindings}
+        for ring in rings:
+            field = ring['value_field']
+            try:
+                progress_percentage(texts.get(field, texts.get(aliases.get(field))))
+            except ValueError as exc:
+                code, _, reason = str(exc).partition(': ')
+                hard.append({'field': field, 'rule': code, 'detail': reason})
     title_pressure = rules.get('title_pressure_test') or {}
     safe_title_chars = title_pressure.get('safe_title_chars')
     if not contract and isinstance(safe_title_chars, int) and page_title and len(page_title) > safe_title_chars:

@@ -7,6 +7,7 @@ from copy import deepcopy
 from text_width import binding_text_issues, directory_text_over_capacity, visual_width_units
 from body_header import attach_header, checked_title, contract_for, verify_asset
 from month_schedule import month_ranges, place_month_bars
+from progress_rings import apply_progress_rings
 
 import argparse,json,math,re,subprocess
 from pptx import Presentation
@@ -1349,6 +1350,9 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
     schedule_result=apply_project_schedule(s,rules,data['tasks']) if rules.get('cardinality_mode')=='project_schedule' else None
     if intervals is not None:
         schedule_result = place_month_bars(s, month_schedule, intervals)
+    progress_rings = rules.get('progress_rings')
+    progress_ring_result = (apply_progress_rings(lookup, progress_rings, texts, semantic_aliases)
+                            if progress_rings else None)
     header_result = None
     replace_source_logo = bool(source_logo_present and logo_enabled and m.get('replace_source_logo'))
     if body_header:
@@ -1379,6 +1383,8 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
         if not logo_audit['passed']:
             raise ValueError('红色风格 Logo 必须是黑白灰单色：'+str(logo_audit['issues']))
     report=dict(layout_id=layout,source_stamp=source_stamp,asset_version=m['version'],asset_status=m['status'],internal_draft=internal,output=str(out),structure_filled=True,omitted_optional_fields=[b['semantic_path'] for b in optional_fields if b['field'] not in texts],layout_constraints=layout_changes,normal_body_weight=normal_body_weight_result,page_background=page_background_result,cardinality=cardinality_result,schedule=schedule_result,logo=logo_result,fonts=font_result,font_profile=resolve_font_profile(),font_normalization=font_normalization,colors={'materialized_references':sum(color_result['materialized_by_part'].values()),'remaining_chart_style_placeholders':sum(color_result['remaining_chart_style_placeholders'].values()),'rendering_depends_on_master_theme_slots':color_result['rendering_depends_on_master_theme_slots'],'chart_visual_review_required':color_result['chart_visual_review_required']},visual_qa='not_run',powerpoint_open='not_run',collision_qa='not_run')
+    if progress_ring_result is not None:
+        report['progress_rings'] = progress_ring_result
     if header_result:
         report['body_header'] = header_result
     out.with_suffix('.qa.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8');return report
