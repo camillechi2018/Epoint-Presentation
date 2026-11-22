@@ -39,7 +39,8 @@
     "enabled": true,
     "themes": ["blue", "red"],
     "applies_to": ["guided_composition", "free_composition"],
-    "description": "仅蓝红简约新绘正文页使用；两个可编辑椭圆位于底层，以锁定主题色、透明度和柔化边缘形成轻微弥散；科技风使用原稿标题栏，不叠加椭圆",
+    "component_layouts": ["content-body-cards-three-longcopy"],
+    "description": "蓝红简约新绘正文和登记的正文组件共用底层画布与两个可编辑柔边椭圆。",
     "blur_pt": 220,
     "circles_by_theme": {
       "blue": [

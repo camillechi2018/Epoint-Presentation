@@ -112,9 +112,9 @@ def connector(slide, x1, y1, x2, y2, ink, width=1.0):
     return shape
 
 
-def remove_shadow_effects(slide):
+def remove_shadow_effects(shapes):
     """Prevent PowerPoint theme effect styles from adding implicit shadows."""
-    for shape in slide.shapes:
+    for shape in shapes:
         element = shape._element
         # python-pptx assigns effectRef idx=2 to new shapes. This theme slot
         # contains an outer shadow even when no shadow was requested in code.
@@ -567,6 +567,20 @@ def add_content_atmosphere(slide, layout: dict, theme_name: str, theme: dict):
         shape._element.spPr.append(effects)
 
 
+def add_body_background(slide, layout, theme_name, theme, background):
+    """Keep the editable background below any existing source objects."""
+    existing = list(slide.shapes)
+    canvas = rectangle(slide, 0, 0, layout["canvas"]["width_inches"],
+                       layout["canvas"]["height_inches"], background)
+    canvas.name = "brand:canvas"
+    add_content_atmosphere(slide, layout, theme_name, theme)
+    layers = list(slide.shapes)[len(existing):]
+    remove_shadow_effects(layers)
+    if existing:
+        for layer in layers:
+            existing[0]._element.addprevious(layer._element)
+
+
 def add_tech_content_header(slide, layout: dict, *, placement=None):
     """Reuse the original editable header group and its embedded images."""
     spec = layout["tech_content_header"]
@@ -608,6 +622,8 @@ def add_content_title(slide, value, profile, layout, theme, *, dark=False, tech_
         x1, y1, length, _ = spec["rule_inches"]
         rule = connector(slide, x1, y1, x1 + length, y1, theme["primary"], spec["rule_width_pt"])
         rule.name = "brand:content-rule"
+        remove_shadow_effects([rule])
+        rule.shadow.inherit = False
 
 
 def base_slide(pres: Presentation, profile: dict, layout: dict, theme: dict, index: int,
@@ -624,11 +640,8 @@ def base_slide(pres: Presentation, profile: dict, layout: dict, theme: dict, ind
     if header and not tech_header:
         # PowerPoint may discard a slide background when InsertFromFile clones
         # the source design. A native bottom rectangle preserves the canvas.
-        canvas = rectangle(slide, 0, 0, layout["canvas"]["width_inches"],
-                           layout["canvas"]["height_inches"], background)
-        canvas.name = "brand:canvas"
         theme_name = next(name for name, values in profile["themes"].items() if values is theme)
-        add_content_atmosphere(slide, layout, theme_name, theme)
+        add_body_background(slide, layout, theme_name, theme, background)
     add_logo(slide, layout, theme, dark=dark, content_header=bool(header), tech_header=tech_header)
     if header:
         add_content_title(slide, header, profile, layout, theme, dark=dark, tech_header=tech_header)
@@ -1440,7 +1453,7 @@ def render(plan: dict, output: Path):
         if type(page_number) is not int or page_number < 1:
             raise ValueError(f"第 {n} 页整稿页码无效")
         slide = render_page(pres, page, page_number, profile, layout, theme)
-        remove_shadow_effects(slide)
+        remove_shadow_effects(slide.shapes)
     output.parent.mkdir(parents=True, exist_ok=True)
     pres.save(output)
     role_overrides = {

@@ -5,7 +5,7 @@ from pptx import Presentation
 
 from relation_match import STRUCTURAL_ROLES
 from tech_background import uses_shared_tech_background
-from body_background import blue_red_background_issue
+from body_background import blue_red_background_issue, uses_component_atmosphere
 from layout_safety import walk_shapes
 
 SKILL=Path(__file__).resolve().parents[1]
@@ -26,12 +26,22 @@ def audit(plan_path,pptx_path):
     seen=[]
     for n,slide in enumerate(p.slides,1):
         info=pages[n-1] if n<=len(pages) else {}
+        theme = plan.get('theme')
+        drawn = info.get('selection_mode') in {'guided_composition', 'free_composition'}
+        shapes = list(slide.shapes)
+        rules = [shape for shape in shapes if shape.name == 'brand:content-rule']
+        if theme in ('blue', 'red') and (drawn or info.get('body_header')) and len(rules) != 1:
+            add('P0', n, 'body_rule_count', '通用页眉须恰有一条分割线')
+        for rule in rules:
+            effects = rule._element.xpath('.//a:effectRef')
+            shadow = rule._element.xpath('.//a:outerShdw | .//a:innerShdw | .//a:prstShdw')
+            if shadow or any(ref.get('idx') != '0' for ref in effects) or (
+                    not effects and not rule._element.xpath('./p:spPr/a:effectLst')):
+                add('P0', n, 'body_rule_shadow', '页眉分割线存在阴影或未显式关闭主题效果')
         if info.get('body_header',{}).get('background') == 'skill_tech' and not uses_shared_tech_background(slide,offline_layout):
             add('P0',n,'body_component_tech_background','知识库纯正文未使用科技风公共背景')
-        if info.get('selection_mode') in {'guided_composition','free_composition'}:
-            theme=plan.get('theme')
+        if drawn or uses_component_atmosphere(offline_layout, info.get('layout_id'), theme):
             tech_header=theme=='deep-blue-tech'
-            shapes=list(slide.shapes)
             if tech_header:
                 if not uses_shared_tech_background(slide,offline_layout):
                     add('P0',n,'new_drawn_tech_background','新绘正文未使用科技风公共背景')
@@ -68,7 +78,12 @@ def audit(plan_path,pptx_path):
         section_layouts={page.get('layout_id') for page in pages if page.get('role')=='section'}
         if len(section_layouts)!=1 or None in section_layouts:
             add('P0',0,'section_layout_mixed','同一完整演示稿的章节页须使用同一组件版式')
-    return {'schema_version':'1.0','slide_count':len(p.slides),'planned_count':len(pages),'issues':issues,'p0_passed':not any(x['severity']=='P0' for x in issues),'checks':(['template_source'] if require_templates or has_mandatory else [])+['page_count','new_drawn_background','placeholder_or_source_example','chart_source','image_source','repeated_layout','dense_sequence'],'manual_review_required':['PowerPoint实际文字边界与箭头碰撞','中文断行、字号、底部留白与相邻页面疏密','图片裁切及图表编辑数据','事实、术语与品牌核对']}
+    checks = ['page_count', 'body_rule_count', 'body_rule_shadow', 'new_drawn_background',
+              'component_atmosphere', 'placeholder_or_source_example', 'chart_source',
+              'image_source', 'repeated_layout', 'dense_sequence']
+    if require_templates or has_mandatory:
+        checks.insert(0, 'template_source')
+    return {'schema_version':'1.0','slide_count':len(p.slides),'planned_count':len(pages),'issues':issues,'p0_passed':not any(x['severity']=='P0' for x in issues),'checks':checks,'manual_review_required':['PowerPoint实际文字边界与箭头碰撞','中文断行、字号、底部留白与相邻页面疏密','图片裁切及图表编辑数据','事实、术语与品牌核对']}
 def main():
     p=argparse.ArgumentParser();p.add_argument('--plan',type=Path,required=True);p.add_argument('--input',type=Path,required=True);p.add_argument('--out',type=Path,required=True);a=p.parse_args()
     result=audit(a.plan,a.input);a.out.write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8');print(json.dumps({'p0_passed':result['p0_passed'],'issues':len(result['issues'])},ensure_ascii=False))

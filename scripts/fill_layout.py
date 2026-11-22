@@ -6,6 +6,8 @@ from pathlib import Path
 from copy import deepcopy
 from text_width import binding_text_issues, directory_text_over_capacity, visual_width_units
 from body_header import attach_header, checked_title, contract_for, binding_for_count, verify_asset
+from body_header import frame as body_frame
+from body_background import uses_component_atmosphere
 from content_adapters import normalize_binding_path_aliases
 from month_schedule import month_ranges, place_month_bars
 from period_schedule import schedule_intervals, place_period_bars
@@ -1791,6 +1793,11 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
     body_text_result=apply_body_text_presentation(s,rules,bindings)
     normal_body_weight_result=apply_normal_body_weight(s,rules,bindings)
     page_background_result=apply_page_background_role(s,rules,theme,p.slide_width,p.slide_height)
+    if uses_component_atmosphere(body_frame(), layout, theme):
+        from render_offline_brand import PROFILE, add_body_background, read_json
+        palette = read_json(PROFILE)['themes'][theme]
+        add_body_background(s, body_frame(), theme, palette, palette['canvas'])
+        page_background_result = {'background': 'content_atmosphere', 'theme': theme}
     brand_slot=next((lookup[b['shape_id']] for b in bindings if b['field']=='brand'),None) if logo_enabled else None
     cardinality_result=early_cardinality or apply_cardinality(s,rules,item_count,data.get('items'),theme)
     schedule_result=apply_project_schedule(s,rules,data['tasks']) if rules.get('cardinality_mode')=='project_schedule' else None
