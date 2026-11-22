@@ -27,3 +27,13 @@
 在当前知识库 `review/body-longcopy-capacity.json` 中按组件 ID 和 `semantic_path` 读取逐字段的 `recommended_max_cjk_chars`、`registered_min_max_chars` 与 `use_for_planning_cjk_chars`。内容规划以 `use_for_planning_cjk_chars` 为参考，实际填充仍须通过 `bindings.json` 的字符数、行数、行宽及 PowerPoint 边界验收。长正文自动选稿还须检查该组件的 `long_copy_review_status=长文案已验收`；`视觉复核未通过`、填充失败和标题溢出状态不可用于长正文自动选稿。参考值由蓝红科技版本逐字段测量，蓝红共用较小值；适用于中文单段自动换行。短标签与标题不能当作正文槽，`preparation_methods` 含 `source_fallback` 的组件还需正常填充路径复核。**结构复用新增的短文案跨业务试填只验证新字段映射，不会重置该组件既有的长文案验收；报告中分别记录结构映射验收、逐字段长文案验收和整稿视觉复核。**每次从固定知识库 commit 读取，不在 Skill 中复制组件数值。
 
 需要修整版源页时按 `ready_source_by_theme` 取用；普通正文的字重按组件 `normal_body_weight` 执行，标题、指标和刻意强调文字不套用。目录重排、步骤次序、日期连续性、图表合计、百分比联动、Logo 替换与背景覆盖依各组件的规则和脚本检查；不得把某一页的例外复制给整套稿。新增或修订普通组件只更新知识库的目录、绑定、规则和审阅证据；若引入脚本尚不支持的新形状、图表、动效或输出格式，需先扩展执行器并通过专项验收。
+正文绑定可以声明 `preserve_source_text_styles`。替换时逐段保留来源段落的格式，按目标文字中的短标签拆分行首标签与正文的样式。此规则适用于经过试填的多段正文槽位。
+带 `month_axis_schedule` 规则的年度排期使用固定原生行和阶段。可编辑阶段标题来自 `items[].stages[].label`，每段的 `start_month`、`end_month` 为 1–12 的整数，包含首尾月。同一行按月升序，阶段之间可留空月。试填按月轴边界调整原生条带的位置和宽度。
+
+带 `period_axis_schedule` 规则的分组排期保留原生任务行。阶段填写在 `items[].tasks[].stages[]`，单项目一行的 P194 使用 `items[].stages[]`。月轴用 `start_month`、`end_month`，季度轴用 `start_quarter`、`end_quarter`。区间包含首尾，同一行各段按升序排列且互不重叠。P192 的 `stages[].value` 同时决定百分比文字和已完成进度的位置。
+
+带 `progress_rings` 规则的组件使用同一字段填充进度文字和原生进度环。P153 的 `items[].progress.value` 接受 0–100 的整数百分比，如 `65%`，`0%` 显示底轨，`100%` 显示完整圆环。
+
+`shared_text_paths` 列出的语义字段可对应多个原生文字框。P245 每步只填写一个标题，左栏与右侧卡片同步更新，各自沿用原版字色和步骤编号。
+
+纯正文的主题契约可带 `bindings_by_count`，为已验证项数登记各自的绑定路径及 SHA-256。容量预检和填充按同一项数读取绑定，复用该主题的纯正文对象与已验收的重排规则。现有可变项数组件保留原编号，采用另一种计数单位或槽位结构的固定版使用 `-body-fixed` 编号。

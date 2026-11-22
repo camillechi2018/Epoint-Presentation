@@ -10,7 +10,10 @@ from pathlib import Path
 from library_location import asset_root, text_binding_path
 from content_adapters import adapt_for_layout
 from text_width import binding_text_issues, visual_width_units
-from body_header import checked_title, contract_for
+from body_header import binding_for_count, checked_title, contract_for
+from month_schedule import month_ranges
+from period_schedule import schedule_intervals
+from progress_rings import progress_percentage
 
 
 @lru_cache(maxsize=8)
@@ -132,7 +135,9 @@ def preflight(library: Path, entry: dict, content: dict, page_title: str | None,
     mapped, adapter = adapt_for_layout(entry['id'], content, page_title, entry=entry)
     texts = mapped.get('texts') if isinstance(mapped.get('texts'), dict) else {}
     contract = contract_for(entry, theme, body_header_pilot and content.get('logo') is None)
-    binding_rel = contract['bindings'] if contract else text_binding_path(entry, theme, mapped.get('item_count'))
+    item_count = mapped.get('item_count')
+    selected_body_binding = binding_for_count(contract, item_count) if contract else None
+    binding_rel = selected_body_binding[0] if selected_body_binding else text_binding_path(entry, theme, item_count)
     bindings, binding_sha = _bindings(str(library / binding_rel))
     longcopy, policy, longcopy_sha, policy_sha = _review(str(library))
     reviewed_fields = longcopy.get(entry['id'], {})
@@ -141,7 +146,7 @@ def preflight(library: Path, entry: dict, content: dict, page_title: str | None,
     if contract:
         try:
             title_field = contract['title_input']
-            if binding_sha != contract['bindings_sha256']:
+            if binding_sha != selected_body_binding[1]:
                 raise ValueError('BODY_HEADER_BINDING_HASH_MISMATCH')
             header['body_header_title'] = checked_title(title_field, texts, page_title, contract)
             header['body_header_binding_path'] = title_field['semantic_path']
@@ -230,6 +235,27 @@ def preflight(library: Path, entry: dict, content: dict, page_title: str | None,
     rules_file = library / rules_rel if rules_rel else None
     rules = json.loads(rules_file.read_text(encoding='utf-8-sig')) if rules_file and rules_file.is_file() else {}
     rules_sha = hashlib.sha256(rules_file.read_bytes()).hexdigest() if rules_file and rules_file.is_file() else None
+    if schedule := rules.get('month_axis_schedule'):
+        try:
+            month_ranges(schedule, content.get('items'))
+        except ValueError as exc:
+            code, _, reason = str(exc).partition(': ')
+            hard.append({'field': 'items.stages', 'rule': code, 'detail': reason})
+    if schedule := rules.get('period_axis_schedule'):
+        try:
+            schedule_intervals(schedule, content.get('items'))
+        except ValueError as exc:
+            code, _, reason = str(exc).partition(': ')
+            hard.append({'field': 'items', 'rule': code, 'detail': reason})
+    if rings := rules.get('progress_rings'):
+        aliases = {binding.get('semantic_path'): binding['field'] for binding in bindings}
+        for ring in rings:
+            field = ring['value_field']
+            try:
+                progress_percentage(texts.get(field, texts.get(aliases.get(field))))
+            except ValueError as exc:
+                code, _, reason = str(exc).partition(': ')
+                hard.append({'field': field, 'rule': code, 'detail': reason})
     title_pressure = rules.get('title_pressure_test') or {}
     safe_title_chars = title_pressure.get('safe_title_chars')
     if not contract and isinstance(safe_title_chars, int) and page_title and len(page_title) > safe_title_chars:

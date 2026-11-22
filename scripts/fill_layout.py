@@ -5,8 +5,11 @@ from font_profile import resolve as resolve_font_profile
 from pathlib import Path
 from copy import deepcopy
 from text_width import binding_text_issues, directory_text_over_capacity, visual_width_units
-from body_header import attach_header, checked_title, contract_for, verify_asset
+from body_header import attach_header, checked_title, contract_for, binding_for_count, verify_asset
 from content_adapters import normalize_binding_path_aliases
+from month_schedule import month_ranges, place_month_bars
+from period_schedule import schedule_intervals, place_period_bars
+from progress_rings import apply_progress_rings
 
 import argparse,json,math,re,subprocess
 from pptx import Presentation
@@ -852,17 +855,77 @@ def validate_text_field(binding, value):
         raise ValueError(messages[issues[0]] + field)
 
 
+def fill_source_paragraphs(shape, text):
+    """Keep per-line formatting and the source styling of a leading label."""
+    frame = shape.text_frame
+    if frame.text == text:
+        return
+    originals = [deepcopy(paragraph._p) for paragraph in frame.paragraphs]
+    for paragraph in frame.paragraphs:
+        frame._txBody.remove(paragraph._p)
+    for index, line in enumerate(text.split('\n')):
+        paragraph = deepcopy(originals[min(index, len(originals) - 1)])
+        runs = [node for node in paragraph if node.tag.endswith('}r')]
+        segments = [(node.findtext('a:t', namespaces=NS) or '', node.find('a:rPr', NS)) for node in runs]
+        source_text = ''.join(value for value, _ in segments)
+        source_label = re.match(r'^[^：:]{1,18}[：:]', source_text)
+        new_label = re.match(r'^[^：:]{1,18}[：:]', line)
+        first = segments[0][1] if segments else None
+        replacement = [(line, first)]
+        if source_label and new_label and len(line) > new_label.end():
+            offset = source_label.end()
+            body = first
+            for value, style in segments:
+                if offset < len(value):
+                    body = style
+                    break
+                offset -= len(value)
+            replacement = [(line[:new_label.end()], first), (line[new_label.end():], body)]
+        properties = paragraph.find('a:pPr', NS)
+        if properties is not None and properties.get('algn') in {'just', 'dist', 'justLow', 'thaiDist'}:
+            properties.set('algn', 'l')
+        for node in list(paragraph):
+            if node.tag.rsplit('}', 1)[-1] not in ('pPr', 'endParaRPr'):
+                paragraph.remove(node)
+        for value, style in replacement:
+            run = OxmlElement('a:r')
+            if style is not None:
+                run.append(deepcopy(style))
+            part = OxmlElement('a:t')
+            part.text = value
+            run.append(part)
+            paragraph.insert_element_before(run, 'a:endParaRPr')
+        frame._txBody.append(paragraph)
+
+
 def write_text_fields(shapes, bindings, texts, logo_enabled):
     # Clear template copy first. Multiple bindings can refer to the same shape.
     locked_roles = ('brand_locked', 'decoration_locked', 'source_decorative_locked')
     for binding in bindings:
         shape_id = binding['shape_id']
         if binding.get('semantic_role') not in locked_roles and shape_id in shapes:
+            if binding.get('preserve_source_text_styles') and binding['field'] in texts:
+                continue
             set_text(shapes[shape_id], '')
     for binding in bindings:
         field = binding['field']
         if field in texts and not (logo_enabled and field == 'brand'):
-            set_text(shapes[binding['shape_id']], binding.get('render_prefix', '') + texts[field])
+            replace = fill_source_paragraphs if binding.get('preserve_source_text_styles') else set_text
+            replace(shapes[binding['shape_id']], binding.get('render_prefix', '') + texts[field])
+
+
+def expand_shared_text_paths(texts, bindings, paths):
+    """Populate reviewed text positions that display one semantic field."""
+    for path in paths:
+        fields = [binding['field'] for binding in bindings if binding.get('semantic_path') == path]
+        if len(set(fields)) < 2:
+            raise ValueError('共享文字字段缺少对应的版式对象：'+path)
+        supplied = [texts[field] for field in fields if field in texts]
+        if not supplied:
+            continue
+        if any(value != supplied[0] for value in supplied[1:]):
+            raise ValueError('共享文字字段的内容不一致：'+path)
+        texts.update(dict.fromkeys(fields, supplied[0]))
 
 
 def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=None,no_logo=False,
@@ -886,6 +949,9 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
         if not body_header or logo_config is not None or data.get('logo') is not None:
             raise ValueError('BODY_HEADER_CONFIGURATION_UNSUPPORTED')
         source_rel, source_page = layout_source(m, theme, body_contract=body_header)
+        body_constraints = (component_root/source_rel).parent/'constraints.json'
+        if body_constraints.is_file():
+            constraint_file = body_constraints
     commit=data.get('library_commit')
     source_stamp=None
     if commit is not None:
@@ -905,13 +971,14 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
     if (out==source or out.is_relative_to(lib/'layouts') or out.is_relative_to(lib/'diagrams')
             or out.is_relative_to(lib/'master') or (component_root != lib and out.is_relative_to(component_root))):
         raise ValueError('输出不能覆盖模板库资产')
-    binding_rel = body_header['bindings'] if body_header else text_binding_path(m, theme, data.get('item_count'))
+    selected_body_binding = binding_for_count(body_header, data.get('item_count')) if body_header else None
+    binding_rel = selected_body_binding[0] if selected_body_binding else text_binding_path(m, theme, data.get('item_count'))
     binding_path = (component_root/binding_rel).resolve()
     if not binding_path.is_relative_to(component_root):
         raise ValueError('绑定文件越出库根目录')
     if body_header:
         verify_asset(source, body_header['sha256'])
-        verify_asset(binding_path, body_header['bindings_sha256'])
+        verify_asset(binding_path, selected_body_binding[1])
     binding_data=json.loads(binding_path.read_text(encoding='utf-8-sig'))
     if m.get('collection')=='new-template-content' and not internal:
         safe_media={'brand_logo_locked','source_decorative_locked','source_visual_locked','cover_visual_layer'}
@@ -924,6 +991,10 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
         raise ValueError('项数不在支持范围')
     if item_count is not None and rules.get('cardinality_mode')=='fixed' and item_count not in rules.get('supported_counts',[]):
         raise ValueError('固定项数组件不支持该项数；请重新选版')
+    month_schedule = rules.get('month_axis_schedule')
+    intervals = month_ranges(month_schedule, data.get('items')) if month_schedule else None
+    period_schedule = rules.get('period_axis_schedule')
+    period_intervals = schedule_intervals(period_schedule, data.get('items')) if period_schedule else None
     if (item_count is not None and rules.get('cardinality_mode') in _VARIABLE_COUNT_MODES
             and rules.get('validation_status') != 'verified'
             and item_count not in rules.get('verified_counts', []) and not internal):
@@ -942,6 +1013,7 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
         if alias != field and alias in texts:
             if field in texts:raise ValueError('同一字段不能同时提供语义路径和旧字段名：'+field)
             texts[field]=texts.pop(alias)
+    expand_shared_text_paths(texts,bindings,rules.get('shared_text_paths',[]))
     if m.get('role') in ('cover','section','closing'):
         for b in bindings:
             path=b.get('semantic_path')
@@ -1585,6 +1657,13 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
     brand_slot=next((lookup[b['shape_id']] for b in bindings if b['field']=='brand'),None) if logo_enabled else None
     cardinality_result=early_cardinality or apply_cardinality(s,rules,item_count,data.get('items'),theme)
     schedule_result=apply_project_schedule(s,rules,data['tasks']) if rules.get('cardinality_mode')=='project_schedule' else None
+    if intervals is not None:
+        schedule_result = place_month_bars(s, month_schedule, intervals)
+    if period_intervals is not None:
+        schedule_result = place_period_bars(s, period_schedule, period_intervals)
+    progress_rings = rules.get('progress_rings')
+    progress_ring_result = (apply_progress_rings(lookup, progress_rings, texts, semantic_aliases)
+                            if progress_rings else None)
     header_result = None
     replace_source_logo = bool(source_logo_present and logo_enabled and m.get('replace_source_logo'))
     if body_header:
@@ -1615,6 +1694,8 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
         if not logo_audit['passed']:
             raise ValueError('红色风格 Logo 必须是黑白灰单色：'+str(logo_audit['issues']))
     report=dict(layout_id=layout,source_stamp=source_stamp,asset_version=m['version'],asset_status=m['status'],internal_draft=internal,output=str(out),structure_filled=True,omitted_optional_fields=[b['semantic_path'] for b in optional_fields if b['field'] not in texts],layout_constraints=layout_changes,normal_body_weight=normal_body_weight_result,page_background=page_background_result,cardinality=cardinality_result,schedule=schedule_result,logo=logo_result,fonts=font_result,font_profile=resolve_font_profile(),font_normalization=font_normalization,colors={'materialized_references':sum(color_result['materialized_by_part'].values()),'remaining_chart_style_placeholders':sum(color_result['remaining_chart_style_placeholders'].values()),'rendering_depends_on_master_theme_slots':color_result['rendering_depends_on_master_theme_slots'],'chart_visual_review_required':color_result['chart_visual_review_required']},visual_qa='not_run',powerpoint_open='not_run',collision_qa='not_run')
+    if progress_ring_result is not None:
+        report['progress_rings'] = progress_ring_result
     if header_result:
         report['body_header'] = header_result
     out.with_suffix('.qa.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8');return report

@@ -39,6 +39,12 @@ def title_path(contract):
     return contract['title_input']['semantic_path']
 
 
+def binding_for_count(contract, item_count=None):
+    """Read the reviewed binding for the requested count on this body asset."""
+    binding = contract.get('bindings_by_count', {}).get(str(item_count), contract)
+    return binding['bindings'], binding['bindings_sha256']
+
+
 def frame_spec(contract):
     layout = frame()
     if 'tech' not in contract:
