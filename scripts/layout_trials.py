@@ -87,13 +87,16 @@ def guided_alternatives(content, *, repeat):
     kind = content.get('type')
     if kind in ('cards', 'process') and plain_items(content):
         base = {key: content[key] for key in ('title', 'items') if key in content}
-        if kind == 'cards' and repeat:
+        if kind == 'cards':
             yield dict(base, type='rule_list')
-            yield dict(base, type='cards', variant='grid')
+            if repeat:
+                yield dict(base, type='cards', variant='grid')
         if kind == 'process':
             yield dict(base, type='process', variant='open_steps')
             if repeat:
                 yield dict(base, type='process', variant='rail')
+                # Rule-list rows carry editable step numbers in source order.
+                yield dict(base, type='rule_list')
     elif repeat and kind == 'bullets' and all(isinstance(x, str) for x in content.get('items', [])):
         for variant in ('balanced', 'spacious', 'compact'):
             yield dict(content, variant=variant)
@@ -149,7 +152,7 @@ def trial_alternative(page, choice, previous, path, theme, *, repeat):
         candidate['_deck_page_number'] = choice['page']
         kind = candidate['type']
         trial = {'status': 'guided_trial', 'type': kind, 'variant': candidate.get('variant'),
-                 'trigger': 'third_consecutive' if repeat else 'capacity_fallback'}
+                 'trigger': 'second_consecutive' if repeat else 'capacity_fallback'}
         trial_path = path.with_name(path.stem + '-guided-trial.pptx')
         try:
             validate_page(candidate, choice['page'])
@@ -169,7 +172,7 @@ def trial_alternative(page, choice, previous, path, theme, *, repeat):
             choice.pop(key, None)
         choice.update(selection_mode='guided_composition', selection_label='技能排版', source_stamp=None,
                       layout_id=None, fallback_layout_id=kind, variant=variant,
-                      reason_code='THIRD_CONSECUTIVE_LAYOUT' if repeat else 'GUIDED_ALTERNATIVE_FIT',
+                      reason_code='SECOND_CONSECUTIVE_LAYOUT' if repeat else 'GUIDED_ALTERNATIVE_FIT',
                       selection_reason='试排通过，原文完整保留在可编辑对象中')
         return True
     return False

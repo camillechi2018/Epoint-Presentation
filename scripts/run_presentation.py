@@ -259,6 +259,12 @@ def execute_plan(request, plan, report, output: Path, *, catalog=None):
             if page.get('role') == 'section' and locked_section_layout_id:
                 candidate_ids = [locked_section_layout_id]
                 choice['candidate_ids'] = candidate_ids
+            # Prefer a different verified template before trying a drawn layout.
+            previous_id = actual_layouts[-1] if actual_layouts else None
+            repeat_search = (previous_id and candidate_ids and previous_id == candidate_ids[0]
+                             and not page.get('layout_id') and page.get('role') not in STRUCTURAL)
+            if repeat_search:
+                candidate_ids = sorted(candidate_ids, key=lambda ident: ident == previous_id)
             for candidate_id in candidate_ids:
                 trial_path = work / f'P{index:03d}-{candidate_id}-content.json'
                 filled, trial = try_candidate(
@@ -268,11 +274,18 @@ def execute_plan(request, plan, report, output: Path, *, catalog=None):
                     trial['reason'] = safe_message(trial.pop('detail'))
                     for partial in (page_out, page_out.with_suffix('.qa.json'), page_out.with_suffix('.colors.json')):
                         partial.unlink(missing_ok=True)
-                # Source layouts must preserve each inferred column or primary/support field.
-                if filled is not None and inferred and not retains_text(page_out, text_fields(content)):
-                    trial.update(status='rejected', reason_code='INFERRED_TEXT_INCOMPLETE')
-                    page_out.unlink()
-                    filled = None
+                material_view = page.get('material_matching_content')
+                verify_copy = inferred or material_view or (repeat_search and candidate_id != previous_id)
+                if filled is not None and verify_copy:
+                    copy = material_view or content
+                    required = {k:v for k,v in copy.items() if k not in ('item_count','source_refs')}
+                    if not retains_text(page_out, text_fields(required)):
+                        trial.update(status='rejected', reason_code='SOURCE_TEXT_INCOMPLETE')
+                        for partial in (page_out, page_out.with_suffix('.qa.json'), page_out.with_suffix('.colors.json')):
+                            partial.unlink(missing_ok=True)
+                        filled = None
+                    else:
+                        trial['editable_copy_verified'] = True
                 choice['trial_results'].append(trial)
                 if filled is not None:
                     if filled.get('body_header'):
@@ -364,16 +377,25 @@ def execute_plan(request, plan, report, output: Path, *, catalog=None):
         if choice['selection_mode'] == 'source_template':
             stamp = choice['source_stamp']
         current = layout_key(choice) if page.get('role') not in STRUCTURAL else None
-        if current and len(actual_layouts) >= 2 and actual_layouts[-2:] == [current, current]:
+        if current and actual_layouts and actual_layouts[-1] == current:
             choice['repeated_layout_review'] = True
             if trial_alternative(page, choice, current, page_out, report['theme'], repeat=True):
                 stamp = None
             else:
-                choice['repeat_retained_reason'] = '无适配且可完整保留原文的其他自动排版，或已指定版式'
+                if page.get('material_excerpt') or (not page.get('layout_id') and content.get('variant', 'auto') == 'auto'):
+                    raise ValueError(f'第 {index} 页与上一张正文版式相同，其他排法无法完整保留内容')
+                choice['repeat_retained_reason'] = '请求已明确指定版式'
         if choice['selection_mode'] == 'guided_composition':
             final_variant = (choice['fallback_layout_id'], choice.get('variant'))
             used_guided_variants[final_variant] = used_guided_variants.get(final_variant, 0) + 1
         actual_layouts.append(layout_key(choice) if page.get('role') not in STRUCTURAL else None)
+        if page.get('material_excerpt'):
+            from pptx import Presentation
+            source_page = Presentation(page_out)
+            notes = source_page.slides[0].notes_slide.notes_text_frame
+            if notes is not None:
+                notes.text = 'Word 原文｜' + '／'.join(page.get('source_refs', [])) + '\n' + page['material_excerpt']
+                source_page.save(page_out)
         slides.append({'path': str(page_out), 'role': page.get('role', 'body'),
                        'layout_id': choice.get('layout_id'), 'source_stamp': stamp})
         free_images = [element['source_path'] for element in content.get('free_layout', {}).get('elements', [])
@@ -438,7 +460,10 @@ def main():
         from doctor import main as doctor_main
         return doctor_main([arg for arg in sys.argv[1:] if arg != '--doctor'])
     ap = argparse.ArgumentParser(description='知识库预检与逐页规划的统一入口')
-    ap.add_argument('--request', type=Path, required=True)
+    inputs = ap.add_mutually_exclusive_group(required=True)
+    inputs.add_argument('--request', type=Path)
+    inputs.add_argument('--material', type=Path, help='直接从原始 Word 检索、起草和出稿')
+    ap.add_argument('--theme', choices=STYLES, help='Word 出稿主题，默认蓝色')
     ap.add_argument('--out', type=Path, required=True)
     ap.add_argument('--plan-out', type=Path)
     ap.add_argument('--execute-out', type=Path, help='所有页面均有 content 时填充并组装完整 PPTX')
@@ -455,12 +480,24 @@ def main():
         ap.error(str(exc))
     if args.out.exists() or args.plan_out and args.plan_out.exists() or args.execute_out and args.execute_out.exists():
         ap.error('输出文件已存在')
-    request = json.loads(args.request.read_text(encoding='utf-8-sig'))
-    from structure_content import prepare
-    request, content_preparation = prepare(request, auto=True)
+    if args.theme and args.request:
+        ap.error('逐页请求使用文件中声明的主题')
+    request = ({'theme': args.theme or 'blue'} if args.material
+               else json.loads(args.request.read_text(encoding='utf-8-sig')))
     report = preflight(request, library=args.library, offline=args.offline,
                        native_experimental=args.native_experimental,
                        assembly_backend=args.assembly_backend)
+    if args.material and report['status'] == 'ready':
+        from material_first import build
+        root = Path(report['library_path'])
+        try:
+            request, trace = build(args.material, root, load_catalog(root), report['theme'])
+        except (OSError, ValueError) as exc:
+            ap.error(str(exc))
+        report['material_retrieval'] = trace
+        report['material_request'] = request
+    from structure_content import prepare
+    request, content_preparation = prepare(request, auto=True)
     report['content_preparation'] = content_preparation
     if content_preparation['tasks']:
         report['warnings'].append('部分正文保留原有内容结构，整理原因见 content_preparation.tasks。')

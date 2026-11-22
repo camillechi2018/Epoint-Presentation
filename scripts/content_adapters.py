@@ -253,6 +253,8 @@ def _ordered_groups(groups, count):
 def matching_content(page):
     """Add a source-proven matching interpretation while keeping fallback content intact."""
     original = page.get('content') or {}
+    if page.get('role') not in STRUCTURAL_ROLES and isinstance(page.get('material_matching_content'), dict):
+        return page['material_matching_content'], 'source_material_contract'
     annotation = page.get('body_match')
     if annotation is None or page.get('role') in STRUCTURAL_ROLES:
         kind = original.get('type') if isinstance(original, dict) else None
