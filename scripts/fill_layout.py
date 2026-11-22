@@ -543,6 +543,10 @@ def reflow_registered_geometry(slide, rules, count):
         for sid in variant['remove_shape_ids']:
             element = shapes[sid]._element
             element.getparent().remove(element)
+    count_label_id = rules.get('geometry_count_label_shape_id')
+    if count_label_id is not None:
+        label = next(shape for shape in walk(slide.shapes) if shape.shape_id == count_label_id)
+        set_text(label, str(count))
     return {'mode': 'repeatable', 'count': count, 'source_count': rules['source_count'],
             'status': rules['validation_status']}
 
@@ -1394,6 +1398,14 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
         if m.get('collection')=='new-template-content' and any(not isinstance(c.get(k),str) or not c[k].strip() for k in ['unit','period','source']):raise ValueError('原稿图表组件必须提供unit、period、source')
         categories=c['categories'];series=c['series'];chart=chart_shapes[c['shape_id']].chart
         registered=next((x for x in binding_data.get('objects',{}).get('charts',[]) if x['shape_id']==c['shape_id']),{})
+        if registered.get('count_matches_categories'):
+            chart_count = rules['source_count'] if item_count is None else item_count
+            if len(categories) != chart_count or chart_count not in rules['verified_counts']:
+                raise ValueError('图表类别与已验证项数不一致')
+        category_chars = registered.get('category_max_chars')
+        if category_chars and any(not isinstance(label,str) or not label.strip() or len(label)>category_chars
+                                  or '\\n' in label or '\\r' in label for label in categories):
+            raise ValueError('图表类目名称超出已验证容量')
         max_categories=registered.get('categories_max',8);max_series=registered.get('series_max',4)
         if not 1<=len(categories)<=max_categories or not 1<=len(series)<=max_series:raise ValueError(f'图表超容量：本组件最多{max_categories}类、{max_series}系列')
         cd=CategoryChartData();cd.categories=categories
@@ -1401,11 +1413,19 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
             if len(ss['values'])!=len(categories):raise ValueError('图表系列与分类数量不一致')
             if any(isinstance(v,bool) or not isinstance(v,(float,int)) or not math.isfinite(v) for v in ss['values']):raise ValueError('图表必须为有限数值')
             if 'DOUGHNUT' in str(chart.chart_type) and (any(v<0 for v in ss['values']) or sum(ss['values'])<=0):raise ValueError('构成图需非负值且总数大于0')
+            minimum_share = registered.get('minimum_slice_share')
+            if minimum_share and any(value / sum(ss['values']) < minimum_share for value in ss['values']):
+                raise ValueError('图表扇区小于已验证标签空间')
+            limits = registered.get('value_range')
+            if limits and any(not limits[0] <= value <= limits[1] for value in ss['values']):
+                raise ValueError('图表数值超出已验证容量')
             cd.add_series(ss['name'],ss['values'])
         chart.replace_data(cd)
         if 'DOUGHNUT' not in str(chart.chart_type) and 'PIE' not in str(chart.chart_type):
             ax=chart.value_axis;ax.major_unit=None;ax.maximum_scale=None;ax.minimum_scale=None
         # Never carry the template's fictitious chart title into a filled report.
+        if c.get('title') and registered.get('title_in_binding'):
+            raise ValueError('请通过正文图表标题字段提供标题')
         if c.get('title'):
             chart.has_title=True;chart.chart_title.text_frame.text=c['title']
         else:chart.has_title=False
