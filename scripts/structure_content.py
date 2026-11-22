@@ -181,6 +181,19 @@ def prepare(request, *, auto=False):
         if isinstance(reason, str) and reason.strip():
             retained.append(dict(info, reason=reason))
             continue
+        if auto:
+            from layout_trials import infer_relation
+            inferred = infer_relation(page, index)
+            if inferred:
+                relation, layout = inferred
+                page.setdefault('items', content['items'])
+                page['content'] = layout
+                page['information_relation'] = relation
+                evidence = dict(info, operation='infer_body_relation', relation=relation,
+                                source_items=content['items'], body_preserved=True)
+                page['content_preparation'] = evidence
+                automatic.append(evidence)
+                continue
         if auto and 'body_match' not in page and 'item_titles' not in content:
             annotation = automatic_annotation(page, content)
             if annotation is not None:

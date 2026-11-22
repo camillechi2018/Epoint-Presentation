@@ -440,6 +440,7 @@
     "scripts/free_composition.py",
     "scripts/install_runtime.py",
     "scripts/layout_safety.py",
+    "scripts/layout_trials.py",
     "scripts/library_location.py",
     "scripts/logo_brand.py",
     "scripts/managed_library_cache.py",
