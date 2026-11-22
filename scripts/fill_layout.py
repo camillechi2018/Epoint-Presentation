@@ -13,7 +13,7 @@ from progress_rings import apply_progress_rings
 
 import argparse,json,math,re,subprocess
 from pptx import Presentation
-from pptx.chart.data import CategoryChartData
+from pptx.chart.data import CategoryChartData, XyChartData
 from pptx.oxml.xmlchemy import OxmlElement
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pptx.enum.shapes import MSO_SHAPE
@@ -1472,25 +1472,44 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
     if {x['shape_id'] for x in supplied}!=set(chart_shapes):raise ValueError('必须显式提供本页所有原生图表数据，禁止使用占位值')
     for c in supplied:
         if m.get('collection')=='new-template-content' and any(not isinstance(c.get(k),str) or not c[k].strip() for k in ['unit','period','source']):raise ValueError('原稿图表组件必须提供unit、period、source')
-        categories=c['categories'];series=c['series'];chart=chart_shapes[c['shape_id']].chart
+        series=c['series'];chart=chart_shapes[c['shape_id']].chart
         registered=next((x for x in binding_data.get('objects',{}).get('charts',[]) if x['shape_id']==c['shape_id']),{})
+        xy = registered.get('data_mode') == 'xy'
+        if xy:
+            if not chart._chartSpace.xpath('./c:chart/c:plotArea/c:scatterChart') or 'categories' in c:
+                raise ValueError('散点图须使用原生数值型 X 轴')
+            positions = c.get('x_values')
+            if not isinstance(positions,list) or any(type(value) not in (int,float) or not math.isfinite(value)
+                                                     for value in positions):
+                raise ValueError('散点图 x_values 须为有限数值数组')
+            if any(left>=right for left,right in zip(positions,positions[1:])):
+                raise ValueError('散点趋势图 x_values 须严格递增')
+            chart_count = rules['source_count'] if item_count is None else item_count
+            if len(positions) != chart_count or chart_count not in rules['verified_counts']:
+                raise ValueError('散点图点数与已验证项数不一致')
+        else:
+            positions = c['categories']
         if registered.get('count_matches_categories'):
             chart_count = rules['source_count'] if item_count is None else item_count
-            if len(categories) != chart_count or chart_count not in rules['verified_counts']:
+            if len(positions) != chart_count or chart_count not in rules['verified_counts']:
                 raise ValueError('图表类别与已验证项数不一致')
         category_chars = registered.get('category_max_chars')
         if category_chars and any(not isinstance(label,str) or not label.strip() or len(label)>category_chars
-                                  or '\\n' in label or '\\r' in label for label in categories):
+                                  or '\\n' in label or '\\r' in label for label in positions):
             raise ValueError('图表类目名称超出已验证容量')
-        max_categories=registered.get('categories_max',8);max_series=registered.get('series_max',4)
+        max_positions=registered.get('points_max' if xy else 'categories_max',8)
+        max_series=registered.get('series_max',4)
         min_series=registered.get('series_min',1)
-        category_counts=registered.get('category_counts')
-        if not 1<=len(categories)<=max_categories or not 1<=len(series)<=max_series:
-            raise ValueError(f'图表超容量：本组件最多{max_categories}类、{max_series}系列')
-        if len(series)<min_series or (category_counts and len(categories) not in category_counts):
+        allowed_positions=registered.get('point_counts' if xy else 'category_counts')
+        if not 1<=len(positions)<=max_positions or not 1<=len(series)<=max_series:
+            position_unit='个点' if xy else '类'
+            raise ValueError(f'图表超容量：本组件最多{max_positions}{position_unit}、{max_series}系列')
+        if len(series)<min_series or (allowed_positions and len(positions) not in allowed_positions):
             raise ValueError('图表系列或类目数超出已验证范围')
         series_name_chars=registered.get('series_name_max_chars')
-        cd=CategoryChartData();cd.categories=categories
+        cd = XyChartData() if xy else CategoryChartData()
+        if not xy:
+            cd.categories=positions
         series_formats = registered.get('series_number_formats')
         if series_formats is not None and len(series_formats) != len(series):
             raise ValueError('图表系列与登记的数值格式数量不一致')
@@ -1498,7 +1517,9 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
             if series_name_chars and (not isinstance(ss['name'],str) or not ss['name'].strip()
                     or len(ss['name'])>series_name_chars or '\n' in ss['name'] or '\r' in ss['name']):
                 raise ValueError('图表系列名称超出已验证容量')
-            if len(ss['values'])!=len(categories):raise ValueError('图表系列与分类数量不一致')
+            if len(ss['values'])!=len(positions):
+                position_kind='坐标' if xy else '分类'
+                raise ValueError(f'图表系列与{position_kind}数量不一致')
             if any(isinstance(v,bool) or not isinstance(v,(float,int)) or not math.isfinite(v) for v in ss['values']):raise ValueError('图表必须为有限数值')
             minimum_share = registered.get('minimum_slice_share')
             if minimum_share or 'DOUGHNUT' in str(chart.chart_type):
@@ -1510,12 +1531,17 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
             limits = registered.get('value_range')
             if limits and any(not limits[0] <= value <= limits[1] for value in ss['values']):
                 raise ValueError('图表数值超出已验证容量')
-            cd.add_series(ss['name'],ss['values'],number_format=number_format)
+            if xy:
+                xy_series=cd.add_series(ss['name'],number_format=number_format)
+                for x,y in zip(positions,ss['values'],strict=True):
+                    xy_series.add_data_point(x,y)
+            else:
+                cd.add_series(ss['name'],ss['values'],number_format=number_format)
         category_targets=registered.get('category_label_shape_ids')
         if category_targets:
-            if len(category_targets)!=len(categories) or any(sid not in lookup for sid in category_targets):
+            if len(category_targets)!=len(positions) or any(sid not in lookup for sid in category_targets):
                 raise ValueError('原生图表类目与正文标签槽位不匹配')
-            for sid,label in zip(category_targets,categories):
+            for sid,label in zip(category_targets,positions):
                 set_text(lookup[sid],label)
         total_target=registered.get('total_shape_id')
         if total_target is not None:
@@ -1538,6 +1564,10 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
                 # Recompute any secondary axis for the new series as well.
                 for setting in chart._chartSpace.xpath('.//c:valAx/c:scaling/c:min | .//c:valAx/c:scaling/c:max | .//c:valAx/c:majorUnit'):
                     setting.getparent().remove(setting)
+        if xy:
+            x_axis = chart.category_axis
+            x_axis.minimum_scale = positions[0]
+            x_axis.maximum_scale = positions[-1]
         # Never carry the template's fictitious chart title into a filled report.
         if c.get('title') and registered.get('title_in_binding'):
             raise ValueError('请通过正文图表标题字段提供标题')
