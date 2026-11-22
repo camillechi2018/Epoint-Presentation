@@ -7,7 +7,7 @@ import re
 from functools import lru_cache
 from pathlib import Path
 
-from library_location import asset_root, binding_path_key
+from library_location import asset_root, text_binding_path
 from content_adapters import adapt_for_layout
 from text_width import binding_text_issues, visual_width_units
 from body_header import checked_title, contract_for
@@ -132,7 +132,7 @@ def preflight(library: Path, entry: dict, content: dict, page_title: str | None,
     mapped, adapter = adapt_for_layout(entry['id'], content, page_title, entry=entry)
     texts = mapped.get('texts') if isinstance(mapped.get('texts'), dict) else {}
     contract = contract_for(entry, theme, body_header_pilot and content.get('logo') is None)
-    binding_rel = contract['bindings'] if contract else entry[binding_path_key(entry, theme)]
+    binding_rel = contract['bindings'] if contract else text_binding_path(entry, theme, mapped.get('item_count'))
     bindings, binding_sha = _bindings(str(library / binding_rel))
     longcopy, policy, longcopy_sha, policy_sha = _review(str(library))
     reviewed_fields = longcopy.get(entry['id'], {})

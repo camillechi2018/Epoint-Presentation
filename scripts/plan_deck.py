@@ -12,6 +12,8 @@ from fallback_rules import fallback_type, fallback_catalog, uses_minimal_body_la
 from content_adapters import (BODY_RELATIONS, BODY_INPUT_RELATIONS,
                               adapt_body_input, adapt_for_layout, matching_content)
 from capacity_preflight import missing_binding_paths, preflight, required_input_fields
+from content_adapters import structural_required_paths
+from library_location import text_binding_path
 from body_header import body_components_enabled, contract_for, title_path
 import atomic_body
 
@@ -89,9 +91,16 @@ def count_profile(entry, root):
 def binding_gap(entry, page, root, theme, *, binding_rel=None):
     """Count fields not yet mapped by an explicitly prepared template payload."""
     content = page.get('content') if isinstance(page.get('content'), dict) else {}
+    contract = entry.get('matching_contract') or {}
+    if contract.get('required_binding_paths_by_count') and content.get('item_count') is None:
+        content = dict(content, item_count=(page.get('needs') or {}).get('item_count'))
     content, _ = adapt_for_layout(entry['id'], content, page.get('title'), entry=entry)
-    binding_rel = binding_rel or entry[binding_path_key(entry, theme)]
+    binding_rel = binding_rel or text_binding_path(entry, theme, content.get('item_count'))
     fields = json.loads((asset_root(root, entry) / binding_rel).read_text(encoding='utf-8-sig'))['fields']
+    if contract.get('required_binding_paths_by_count'):
+        inactive = set(contract['required_binding_paths']) - set(
+            structural_required_paths(contract, content.get('item_count')))
+        fields = [field for field in fields if field.get('semantic_path') not in inactive]
     return len(missing_binding_paths(fields, content))
 
 STRUCTURAL_RELATION_GROUPS = {
@@ -108,6 +117,10 @@ STRUCTURAL_RELATION_GROUPS = {
 
 def structural_relation_compatible(entry, page):
     structure = (entry.get('matching_contract') or {}).get('structure_type')
+    content = page.get('content') if isinstance(page.get('content'), dict) else {}
+    if content.get('type') == 'template_fields' and content.get('structure_type') == structure:
+        # Explicit, field-complete structure is independent of source business vocabulary.
+        return True
     requested = page.get('matching_relation') or page.get('information_relation')
     return not requested or requested in STRUCTURAL_RELATION_GROUPS.get(structure, {requested})
 
@@ -145,7 +158,7 @@ def matches_structural_contract(entry, page, taxonomy):
             and content.get('type') == 'template_fields'
             and content.get('structure_type') == contract.get('structure_type')
             and isinstance(content.get('texts'), dict)):
-        required = contract.get('required_binding_paths', [])
+        required = structural_required_paths(contract, content.get('item_count'))
         return bool(required and all(isinstance(content['texts'].get(path), str)
                                      and content['texts'][path].strip() for path in required))
     if entry.get('matching_activation') != 'pilot_verified':
@@ -300,6 +313,16 @@ def eligible(e, p, request, taxonomy, *, atomic_requested=False):
     relation=p.get('matching_relation') or p.get('information_relation')
     theme=p.get('theme',request.get('theme'))
     content=p.get('content') if isinstance(p.get('content'),dict) else {}
+    if (e.get('matching_contract') or {}).get('required_binding_paths_by_count'):
+        count = content.get('item_count')
+        requested_count = (p.get('needs') or {}).get('item_count')
+        if count is not None and (type(count) is not int or (requested_count is not None and count != requested_count)):
+            reasons.append('invalid_item_count')
+        if count is not None and (type(count) is not int or count not in count_profile(e,request['_root'])[0]):
+            reasons.append('item_count_unverified')
+        if count is None and requested_count is not None:
+            content = dict(content, item_count=requested_count)
+            p = dict(p, content=content)
     replaces_title = None
     if atomic:
         issue = atomic_body.eligibility(atomic, e, p, content, taxonomy, specified=specified)
@@ -485,7 +508,10 @@ def resolve(library,request,*,catalog=None):
             requested_count=need.get('item_count')
             _,native_count=count_profile(e,root) if requested_count is not None else ([],None)
             count_fit=1 if requested_count is not None and requested_count==native_count else 0
-            capacity_check=preflight(root,e,content,p.get('title'),p.get('theme',request.get('theme')),
+            capacity_content = content
+            if e.get('bindings_by_count') and content.get('item_count') is None:
+                capacity_content = dict(content, item_count=requested_count)
+            capacity_check=preflight(root,e,capacity_content,p.get('title'),p.get('theme',request.get('theme')),
                                      body_header_pilot=body_components_enabled(request))
             gap=binding_gap(e,p,root,p.get('theme',request.get('theme')),
                             binding_rel=capacity_check['binding_path'])

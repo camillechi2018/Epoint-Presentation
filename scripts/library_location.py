@@ -61,6 +61,11 @@ def binding_path_key(entry, theme):
     return 'bindings'
 
 
+def text_binding_path(entry, theme, item_count=None):
+    paths = entry.get('bindings_by_count', {}).get(str(item_count), {})
+    return paths.get(theme) or entry[binding_path_key(entry, theme)]
+
+
 def layout_source(entry, theme, *, body_contract=None):
     """Return the source path and one-based page for a catalog entry."""
     if body_contract is not None:

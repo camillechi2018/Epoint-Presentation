@@ -1,11 +1,12 @@
 """Fill one editable template; fail before writing on missing facts or capacity errors."""
-from library_location import asset_root, binding_path_key, get_library, layout_source, load_catalog, source_locator
+from library_location import asset_root, get_library, layout_source, load_catalog, source_locator, text_binding_path
 from normalize_fonts import normalize
 from font_profile import resolve as resolve_font_profile
 from pathlib import Path
 from copy import deepcopy
 from text_width import binding_text_issues, directory_text_over_capacity, visual_width_units
 from body_header import attach_header, checked_title, contract_for, verify_asset
+from content_adapters import normalize_binding_path_aliases
 
 import argparse,json,math,re,subprocess
 from pptx import Presentation
@@ -299,6 +300,245 @@ def apply_tech_pillars(slide,rules,count):
     set_text(shapes[rules['computed_count_shape_id']],str(count))
     return {'mode':'tech_six_pillars','count':count,'source_count':6,
             'source_slots':[i+1 for i in selected],'status':rules['validation_status']}
+def trim_right_arcs(shape, removed_count):
+    geometry = shape._element.spPr.find('a:custGeom', NS)
+    path = geometry.find('a:pathLst/a:path', NS)
+    move, *curves = list(path)
+    skip = 2 * removed_count
+    if not (0 < skip < len(curves)) or any(not node.tag.endswith('}cubicBezTo') for node in curves):
+        raise ValueError('重复列弧线与来源结构不一致')
+    start = curves[skip - 1][-1]
+    move[0].set('x', start.get('x'))
+    move[0].set('y', start.get('y'))
+    path.set('w', start.get('x'))
+    for curve in curves[:skip]:
+        path.remove(curve)
+    for list_name in ('a:cxnLst', 'a:gdLst'):
+        elements = geometry.find(list_name, NS)
+        for element in list(elements):
+            elements.remove(element)
+
+
+def append_right_arc(shape, source_count):
+    geometry = shape._element.spPr.find('a:custGeom', NS)
+    path = geometry.find('a:pathLst/a:path', NS)
+    move, *curves = list(path)
+    width = int(path.get('w'))
+    step = width // source_count
+    if len(curves) != 2 * source_count:
+        raise ValueError('重复列弧线与来源结构不一致')
+    for index, curve in enumerate(curves[:2], 1):
+        clone = deepcopy(curve)
+        for point in clone:
+            point.set('x', str(int(point.get('x')) + step))
+        path.insert(index, clone)
+    path.set('w', str(width + step))
+    move[0].set('x', str(width + step))
+    for tag in ('a:cxnLst', 'a:gdLst'):
+        container = geometry.find(tag, NS)
+        for child in list(container):
+            container.remove(child)
+
+
+def expand_centered_columns(slide, rules, count):
+    config = rules['expand_columns']
+    source_count = rules['source_count']
+    units = rules['units']
+    shapes = {shape.shape_id: shape for shape in slide.shapes}
+    pitch = rules['spacing_emu']
+    offset = config['clone_id_offset']
+    anchor = shapes[config['anchor_shape_id']]
+    left = anchor.left + (anchor.width - pitch) // 2
+    root_ids = {sid + offset for sid in units[-1]}
+    original_ids = {int(node.get('id')) for node in slide._element.xpath('.//p:cNvPr')}
+    if count != source_count + 1 or root_ids & original_ids:
+        raise ValueError('新增列配置与来源对象不一致')
+    nested_id = max(root_ids | original_ids) + 1
+    movable = [shapes[sid] for unit in units for sid in unit]
+    for sid in units[-1]:
+        source = shapes[sid]
+        element = deepcopy(source._element)
+        root, *children = element.xpath('.//p:cNvPr')
+        root.set('id', str(sid + offset))
+        for node in children:
+            node.set('id', str(nested_id))
+            nested_id += 1
+        source._element.addnext(element)
+        clone = slide.shapes._shape_factory(element)
+        clone.left += pitch
+        movable.append(clone)
+    for shape in movable:
+        shape.left = left + round((shape.left - left) * source_count / count)
+        width = round(shape.width * source_count / count)
+        if shape.shape_type == 6 and config.get('preserve_group_width'):
+            shape.left -= (shape.width - width) // 2
+        else:
+            shape.width = width
+        sid = shape.shape_id - offset if shape.shape_id in root_ids else shape.shape_id
+        if sid in config.get('tight_margin_shape_ids', []):
+            shape.text_frame.margin_left = Pt(3)
+            shape.text_frame.margin_right = Pt(3)
+    if 'arc_shape_id' in rules['centered_reflow']:
+        append_right_arc(shapes[rules['centered_reflow']['arc_shape_id']], source_count)
+    return {'mode':'repeatable','count':count,'source_count':source_count,'status':rules['validation_status']}
+
+
+def repeatable_source_indices(rules, count):
+    geometry = rules.get('centered_reflow', {})
+    selected = geometry.get('source_indices_by_count', {}).get(str(count), list(range(count)))
+    if (len(selected) != count or len(set(selected)) != count
+            or any(type(index) is not int or not 0 <= index < rules['source_count'] for index in selected)):
+        raise ValueError('重复列项数与来源单元映射不一致')
+    return selected
+
+
+def replace_column_number(slide, old, number):
+    shape = slide.shapes.add_textbox(old.left, old.top, old.width, old.height)
+    shape.line.color.rgb = RGBColor(255, 255, 255)
+    shape.line.width = Pt(1)
+    frame = shape.text_frame
+    frame.margin_left = frame.margin_right = frame.margin_top = frame.margin_bottom = Pt(0)
+    frame.vertical_anchor = MSO_ANCHOR.MIDDLE
+    paragraph = frame.paragraphs[0]
+    paragraph.alignment = PP_ALIGN.CENTER
+    run = paragraph.add_run()
+    run.text = str(number)
+    run.font.name = 'Arial'
+    run.font.size = Pt(15)
+    run.font.bold = True
+    run.font.color.rgb = RGBColor(255, 255, 255)
+    old._element.getparent().remove(old._element)
+
+
+def reflow_fixed_span(slide, rules, count):
+    config = rules['fixed_span_reflow']
+    native_count = rules['source_count']
+    if count != native_count:
+        shapes = {shape.shape_id: shape for shape in slide.shapes}
+        units = rules['units']
+        groups = [{sid: shapes[sid] for sid in unit} for unit in units]
+        anchors = [shapes[sid] for sid in config['anchor_shape_ids']]
+        lefts = [shape.left for shape in anchors]
+        widths = [shape.width for shape in anchors]
+        start, end = lefts[0], lefts[-1] + widths[-1]
+        gutter = lefts[1] - start - widths[0] if config['preserve_gutter'] else 0
+        column_width = (end - start - (count - 1) * gutter) / count
+        if count < native_count:
+            selected = repeatable_source_indices(rules, count)
+            for source, group in enumerate(groups):
+                if source not in selected:
+                    for shape in group.values():
+                        shape._element.getparent().remove(shape._element)
+            columns = [(source, groups[source]) for source in selected]
+        else:
+            source = config['extra_source_index']
+            offset = config['clone_id_offset']
+            taken_ids = {int(node.get('id')) for node in slide._element.xpath('.//p:cNvPr')}
+            root_ids = {sid + offset for sid in groups[source]}
+            if count != native_count + 1 or root_ids & taken_ids:
+                raise ValueError('新增列配置与来源对象不一致')
+            next_id = max(taken_ids | root_ids) + 1
+            duplicate = {}
+            for sid, shape in groups[source].items():
+                element = deepcopy(shape._element)
+                root, *children = element.xpath('.//p:cNvPr')
+                root.set('id', str(sid + offset))
+                for node in children:
+                    node.set('id', str(next_id))
+                    next_id += 1
+                shape._element.addnext(element)
+                duplicate[sid] = slide.shapes._shape_factory(element)
+            columns = list(enumerate(groups))
+            columns.insert(config['extra_target_index'], (source, duplicate))
+        fixed_width = set(config.get('fixed_width_when_reduced', []))
+        fixed_width_all = set(config.get('fixed_width_shape_ids', []))
+        tight_margins = set(config.get('tight_margins_when_expanded', []))
+        separators = set(config.get('separator_shape_ids', []))
+        for position, (source, group) in enumerate(columns):
+            left = start + position * (column_width + gutter)
+            scale = column_width / widths[source]
+            for sid, shape in group.items():
+                center = shape.left - lefts[source] + shape.width / 2
+                preserve_width = sid in fixed_width_all or (count < native_count and sid in fixed_width)
+                width = shape.width if preserve_width else round(shape.width * scale)
+                shape.left = round(left + center * scale - width / 2)
+                if sid in separators:
+                    shape.left = round(left - gutter / 2)
+                shape.width = width
+                if count > native_count and sid in tight_margins:
+                    shape.text_frame.margin_left = shape.text_frame.margin_right = Pt(3)
+        for index, sid in enumerate(config.get('standalone_separator_ids', [])):
+            shape = shapes[sid]
+            if index < count - 1:
+                shape.left = round(start + (index + 1) * (column_width + gutter) - gutter / 2)
+            else:
+                shape._element.getparent().remove(shape._element)
+        if count > native_count and 'extra_number_shape_id' in config:
+            replace_column_number(slide, duplicate[config['extra_number_shape_id']], count)
+        if 'arc_shape_id' in config:
+            arc = shapes[config['arc_shape_id']]
+            if count < native_count:
+                trim_right_arcs(arc, native_count - count)
+            else:
+                append_right_arc(arc, native_count)
+    return {'mode':'repeatable','count':count,'source_count':native_count,'status':rules['validation_status']}
+
+
+def reflow_paired_rows(slide, rules, count):
+    native_count = rules['source_count']
+    if count != native_count:
+        config = rules['paired_rows_reflow']
+        shapes = {shape.shape_id: shape for shape in slide.shapes}
+        source_rows = len(config['row_anchor_ids'])
+        selected = repeatable_source_indices(rules, count)
+        left_rows = [index for index in selected if index < source_rows]
+        right_rows = [index - source_rows for index in selected if index >= source_rows]
+        if left_rows != right_rows or not left_rows:
+            raise ValueError('左右两组必须按相同项数重排')
+        anchors = [shapes[sid].top for sid in config['row_anchor_ids']]
+        top = anchors[0]
+        bottom = max(shapes[sid].top + shapes[sid].height for sid in config['body_shape_ids'][-1])
+        pitch = (bottom - top + Pt(config['band_gap_pt'])) // len(left_rows)
+        for index in range(source_rows):
+            ids = rules['units'][index] + rules['units'][source_rows + index]
+            if index not in left_rows:
+                for sid in ids:
+                    element = shapes[sid]._element
+                    element.getparent().remove(element)
+                continue
+            position = left_rows.index(index)
+            target = top + position * pitch
+            for sid in ids:
+                shapes[sid].top += target - anchors[index]
+            body_bottom = bottom if position == len(left_rows) - 1 else target + pitch - Pt(config['body_clearance_pt'])
+            for sid in config['body_shape_ids'][index]:
+                shapes[sid].height = body_bottom - shapes[sid].top
+    return {'mode':'repeatable','count':count,'source_count':native_count,'status':rules['validation_status']}
+
+
+def reflow_registered_geometry(slide, rules, count):
+    variant = rules['geometry_by_count'].get(str(count))
+    if variant:
+        shapes = {shape.shape_id: shape for shape in walk(slide.shapes)}
+        for sid, bounds in variant['bounds_emu'].items():
+            shape = shapes[int(sid)]
+            shape.left, shape.top, shape.width, shape.height = bounds
+        for sid, coordinates in variant.get('path_x', {}).items():
+            paths = shapes[int(sid)]._element.xpath('.//a:path')
+            if len(paths) != 1:
+                raise ValueError('重排路径与源组件不一致')
+            points = [child[0] for child in paths[0] if len(child)]
+            if len(points) != len(coordinates):
+                raise ValueError('重排路径与源组件不一致')
+            for point, x in zip(points, coordinates):
+                point.set('x', str(x))
+        for sid in variant['remove_shape_ids']:
+            element = shapes[sid]._element
+            element.getparent().remove(element)
+    return {'mode': 'repeatable', 'count': count, 'source_count': rules['source_count'],
+            'status': rules['validation_status']}
+
+
 def apply_cardinality(slide,rules,count,items=None,theme=None):
     if rules.get('cardinality_mode') == 'paragraphs':
         return {'mode': 'paragraphs', 'count': count, 'source_count': rules['source_count'],
@@ -413,15 +653,33 @@ def apply_cardinality(slide,rules,count,items=None,theme=None):
     groups=rules['units'];source_count=rules['source_count']
     if len(groups)!=source_count:raise ValueError('数量规则与来源结构不一致')
     all_shapes={s.shape_id:s for s in slide.shapes};spacing=rules['spacing_emu']
-    for group in groups[count:]:
+    selected = repeatable_source_indices(rules, count)
+    delta=(source_count-count)*spacing//2
+    positions = {source: position for position, source in enumerate(selected)}
+    for index, group in enumerate(groups):
         for sid in group:
             if sid not in all_shapes:raise ValueError(f'数量规则缺失形状 {sid}')
-            node=all_shapes[sid]._element;node.getparent().remove(node)
-    delta=(source_count-count)*spacing//2
-    for group in groups[:count]:
-        for sid in group:all_shapes[sid].left+=delta
-    arrow=all_shapes[rules['arrow_shape_id']]
-    arrow.left+=delta;arrow.width-=(source_count-count)*spacing
+            shape = all_shapes[sid]
+            if index in positions:
+                shape.left += delta + (positions[index] - index) * spacing
+            else:
+                node = shape._element
+                node.getparent().remove(node)
+    if count != source_count and 'centered_reflow' in rules:
+        geometry = rules['centered_reflow']
+        for sid in geometry['resize_shape_ids']:
+            shape = all_shapes[sid]
+            shape.left += delta
+            shape.width -= (source_count - count) * spacing
+        for sid in geometry.get('left_label_ids', []):
+            all_shapes[sid].left += delta
+        for sid in geometry.get('right_label_ids', []):
+            all_shapes[sid].left -= delta
+        if 'arc_shape_id' in geometry:
+            trim_right_arcs(all_shapes[geometry['arc_shape_id']], source_count - count)
+    elif 'centered_reflow' not in rules:
+        arrow=all_shapes[rules['arrow_shape_id']]
+        arrow.left+=delta;arrow.width-=(source_count-count)*spacing
     return {'mode':'repeatable','count':count,'source_count':source_count,'status':rules['validation_status']}
 def apply_project_schedule(slide,rules,tasks):
     shapes={s.shape_id:s for s in slide.shapes}
@@ -588,6 +846,7 @@ def validate_text_field(binding, value):
             'max_chars': '超出容量，请拆页或精简：',
             'allowed_values': '字段当前仅支持指定值：',
             'max_lines': '字段超过允许行数：',
+            'max_chars_per_line': '单段文字超出容量，请精简：',
             'max_width_units': '字段超出视觉宽度，请精简或换版：',
         }
         raise ValueError(messages[issues[0]] + field)
@@ -616,6 +875,7 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
     if m is None or m['id']!=layout:raise ValueError('未知组件 '+layout)
     if m['status']!='approved' and not allow_draft:raise ValueError('组件尚未批准；内部使用必须显式 --allow-draft')
     data=json.loads(content.read_text(encoding='utf-8-sig'))
+    data=normalize_binding_path_aliases(m.get('matching_contract') or {},data)
     theme=data.get('theme','blue')
     if theme not in m.get('themes',[]):raise ValueError('该组件不支持所选主题：'+str(theme))
     source_rel, source_page = layout_source(m, theme)
@@ -645,7 +905,7 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
     if (out==source or out.is_relative_to(lib/'layouts') or out.is_relative_to(lib/'diagrams')
             or out.is_relative_to(lib/'master') or (component_root != lib and out.is_relative_to(component_root))):
         raise ValueError('输出不能覆盖模板库资产')
-    binding_rel = body_header['bindings'] if body_header else m[binding_path_key(m, theme)]
+    binding_rel = body_header['bindings'] if body_header else text_binding_path(m, theme, data.get('item_count'))
     binding_path = (component_root/binding_rel).resolve()
     if not binding_path.is_relative_to(component_root):
         raise ValueError('绑定文件越出库根目录')
@@ -659,6 +919,9 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
         if unreviewed:raise ValueError('该页含未分类的源稿图片，需先确认装饰用途或替换内容图片；内部结构测试可传 --internal-draft')
     rules=json.loads((component_root/m['layout_rules']).read_text(encoding='utf-8-sig'))
     item_count=data.get('item_count')
+    if any(rules.get(key) for key in ('expand_columns', 'fixed_span_reflow', 'paired_rows_reflow')) and item_count is not None and (
+            type(item_count) is not int or item_count not in rules.get('supported_counts', [])):
+        raise ValueError('项数不在支持范围')
     if item_count is not None and rules.get('cardinality_mode')=='fixed' and item_count not in rules.get('supported_counts',[]):
         raise ValueError('固定项数组件不支持该项数；请重新选版')
     if (item_count is not None and rules.get('cardinality_mode') in _VARIABLE_COUNT_MODES
@@ -684,6 +947,13 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
             path=b.get('semantic_path')
             if path and (b['field'] not in texts or not isinstance(texts[b['field']],str) or not texts[b['field']].strip()):
                 raise ValueError('结构页可编辑文字字段必须提供真实非空内容；不适用时请改选版式：'+path)
+    for pair in rules.get('paired_text_consistency',[]):
+        fields=pair['fields']
+        if len(fields)<2 or any(semantic_aliases.get(field,field) not in texts for field in fields):
+            raise ValueError('配对文字字段缺失：'+','.join(fields))
+        values=[texts[semantic_aliases.get(field,field)].strip() for field in fields]
+        if len(set(values))!=1:
+            raise ValueError('配对文字字段必须一致：'+','.join(fields))
     if rules.get('cardinality_mode') in ('directory_reflow','tech_grid_2x3') and m.get('role')=='directory':
         items=data.get('items')
         if not isinstance(items,list) or len(items) not in rules['supported_counts']:
@@ -813,11 +1083,16 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
     removed_ids=set()
     if rules.get('cardinality_mode') in _VARIABLE_COUNT_MODES and item_count is not None:
         if type(item_count) is not int or item_count not in rules['supported_counts']:raise ValueError('项数不在支持范围')
-        if rules.get('cardinality_mode') in ('tech_six_pillars','process_terminal'):
+        if rules.get('geometry_by_count'):
+            removed_ids = set(rules['geometry_by_count'].get(str(item_count), {}).get('remove_shape_ids', []))
+        elif rules.get('cardinality_mode') in ('tech_six_pillars','process_terminal'):
             selected=set(rules['source_indices_by_count'][str(item_count)])
             removed_ids={sid for index,unit in enumerate(rules['units']) if index not in selected for sid in unit}
         elif rules.get('cardinality_mode')=='directory_reflow':
             removed_ids={sid for unit in rules['directory_units'][item_count:] for sid in unit['shape_ids']}
+        elif rules.get('cardinality_mode') == 'repeatable' and item_count <= rules['source_count']:
+            selected = set(repeatable_source_indices(rules, item_count))
+            removed_ids = {sid for index, unit in enumerate(rules['units']) if index not in selected for sid in unit}
         else:removed_ids={sid for unit in rules['units'][item_count:] for sid in unit}
     removed_fields=set()
     if rules.get('cardinality_mode')=='directory_reflow' and item_count is not None:
@@ -1070,6 +1345,18 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
         if logo_shape is None or logo_shape.shape_type!=13:raise ValueError('来源 Logo 图片未找到，停止填充')
         if logo_enabled:logo_shape.name='brand:logo:source'
         else:logo_shape._element.getparent().remove(logo_shape._element)
+    early_cardinality = None
+    if rules.get('geometry_by_count'):
+        count = rules['source_count'] if item_count is None else item_count
+        early_cardinality = reflow_registered_geometry(s, rules, count)
+    elif rules.get('fixed_span_reflow'):
+        count = rules['source_count'] if item_count is None else item_count
+        early_cardinality = reflow_fixed_span(s, rules, count)
+    elif rules.get('paired_rows_reflow'):
+        count = rules['source_count'] if item_count is None else item_count
+        early_cardinality = reflow_paired_rows(s, rules, count)
+    elif rules.get('expand_columns') and item_count is not None and item_count > rules['source_count']:
+        early_cardinality = expand_centered_columns(s, rules, item_count)
     lookup={x.shape_id:x for x in walk(s.shapes)}
     write_text_fields(lookup, bindings, texts, logo_enabled)
     for fit in rules.get('text_box_expand_pt',[]):
@@ -1296,7 +1583,7 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
     normal_body_weight_result=apply_normal_body_weight(s,rules,bindings)
     page_background_result=apply_page_background_role(s,rules,theme,p.slide_width,p.slide_height)
     brand_slot=next((lookup[b['shape_id']] for b in bindings if b['field']=='brand'),None) if logo_enabled else None
-    cardinality_result=apply_cardinality(s,rules,item_count,data.get('items'),theme)
+    cardinality_result=early_cardinality or apply_cardinality(s,rules,item_count,data.get('items'),theme)
     schedule_result=apply_project_schedule(s,rules,data['tasks']) if rules.get('cardinality_mode')=='project_schedule' else None
     header_result = None
     replace_source_logo = bool(source_logo_present and logo_enabled and m.get('replace_source_logo'))
