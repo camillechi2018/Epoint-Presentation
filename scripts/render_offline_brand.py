@@ -1262,7 +1262,18 @@ def longcopy_card_rows(items):
     raise ValueError("长文卡片超出可读高度，请拆页或调整文案")
 
 
-def render_page(pres, page, index, profile, layout, theme):
+def render_page(pres, page, index, profile, layout, theme, *, recipe=None):
+    if recipe:
+        from body_header import draw_header
+        from body_layout_recipes import draw
+
+        theme_name = next(name for name, palette in profile['themes'].items() if palette is theme)
+        slide = pres.slides.add_slide(pres.slide_layouts[6])
+        draw(slide, recipe)
+        if theme_name in ('blue', 'red'):
+            add_body_background(slide, layout, theme_name, theme, theme['canvas'])
+        draw_header(slide, recipe['frame']['header'], theme_name, recipe['title'], True)
+        return slide
     kind = validate_page(page, index)
     head = profile["typography"]["heading"]
     body = profile["typography"]["body"]
@@ -1493,7 +1504,7 @@ def render_page(pres, page, index, profile, layout, theme):
     return slide
 
 
-def render(plan: dict, output: Path):
+def render(plan: dict, output: Path, *, body_recipe=None):
     profile = read_json(PROFILE)
     layout = read_json(LAYOUT_SPEC)
     if layout.get("schema_version") != "1.0" or profile.get("schema_version") != "1.0":
@@ -1514,7 +1525,12 @@ def render(plan: dict, output: Path):
         raise ValueError("完整演示稿的封面、目录、章节页和封底必须来自知识库；离线出稿仅支持 complete_deck:false 的内容页")
     if any(not isinstance(page, dict) or page.get("type") in STRUCTURAL_ROLE_ORDER for page in pages):
         raise ValueError("离线出稿仅支持内容页；封面、目录、章节页和封底必须来自知识库")
-    pages = [report_table_layout(page) for page in pages]
+    from body_layout_recipes import prepare
+    if body_recipe and len(pages) != 1:
+        raise ValueError("固定的正文排版规则仅适用于单页")
+    prepared = [body_recipe or prepare(page, theme_name) for page in pages]
+    pages = [dict(page, title=recipe['title']) if recipe else report_table_layout(page)
+             for page, recipe in zip(pages, prepared, strict=True)]
     pres = Presentation()
     pres.slide_width = Inches(layout["canvas"]["width_inches"])
     pres.slide_height = Inches(layout["canvas"]["height_inches"])
@@ -1522,7 +1538,7 @@ def render(plan: dict, output: Path):
         page_number = page.get("_deck_page_number", n)
         if type(page_number) is not int or page_number < 1:
             raise ValueError(f"第 {n} 页整稿页码无效")
-        slide = render_page(pres, page, page_number, profile, layout, theme)
+        slide = render_page(pres, page, page_number, profile, layout, theme, recipe=prepared[n - 1])
         remove_shadow_effects(slide.shapes)
     output.parent.mkdir(parents=True, exist_ok=True)
     pres.save(output)
@@ -1538,6 +1554,20 @@ def render(plan: dict, output: Path):
     # All editable slides use the same CJK/Latin typefaces, including guided
     # pages that are later inserted beside knowledge-base template pages.
     font_normalization = normalize(output, output)
+    if theme_name == "deep-blue-tech" and any(prepared):
+        from font_profile import apply_tech_text_role
+
+        styled = Presentation(output)
+        selected_profile = resolve_font_profile()
+        for slide, recipe in zip(styled.slides, prepared, strict=True):
+            if not recipe:
+                continue
+            frame = recipe['frame']
+            roles = {f['semantic_path']: f.get('typography_role') for f in frame['fields']}
+            by_name = {s['name']: roles.get(s['slot']) for s in frame['shapes'] if s['kind'] == 'text'}
+            for shape in slide.shapes:
+                apply_tech_text_role(shape, by_name.get(shape.name), selected_profile)
+        styled.save(output)
     color_report = audit_color_independence(output)
     if not color_report["passed"]:
         raise RuntimeError("新绘页面仍引用母版颜色槽")
@@ -1566,6 +1596,11 @@ def render(plan: dict, output: Path):
             if issue:
                 raise RuntimeError(f"第 {n} 页{issue[1]}")
         header_spec = layout["tech_content_header"] if tech_header else layout["content_header"]
+        recipe = prepared[n - 1]
+        if recipe:
+            from body_header import frame_spec
+            adjusted, header_key = frame_spec(recipe['frame']['header'])
+            header_spec = adjusted[header_key]
         titles = [s for s in slide.shapes if s.name == "brand:content-title"]
         rules = [s for s in slide.shapes if s.name == "brand:content-rule"]
         if len(titles) != 1 or len(rules) != (0 if tech_header else 1):
@@ -1600,7 +1635,7 @@ def render(plan: dict, output: Path):
             raise RuntimeError(f"第 {n} 页仍有阴影效果")
         page_type = fallback_type(pages[n-1])
         checks.append({"page": n, "type": page_type,
-                       "variant": resolved_variant(pages[n-1], page_type) if page_type in {"bullets", "cards", "process", "priority_grid", "milestone_timeline", "metrics", "comparison", "data_table", "image_case"} else None,
+                       "variant": recipe['id'] if recipe else resolved_variant(pages[n-1], page_type) if page_type in {"bullets", "cards", "process", "priority_grid", "milestone_timeline", "metrics", "comparison", "data_table", "image_case"} else None,
                        "image_source_path": str(pages[n-1]["image_path"]) if page_type == "image_case" else None,
                        "logo_count": len(logos), "atmosphere_shapes": atmosphere_count,
                        "editable_text_shapes": len(text_shapes)})

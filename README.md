@@ -206,15 +206,14 @@ Epoint-Presentation/
 │   ├── brand/               Logo、颜色与字体变量
 │   ├── style-kits/          蓝、红、科技三套风格资料
 │   ├── style-previews/      风格和正文组件预览
-│   ├── body-components/     技能自带的可编辑正文组件
-│   ├── layouts/             正文托底排版规则
+│   ├── layouts/             正文规则与品牌绘制配置
 │   └── minimal-template-pack/  离线结构页最小包
 ├── references/              按任务读取的细则
 ├── scripts/                 选版、填充、组装及审计工具
 └── install.ps1 / install.sh 跨系统运行环境安装入口
 ```
 
-完整原稿、原模板组件目录和专项验收记录位于[独立知识库仓库](https://github.com/camillechi2018/Epoint-Presentation-KnowledgeBase)。24 个技能自带的正文组件随本包的 `assets/body-components/` 分发，包含独立目录、检查清单、可编辑纯正文和兼容整页。匹配时与原模板候选一起比较，成稿来源记录区分技能内置组件和知识库模板。历史本地备份 `assets/minimal-template-pack.previous/` 不进入 Git 仓库。
+完整原稿、原模板组件目录和专项验收记录位于[独立知识库仓库](https://github.com/camillechi2018/Epoint-Presentation-KnowledgeBase)。自动选版优先试填知识库原稿，之后由技能绘制。原有 24 个内置正文组件的 36 个主题变体由 `assets/layouts/body-variants.json` 中的规则生成，保留图形、表格、图片和文字的可编辑性。历史本地备份 `assets/minimal-template-pack.previous/` 不进入 Git 仓库。
 
 ## 授权状态
 

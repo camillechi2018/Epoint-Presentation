@@ -254,7 +254,7 @@ def candidate_content(entry, page, original):
     """Apply a caller's source-backed copy to this candidate only."""
     proposals = page.get('component_copy') or {}
     proposal = proposals.get(entry['id'])
-    if entry.get('asset_origin') == 'skill' or page.get('role') in STRUCTURAL_ROLES:
+    if page.get('role') in STRUCTURAL_ROLES:
         return original
     if proposal is None:
         contract = entry.get('matching_contract') or {}

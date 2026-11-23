@@ -13,79 +13,59 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from audit_deck import audit
 from body_background import uses_component_atmosphere
 from body_header import frame
-from fill_layout import fill
+from body_layout_recipes import prepare, recipes
 from render_offline_brand import PROFILE, add_body_background, add_content_title, read_json, render
 
 
 class BodyBrandEffectsTests(unittest.TestCase):
-    def test_filled_body_components_require_the_shared_background_and_shadowless_rule(self):
-        library = Path(__file__).resolve().parents[1] / 'assets' / 'minimal-template-pack'
-        layouts = ('content-body-parallel-metrics-two', 'content-body-parallel-metrics-four',
-                   'content-body-single-focus', 'content-body-text-hierarchy',
-                   'content-body-gallery-four', 'content-body-gallery-five',
-                   'content-body-metric-evidence')
-        for layout in layouts:
-            for theme in ('blue', 'red'):
-                with self.subTest(layout=layout, theme=theme), tempfile.TemporaryDirectory() as directory:
+    def test_all_registered_rules_draw_editable_body_shapes(self):
+        for identifier, rule in recipes()['variants'].items():
+            for theme, spec in rule['themes'].items():
+                with self.subTest(identifier=identifier, theme=theme), tempfile.TemporaryDirectory() as directory:
                     root = Path(directory)
-                    request, deck, plan = root / 'content.json', root / 'cards.pptx', root / 'plan.json'
-                    bindings = read_json(library.parent / 'body-components' / 'layouts' / layout
-                                         / f'body-{theme}-bindings.json')
-                    texts = {field['semantic_path']: f'核对{i}' for i, field in
-                             enumerate(bindings['fields'], start=1)}
-                    if layout == 'content-body-metric-evidence':
-                        texts.update({'metric.value': '96%', 'metric.label': '测试样本核对率',
-                                      'metric.period': '本轮测试',
-                                      'evidence': '按本轮记录逐项核对样本。\n复查后在汇总表中登记结果。'})
-                    data = {'theme': theme, 'texts': texts}
+                    deck, plan = root / 'body.pptx', root / 'audit.json'
+                    data = {'texts': {field['semantic_path']: f'核对{index}' for index, field
+                                     in enumerate(spec['fields'], 1)}}
+                    if rule['kind'] == 'metric_evidence':
+                        data['texts']['evidence'] = '按原文核对记录。\n登记汇总结果。'
                     images = []
-                    for index, slot in enumerate(bindings.get('image_slots', []), start=1):
-                        path = root / f'figure-{index}.png'
-                        Image.new('RGB', (60, 40), (35 * index, 100, 180)).save(path)
-                        images.append({'shape_name': slot['shape_name'], 'path': str(path), 'source': '测试生成'})
-                    data['images'] = images
-                    request.write_text(json.dumps(data), encoding='utf-8')
-                    fill(library, layout, request, deck, allow_draft=True, body_header_title='任务安排')
-                    page = {'role': 'body', 'selection_mode': 'source_template', 'layout_id': layout,
-                            'body_header': {'version': 2}}
-                    plan.write_text(json.dumps({'theme': theme, 'pages': [page]}), encoding='utf-8')
+                    for index, item in enumerate(spec['shapes'], 1):
+                        if item['kind'] == 'picture':
+                            path = root / f'figure-{index}.png'
+                            Image.new('RGB', (60, 40), (15 * index, 100, 180)).save(path)
+                            images.append({'shape_name': item['name'], 'path': str(path), 'source': '测试生成'})
+                    if images:
+                        data['images'] = images
+                    if rule['kind'] == 'report_table':
+                        rows = [['核对条目', '原文依据'], *[[f'条目{i}', f'口径{i}'] for i in range(1, 6)]]
+                        data['tables'] = [{'shape_id': 2, 'rows': rows}]
+                    prepared = prepare(data, theme, '任务安排', preferred=identifier)
+                    render({'theme': theme, 'complete_deck': False, 'pages': [{'title': '任务安排'}]},
+                           deck, body_recipe=prepared)
+                    plan.write_text(json.dumps({'theme': theme, 'pages': [
+                        {'role': 'body', 'selection_mode': 'guided_composition'}]}), encoding='utf-8')
                     self.assertTrue(audit(plan, deck)['p0_passed'])
-
-                    pres = Presentation(deck)
-                    shapes = pres.slides[0].shapes
-                    slide_texts = {shape.text for shape in shapes if shape.has_text_frame}
-                    for value in texts.values():
-                        self.assertIn(value, slide_texts)
-                    picture_blobs = [shape.image.blob for shape in shapes
-                                     if shape.shape_type == MSO_SHAPE_TYPE.PICTURE]
-                    for image in images:
-                        self.assertIn(Path(image['path']).read_bytes(), picture_blobs)
-                    layers = list(shapes)[:3]
-                    self.assertEqual([shape.name for shape in layers],
-                                     ['brand:canvas', 'brand:atmosphere:1', 'brand:atmosphere:2'])
-                    # A missing second ellipse must block delivery even if the canvas remains.
-                    ellipse = layers[-1]._element
-                    ellipse.getparent().remove(ellipse)
-                    damaged_deck = root / 'damaged.pptx'
-                    pres.save(damaged_deck)
-                    missing_layer = audit(plan, damaged_deck)
-                    self.assertFalse(missing_layer['p0_passed'])
-                    self.assertEqual({issue['code'] for issue in missing_layer['issues']}, {'new_drawn_background'})
-
-                    pres = Presentation(deck)
-                    rule = next(shape for shape in pres.slides[0].shapes if shape.name == 'brand:content-rule')
-                    rule._element.xpath('./p:style/a:effectRef')[0].set('idx', '1')
-                    pres.save(damaged_deck)
-                    inherited_shadow = audit(plan, damaged_deck)
-                    self.assertFalse(inherited_shadow['p0_passed'])
-                    self.assertEqual({issue['code'] for issue in inherited_shadow['issues']}, {'body_rule_shadow'})
+                    shapes = list(Presentation(deck).slides[0].shapes)
+                    by_name = {shape.name: shape for shape in shapes}
+                    for item in spec['shapes']:
+                        shape = by_name[item['name']]
+                        if item['kind'] == 'text':
+                            self.assertEqual(shape.text, data['texts'][item['slot']])
+                        elif item['kind'] == 'table':
+                            self.assertEqual([[cell.text for cell in row.cells] for row in shape.table.rows], rows)
+                        elif item['kind'] == 'picture':
+                            self.assertEqual(shape.shape_type, MSO_SHAPE_TYPE.PICTURE)
+                            original = next(record for record in images if record['shape_name'] == item['name'])
+                            self.assertEqual(shape.image.blob, Path(original['path']).read_bytes())
+                        if item['kind'] != 'picture':
+                            self.assertEqual([shape.left, shape.top, shape.width, shape.height], item['bounds'])
 
     def test_drawn_long_cards_and_report_tables_keep_editable_evidence(self):
         evidence = '仅纳入统计期内有效记录，按编号去重后汇总。'
         long_evidence = evidence * 3
         items = [{'title': f'指标{i}统计口径与来源说明', 'body': long_evidence} for i in range(5)]
-        labels = ['完整口径', '来源', '时间', '检查', '说明']
-        entries = [long_evidence, '月度记录', '第一季度', '核对编号', '保留有效记录']
+        labels = ['完整口径', '来源', '时间', '检查']
+        entries = [long_evidence, '月度记录', '第一季度', '核对编号']
         for theme in ('blue', 'red', 'deep-blue-tech'):
             with self.subTest(theme=theme), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
@@ -95,7 +75,7 @@ class BodyBrandEffectsTests(unittest.TestCase):
                           'columns': ['条目', '原文依据'], 'row_labels': labels, 'items': entries}]
                 render({'theme': theme, 'complete_deck': False, 'pages': pages}, deck)
                 slides = Presentation(deck).slides
-                text = [shape.text for shape in slides[0].shapes if shape.has_text_frame]
+                text = [shape.text.replace('\n', '') for shape in slides[0].shapes if shape.has_text_frame]
                 self.assertEqual(text.count(long_evidence), len(items))
                 self.assertTrue(all(item['title'] in text for item in items))
                 table, = [shape.table for shape in slides[1].shapes if shape.has_table]

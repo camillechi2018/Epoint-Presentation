@@ -35,9 +35,6 @@ def try_candidate(library, entry, data, page, content_path, trial_path, output,
     candidate, adapter = adapt_for_layout(layout_id, data, title, entry=entry)
     record = {"layout_id": layout_id, "status": "rejected", "content_adapter": adapter,
               **atomic_body.trace(entry)}
-    if entry.get('asset_origin') == 'skill':
-        record['asset_origin'] = 'skill'
-
     atomic = entry.get('atomic_variant')
     if atomic and not adapter and not atomic_body.prepared_texts(atomic, data):
         record.update(reason_code='ATOMIC_FIELDS_INCOMPLETE',

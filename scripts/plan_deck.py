@@ -8,7 +8,8 @@ from pathlib import Path
 from library_location import asset_root, binding_path_key, get_library, load_catalog as load, selection_label
 from relation_match import (STRUCTURAL_ROLE_ORDER, canonical, load_taxonomy,
                             match_relation, match_role, supports_input_structure)
-from fallback_rules import DRAWN_BODY_LAYOUTS, fallback_type, fallback_catalog, migrated_body_content, uses_minimal_body_layout
+from fallback_rules import fallback_type, fallback_catalog, uses_minimal_body_layout
+from body_layout_recipes import page_content as recipe_content, recipes, prepare as prepare_recipe
 from content_adapters import (BODY_RELATIONS, BODY_INPUT_RELATIONS,
                               adapt_body_input, adapt_for_layout, matching_content)
 from capacity_preflight import LayoutMetadata, missing_binding_paths, preflight, required_input_fields
@@ -418,10 +419,7 @@ def eligible(e, p, request, taxonomy, *, atomic_requested=False, read_json=_read
 
 def summarize_selection(pages):
     counts = Counter(page['selection_label'] for page in pages)
-    summary = {label: counts[label] for label in ('知识库模板', '技能排版', '自由编排')}
-    if counts['技能内置组件']:
-        summary['技能内置组件'] = counts['技能内置组件']
-    return summary
+    return {label: counts[label] for label in ('知识库模板', '技能排版', '自由编排')}
 
 
 def resolve(library,request,*,catalog=None,candidate_summary_limit=12):
@@ -437,24 +435,21 @@ def resolve(library,request,*,catalog=None,candidate_summary_limit=12):
     if not isinstance(pages,list) or not pages:raise ValueError('pages必须是非空数组')
     atomic_variants={e['id']:e['atomic_variant'] for e in catalog['layouts'] if e.get('atomic_variant')}
     catalog_ids = {e['id'] for e in catalog['layouts']}
+    drawn_ids = recipes()['variants'].keys() - catalog_ids
     rng=random.Random(seed);chosen=[];family_usage=Counter();layout_usage=Counter();section_layout_id=None
     for index,p in enumerate(pages,1):
         if not isinstance(p,dict) or not str(p.get('purpose','')).strip():raise ValueError(f'第{index}页缺少purpose')
+        original_page = p
         fallback_content = p.get('content')
         p,normalization=normalize_body_request(p);need=dict(p.get('needs') or {})
         if p.get('layout_locked') and not p.get('layout_id'):
             raise ValueError(f'第{index}页锁定版式时须提供组件编号')
         content=p.get('content') if isinstance(p.get('content'),dict) else {}
         requested_id = p.get('layout_id')
-        migrated = DRAWN_BODY_LAYOUTS.get(requested_id) if requested_id not in catalog_ids else None
-        if migrated and p.get('role') not in STRUCTURAL_ROLE_ORDER:
-            kind, count, themes = migrated
-            mapped = migrated_body_content(content, requested_id)
-            items = mapped.get('items')
-            if (mapped.get('type') != kind or not isinstance(items, list) or len(items) != count
-                    or need.get('item_count', count) != count
-                    or p.get('theme', request.get('theme')) not in themes):
-                raise ValueError(f'第{index}页迁移组件 {requested_id} 需要 {count} 项 {kind} 内容及对应主题')
+        if requested_id in drawn_ids and p.get('role') not in STRUCTURAL_ROLE_ORDER:
+            recipe = prepare_recipe(recipe_content(original_page), p.get('theme', request.get('theme')), p.get('title'),
+                                    preferred=requested_id)
+            kind = recipe['type']
             chosen.append({'page': index, 'purpose': p['purpose'], 'evidence': p.get('evidence'),
                            'selection_mode': 'guided_composition', 'selection_label': '技能排版',
                            'layout_id': None, 'fallback_layout_id': 'data_table' if kind == 'report_table' else kind,
@@ -502,22 +497,28 @@ def resolve(library,request,*,catalog=None,candidate_summary_limit=12):
             if p.get('role') in STRUCTURAL_ROLE_ORDER:
                 raise ValueError(f'第{index}页结构页没有合格版式；排除原因：{dict(rejected)}。')
             content = fallback_content if isinstance(fallback_content, dict) else {}
+            recipe = prepare_recipe(recipe_content(original_page), p.get('theme', request.get('theme')),
+                                    p.get('title') or p['purpose'])
             matching_type = p.get('content', {}).get('type')
             if matching_type == 'report_table':
                 inferred = 'data_table'
+            elif recipe:
+                inferred = recipe['type']
             elif 'body_match:parallel_cards' in normalization:
                 inferred = 'cards'
             else:
                 inferred = 'bullets' if atomic_items else fallback_type(content) if content else None
-            fallback_id = inferred if inferred in fallback_catalog() else inferred if inferred in ('bullets','cards','process','comparison','metrics') else None
+            fallback_id = inferred if recipe or inferred in fallback_catalog() or inferred in (
+                'bullets', 'cards', 'process', 'comparison', 'metrics') else None
             assessment=content.get('layout_assessment') if isinstance(content.get('layout_assessment'),dict) else {}
-            wants_free=assessment.get('skill_suitable') is False and isinstance(content.get('free_layout'),dict)
+            wants_free=not recipe and assessment.get('skill_suitable') is False and isinstance(content.get('free_layout'),dict)
             if wants_free and not str(assessment.get('reason','')).strip():
                 raise ValueError(f'第{index}页使用自由编排须说明技能排版不适用的原因')
             mode='free_composition' if wants_free else 'guided_composition'
             chosen.append({'page':index,'purpose':p['purpose'],'evidence':p.get('evidence'),
                            'selection_mode':mode,'selection_label':'自由编排' if wants_free else '技能排版','layout_id':None,
                            'fallback_layout_id':None if wants_free else fallback_id,
+                           **({'body_rule_id': recipe['id']} if recipe else {}),
                            'candidate_ids':[],'trial_results':[],
                            'reason_code':('SKILL_LAYOUT_INADEQUATE' if wants_free else
                                           'EXPLICIT_SKILL_LAYOUT' if minimal_requested else 'NO_ELIGIBLE_TEMPLATE'),
@@ -572,15 +573,7 @@ def resolve(library,request,*,catalog=None,candidate_summary_limit=12):
         trial_limit=request.get('max_template_trials',6)
         if type(trial_limit) is not int or not 1<=trial_limit<=8:
             raise ValueError('max_template_trials须为1至8的整数')
-        origin_counts = {}
-        if p.get('role') not in STRUCTURAL_ROLE_ORDER and not p.get('layout_id'):
-            originals = [row for row in scored if row[12].get('asset_origin') != 'skill']
-            bundled = [row for row in scored if row[12].get('asset_origin') == 'skill']
-            origin_counts = {'knowledge': len(originals), 'bundled': len(bundled)}
-            trials = originals[:trial_limit] + bundled[:trial_limit]
-            scored = trials + originals[trial_limit:] + bundled[trial_limit:]
-        else:
-            trials = scored[:1] if p.get('role') == 'section' else scored[:trial_limit]
+        trials = scored[:1] if p.get('role') == 'section' else scored[:trial_limit]
         best=scored[0];e=best[12];fam=e.get('family_id',e['id'])
         candidate_summaries=[]
         for row in scored[:candidate_summary_limit]:
@@ -608,15 +601,12 @@ def resolve(library,request,*,catalog=None,candidate_summary_limit=12):
                 'field_status':'ready' if row[1]==0 else 'awaiting_mapping',
                 'capacity_preflight':row[13],
                 'source_preview':candidate.get('preview'),
-                **atomic_body.trace(candidate),
-                **({'asset_origin':'skill','source_preview_root':str(candidate_root)}
-                   if candidate.get('asset_origin') == 'skill' else {})})
+                **atomic_body.trace(candidate)})
         layout_usage[e['id']]+=1;family_usage[fam]+=1
         if p.get('role')=='section' and section_layout_id is None:
             section_layout_id=e['id']
         chosen.append({'page':index,'purpose':p['purpose'],'evidence':p.get('evidence'),
                        'selection_mode':'source_template','selection_label':selection_label(e),'candidate_ids':[row[12]['id'] for row in trials],
-                       **({'eligible_by_origin':origin_counts} if origin_counts else {}),
                        'candidate_summaries':candidate_summaries,
                        'field_ready_candidate_count':sum(row[1]==0 for row in scored),
                        'trial_results':[],'reason_code':None,'source_stamp':None,

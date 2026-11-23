@@ -23,7 +23,7 @@ from assembly_backend import BACKENDS, select_backend
 from relation_match import STRUCTURAL_ROLE_ORDER as STRUCTURAL
 from body_header import body_components_enabled
 from content_adapters import matching_content, unmapped_title_body_fields
-from fallback_rules import migrated_body_content, report_table_layout
+from fallback_rules import report_table_layout
 import atomic_body
 from layout_trials import layout_key, retains_text, text_fields, trial_alternative
 
@@ -222,6 +222,7 @@ def _skill_version():
 def execute_plan(request, plan, report, output: Path, *, catalog=None):
     """Fill each planned page, assemble it and audit mandatory source pages."""
     from capacity_preflight import LayoutMetadata
+    from body_layout_recipes import page_content as recipe_content, prepare as prepare_recipe
     _load_workflow()
     if not report['can_make_complete_deck'] or request.get('format', 'pptx') != 'pptx':
         raise ValueError('预检未通过完整 PPTX 出稿门槛')
@@ -288,8 +289,7 @@ def execute_plan(request, plan, report, output: Path, *, catalog=None):
                     preflight = summary.get('capacity_preflight', {})
                     ready = summary.get('field_status') == 'ready' and not preflight.get('hard_issues')
                     family = entry.get('family_id', ident)
-                    return (entry.get('asset_origin') == 'skill', not ready,
-                            ident == previous_id, body_families[family] if ready else 0,
+                    return (not ready, ident == previous_id, body_families[family] if ready else 0,
                             len(preflight.get('advisory', [])) if ready else 0)
 
                 candidate_ids = sorted(candidate_ids, key=trial_order)
@@ -330,20 +330,19 @@ def execute_plan(request, plan, report, output: Path, *, catalog=None):
                     if page.get('role') == 'section' and locked_section_layout_id is None:
                         locked_section_layout_id = candidate_id
                     break
-            if choice.get('eligible_by_origin'):
-                original_trials = [t for t in choice['trial_results'] if t.get('asset_origin') != 'skill']
-                if not any(t['status'] == 'filled' for t in original_trials):
-                    eligible = choice['eligible_by_origin']['knowledge']
-                    choice['knowledge_fallback_reason'] = (
-                        'NO_ELIGIBLE_ORIGINAL' if not eligible else
-                        'ORIGINAL_TRIAL_BUDGET' if eligible > len(original_trials) else 'ORIGINAL_TRIALS_REJECTED')
             if filled is None:
+                if page.get('role') not in STRUCTURAL:
+                    choice['knowledge_fallback_reason'] = (
+                        'ORIGINAL_TRIAL_BUDGET' if choice['candidate_count'] > len(candidate_ids)
+                        else 'ORIGINAL_TRIALS_REJECTED')
                 if page.get('layout_locked'):
                     raise ValueError(f"第 {index} 页锁定组件试填失败：{choice['trial_results']}")
                 if page.get('role') in STRUCTURAL:
                     raise ValueError(f'第 {index} 页结构模板试填均失败：{choice["trial_results"]}')
                 assessment = content.get('layout_assessment') if isinstance(content.get('layout_assessment'), dict) else {}
                 use_free = assessment.get('skill_suitable') is False and isinstance(content.get('free_layout'), dict)
+                if use_free:
+                    use_free = not prepare_recipe(recipe_content(page), report['theme'], page.get('title'))
                 if use_free and not str(assessment.get('reason', '')).strip():
                     raise ValueError(f'第 {index} 页自由编排缺少技能排版不适用的原因')
                 choice['selection_mode'] = 'free_composition' if use_free else 'guided_composition'
@@ -357,16 +356,33 @@ def execute_plan(request, plan, report, output: Path, *, catalog=None):
                     raise RuntimeError(f'第 {index} 页来源标记缺失')
                 choice['source_stamp'] = stamp
         if choice['selection_mode'] == 'guided_composition':
-            if page_out.exists():
-                raise RuntimeError('试填失败后遗留单页文件，拒绝覆盖')
+            preferred = choice.get('migrated_from_layout_id')
+            drawable_content = recipe_content(page)
+            recipe = prepare_recipe(drawable_content, report['theme'], page.get('title') or page['purpose'],
+                                    preferred=preferred)
+            if recipe:
+                if page_out.exists():
+                    raise RuntimeError('试填失败后遗留单页文件，拒绝覆盖')
+                rendered = dict(drawable_content, title=recipe['title'], _deck_page_number=index)
+                render_guided_page({'theme': report['theme'], 'complete_deck': False, 'pages': [rendered]},
+                                   page_out, body_recipe=recipe)
+                required = list(text_fields(recipe['texts']))
+                if recipe['rows'] is not None:
+                    required.extend(text_fields(recipe['rows']))
+                if not retains_text(page_out, required):
+                    raise ValueError(f'第 {index} 页绘制后缺少可编辑正文')
+                stamp = None
+                choice['fallback_layout_id'] = 'data_table' if recipe['type'] == 'report_table' else recipe['type']
+                choice['variant'] = recipe['id']
+                choice['body_rule_id'] = recipe['id']
+                choice['trial_results'].append({'status': 'guided_drawn', 'library_used': False,
+                                                'body_rule_id': recipe['id'], 'editable_text_verified': True})
+        if choice['selection_mode'] == 'guided_composition' and not page_out.exists():
             required_guided_text = list(text_fields(content)) if inferred else None
             try:
                 guided = (atomic_body.fallback_content(content, page.get('title'))
                           if choice.get('atomic_input') else dict(content))
                 interpreted, interpretation = matching_content(page)
-                if migrated_id := choice.get('migrated_from_layout_id'):
-                    interpreted = migrated_body_content(interpreted, migrated_id)
-                    guided = dict(interpreted)
                 if content.get('type') == 'report_table':
                     guided = dict(content)
                 elif interpretation in ('body_match:report_table', 'body_match:parallel_cards'):
@@ -382,10 +398,8 @@ def execute_plan(request, plan, report, output: Path, *, catalog=None):
                     raise ValueError('结构页不得由离线正文绘制器替代')
                 if guided['type'] == 'cards':
                     required_guided_text = list(text_fields(guided.get('items', [])))
-                    if guided.get('variant', 'auto') == 'auto' and choice.get('migrated_from_layout_id'):
-                        guided['variant'] = 'longcopy'
-                    elif (guided.get('variant', 'auto') == 'auto' and len(guided.get('items', [])) == 6
-                          and resolved_variant(guided, 'cards') == 'grid'):
+                    if (guided.get('variant', 'auto') == 'auto' and len(guided.get('items', [])) == 6
+                            and resolved_variant(guided, 'cards') == 'grid'):
                         guided['variant'] = 'stat_rows' if not used_guided_variants.get(('cards', 'stat_rows')) else 'grid'
                 if guided['type'] == content.get('type') == 'cards':
                     unused = unmapped_title_body_fields(content)
@@ -511,7 +525,6 @@ def execute_plan(request, plan, report, output: Path, *, catalog=None):
     delivery = assess_delivery(output, render_dir, len(slides), native_render)
     return {'output': str(output.resolve()), 'slides': len(slides),
             'library_used': plan['selection_summary']['知识库模板'] > 0,
-            'bundled_body_pages': plan['selection_summary'].get('技能内置组件', 0),
             'source_template_pages': sum(x['selection_mode'] == 'source_template' for x in plan['pages']),
             'guided_pages': sum(x['selection_mode'] == 'guided_composition' for x in plan['pages']),
             'free_pages': sum(x['selection_mode'] == 'free_composition' for x in plan['pages']),

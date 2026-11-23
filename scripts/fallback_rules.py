@@ -16,56 +16,6 @@ MINIMAL_BODY_VARIANTS = {
     "comparison_chart": {"range_scale"},
 }
 
-# Optional legacy IDs still name the same content contract on older requests.
-DRAWN_BODY_LAYOUTS = {
-    "content-blue-six-longcopy": ("cards", 6, ("blue", "red")),
-    "content-body-cards-two-longcopy": ("cards", 2, ("blue", "red")),
-    "content-body-cards-three-longcopy": ("cards", 3, ("blue", "red")),
-    "content-body-cards-five-longcopy": ("cards", 5, ("blue", "red")),
-    "content-body-cards-three-longcopy-tech": ("cards", 3, ("deep-blue-tech",)),
-    "content-body-cards-four-tech": ("cards", 4, ("deep-blue-tech",)),
-    "content-body-cards-five-longcopy-tech": ("cards", 5, ("deep-blue-tech",)),
-    "content-body-cards-six-longcopy-tech": ("cards", 6, ("deep-blue-tech",)),
-    "content-body-report-table": ("report_table", 5, ("blue", "red")),
-    "content-body-report-table-tech": ("report_table", 5, ("deep-blue-tech",)),
-}
-
-
-def migrated_body_content(content, layout_id):
-    kind, count, _ = DRAWN_BODY_LAYOUTS[layout_id]
-    if content.get("type") == kind:
-        return content
-    fields = content.get("texts")
-    if not isinstance(fields, dict) or set(content) - {
-            "type", "texts", "tables", "title", "theme", "source_refs", "data_source"}:
-        return content
-    base = {key: value for key, value in content.items() if key not in {"texts", "tables"}}
-    if "page.title" in fields:
-        base.setdefault("title", fields["page.title"])
-    if kind == "cards" and not content.get("tables"):
-        expected = {"page.title"}
-        items = []
-        for i in range(count):
-            aliases = ((f"items[{i}].heading", f"text_{4 * i + 4}"),
-                       (f"items[{i}].body", f"text_{4 * i + 5}"))
-            expected.update(key for pair in aliases for key in pair)
-            title, body = (fields.get(path, fields.get(alias)) for path, alias in aliases)
-            if not all(isinstance(value, str) and value.strip() for value in (title, body)):
-                return content
-            items.append({"title": title, "body": body})
-        if not set(fields) - expected:
-            return dict(base, type=kind, items=items)
-    if kind == "report_table" and not set(fields) - {"page.title"}:
-        tables = content.get("tables")
-        if isinstance(tables, list) and len(tables) == 1 and isinstance(tables[0], dict):
-            rows = tables[0].get("rows")
-            if (tables[0].get("shape_id") == 2 and isinstance(rows, list) and len(rows) == count + 1
-                    and all(isinstance(row, list) and len(row) == 2 for row in rows)):
-                return dict(base, type=kind, columns=rows[0],
-                            row_labels=[row[0] for row in rows[1:]], items=[row[1] for row in rows[1:]])
-    return content
-
-
 def report_table_layout(content):
     if content.get("type") != "report_table":
         return content

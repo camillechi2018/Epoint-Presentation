@@ -1,7 +1,7 @@
 """Fill one editable template; fail before writing on missing facts or capacity errors."""
 from library_location import asset_root, get_library, layout_source, load_catalog, source_locator, text_binding_path
 from normalize_fonts import normalize
-from font_profile import resolve as resolve_font_profile
+from font_profile import apply_tech_text_role, resolve as resolve_font_profile
 from pathlib import Path
 from copy import deepcopy
 from text_width import binding_text_issues, directory_text_over_capacity, visual_width_units
@@ -742,19 +742,9 @@ def apply_tech_font_roles(path,binding_data):
     role_fonts={'chinese_display':selected['east_asian'],'chinese_heading':selected['east_asian'],
                 'chinese_body':selected['east_asian'],'latin_numeric':selected['latin']}
     roles={x['shape_id']:x.get('typography_role') for x in binding_data.get('fields',[])}
-    p=Presentation(path);changed=0
-    for shape in walk(p.slides[0].shapes):
-        font=role_fonts.get(roles.get(shape.shape_id))
-        if not font or not shape.has_text_frame:continue
-        for paragraph in shape.text_frame.paragraphs:
-            for run in paragraph.runs:
-                run.font.name=font
-                props=run._r.get_or_add_rPr()
-                for tag in ('latin','ea','cs'):
-                    child=props.find('a:'+tag,NS)
-                    if child is None:child=OxmlElement('a:'+tag);props.append(child)
-                    child.set('typeface',font)
-                changed+=1
+    p=Presentation(path)
+    changed=sum(apply_tech_text_role(shape, roles.get(shape.shape_id), selected)
+                for shape in walk(p.slides[0].shapes))
     p.save(path)
     return {'role_bound_runs':changed,'fonts':role_fonts}
 def apply_tech_size_overrides(path,rules):

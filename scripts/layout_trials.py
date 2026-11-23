@@ -167,7 +167,7 @@ def trial_alternative(page, choice, previous, path, theme, *, repeat):
             continue
         trial_path.replace(path)
         choice['trial_results'].append(dict(trial, result='selected', editable_text_verified=True))
-        for key in ('source_mapping', 'atomic_variant', 'body_header', 'family_id', 'classification_status',
+        for key in ('source_mapping', 'atomic_variant', 'body_header', 'body_rule_id', 'family_id', 'classification_status',
                     'canonical_relation', 'matched_role', 'matched_relation', 'fit_signals', 'diversity_gap'):
             choice.pop(key, None)
         choice.update(selection_mode='guided_composition', selection_label='技能排版', source_stamp=None,

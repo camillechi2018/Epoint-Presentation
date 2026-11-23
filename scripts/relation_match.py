@@ -31,7 +31,8 @@ def supports_input_structure(input_type, structure):
 def load_taxonomy(root: Path, catalog: dict) -> dict:
     path = root / catalog.get('relation_taxonomy', 'relation-taxonomy.json')
     taxonomy = json.loads(path.read_text(encoding='utf-8-sig'))
-    taxonomy['relations'] = {**catalog.get('bundled_relations', {}), **taxonomy['relations']}
+    taxonomy['relations'].setdefault('image-text', {
+        'aliases': ['图文', '图片图集', '图片与说明'], 'specific_relations': ['image-text']})
     return taxonomy
 
 
