@@ -10,7 +10,10 @@ def write_json(path, data):
 
 
 def safe_file(root, relative):
-    root = Path(root).resolve()
+    return _file_under_root(Path(root).resolve(), relative)
+
+
+def _file_under_root(root, relative):
     rel = PurePosixPath(relative)
     if not relative or '\\' in relative or ':' in relative or rel.is_absolute() or '..' in rel.parts:
         raise ValueError('manifest_invalid_path: ' + relative)
@@ -22,7 +25,7 @@ def safe_file(root, relative):
 
 def verify_manifest(root, manifest_name='knowledge-manifest.json', version=None):
     root = Path(root).resolve()
-    manifest = json.loads(safe_file(root, manifest_name).read_text(encoding='utf-8'))
+    manifest = json.loads(_file_under_root(root, manifest_name).read_text(encoding='utf-8'))
     if not isinstance(manifest, dict):
         raise ValueError('manifest_invalid_object')
     if version is not None and manifest.get('version') != version:
@@ -33,7 +36,7 @@ def verify_manifest(root, manifest_name='knowledge-manifest.json', version=None)
     if manifest.get('file_count', len(files)) != len(files):
         raise ValueError('manifest_file_count_mismatch')
     for relative, expected in files.items():
-        actual = hashlib.sha256(safe_file(root, relative).read_bytes()).hexdigest()
+        actual = hashlib.sha256(_file_under_root(root, relative).read_bytes()).hexdigest()
         if actual != expected:
             raise ValueError('manifest_hash_mismatch: ' + relative)
     return manifest

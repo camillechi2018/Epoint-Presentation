@@ -16,6 +16,7 @@ from body_header import body_components_enabled
 from content_adapters import matching_content
 from relation_match import STRUCTURAL_ROLE_ORDER
 from candidate_trial import try_candidate
+from capacity_preflight import LayoutMetadata
 from plan_deck import load, resolve
 from structure_content import prepare
 
@@ -37,6 +38,7 @@ def audit(library: Path, request_path: Path, work: Path, trial: bool) -> dict:
     commit = library_commit(library)
     plan = resolve(library, planning_request, catalog=catalog)
     body_enabled = body_components_enabled(request)
+    metadata = LayoutMetadata()
     pages = []
     counters = Counter()
     for index, (source, choice) in enumerate(zip(request['pages'], plan['pages']), 1):
@@ -70,7 +72,7 @@ def audit(library: Path, request_path: Path, work: Path, trial: bool) -> dict:
                 filled, record = try_candidate(
                     library, entries[layout_id], content, source, content_path, trial_path, output,
                     allow_draft=planning_request['allow_draft'], body_header_pilot=body_enabled,
-                    diagnostics=True)
+                    diagnostics=True, metadata=metadata)
                 if 'detail' in record:
                     record['detail'] = record['detail'][:300]
                 row['trials'].append(record)

@@ -218,8 +218,9 @@ def _skill_version():
 
 
 def execute_plan(request, plan, report, output: Path, *, catalog=None):
-    _load_workflow()
     """Fill each planned page, assemble it and audit mandatory source pages."""
+    from capacity_preflight import LayoutMetadata
+    _load_workflow()
     if not report['can_make_complete_deck'] or request.get('format', 'pptx') != 'pptx':
         raise ValueError('预检未通过完整 PPTX 出稿门槛')
     if output.exists():
@@ -245,6 +246,7 @@ def execute_plan(request, plan, report, output: Path, *, catalog=None):
     locked_section_layout_id = None
     entries = {entry['id']: entry for entry in catalog['layouts']} if catalog is not None else None
     body_enabled = body_components_enabled(request)
+    metadata = LayoutMetadata()
     allow_draft = request.get('asset_policy', 'verified_draft') != 'approved_only'
     for index, (page, choice) in enumerate(zip(pages, plan['pages']), 1):
         content = page.get('content')
@@ -282,7 +284,7 @@ def execute_plan(request, plan, report, output: Path, *, catalog=None):
                 trial_path = work / f'P{index:03d}-{candidate_id}-content.json'
                 filled, trial = try_candidate(
                     library, entries[candidate_id], data, page, content_path, trial_path, page_out,
-                    allow_draft=allow_draft, body_header_pilot=body_enabled)
+                    allow_draft=allow_draft, body_header_pilot=body_enabled, metadata=metadata)
                 if 'detail' in trial:
                     trial['reason'] = safe_message(trial.pop('detail'))
                     for partial in (page_out, page_out.with_suffix('.qa.json'), page_out.with_suffix('.colors.json')):

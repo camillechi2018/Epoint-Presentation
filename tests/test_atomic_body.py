@@ -80,6 +80,18 @@ class AtomicBodyTests(unittest.TestCase):
                 self.assertEqual(choice['candidate_ids'], [f'outcomes-{count}'])
                 self.assertEqual(choice['candidate_summaries'][0]['field_status'], 'ready')
 
+    def test_independent_plans_reread_updated_binding_limits(self):
+        page = self.page()
+        binding = self.root / 'outcomes-3-bindings.json'
+        original = self.plan(page)['candidate_summaries'][0]['capacity_preflight']
+        data = json.loads(binding.read_text(encoding='utf-8'))
+        data['fields'][0]['max_chars'] = 1
+        self.write(binding.name, data)
+        updated = self.plan(page)['candidate_summaries'][0]['capacity_preflight']
+        self.assertNotEqual(original['binding_sha256'], updated['binding_sha256'])
+        self.assertFalse(original['hard_issues'])
+        self.assertTrue(any(issue['rule'] == 'max_chars' for issue in updated['hard_issues']))
+
     def test_old_generic_or_explicit_parent_never_replaced(self):
         generic = self.page(4, 'parallel-points', content_type='cards')
         self.assertEqual(self.plan(generic)['layout_id'], 'outcomes-original')
