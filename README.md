@@ -2,9 +2,14 @@
 
 把材料整理成符合新点品牌风格、可继续编辑的企业演示文稿。先选 **蓝色系、红色系或科技风格**，再由 Agent 梳理内容与信息关系，优先试用知识库组件；正文不适配时使用技能内的排版规则，仍保持同一套色彩、字体和 Logo。
 
-**当前版本 v1.0.36** · **配套知识库 v1.0.4**
+**当前版本 v1.0.37** · **配套知识库 v1.0.4**
 
-[下载技能安装包](https://github.com/camillechi2018/Epoint-Presentation/releases/tag/v1.0.36) · [下载配套知识库快照](https://github.com/camillechi2018/Epoint-Presentation-KnowledgeBase/releases/tag/v1.0.4) · [查看技能入口](SKILL.md)
+[下载技能安装包](https://github.com/camillechi2018/Epoint-Presentation/releases/tag/v1.0.37) · [下载配套知识库快照](https://github.com/camillechi2018/Epoint-Presentation-KnowledgeBase/releases/tag/v1.0.4) · [查看技能入口](SKILL.md)
+
+## v1.0.37 更新
+
+- Windows 出稿复用同一 PowerPoint 会话进行环境验证、组装和最终文件重开。10 页红色样稿在同一环境各运行三次，整稿耗时中位数从 52.79 秒降至 35.40 秒。[样稿计时记录](https://github.com/camillechi2018/Epoint-Presentation/pull/5)
+- 知识库完整性校验复用已解析的目录路径，保留逐文件 SHA-256 校验。逐页选版和试填在各自阶段复用规则与绑定数据。[优化与回归记录](https://github.com/camillechi2018/Epoint-Presentation/pull/6)
 
 ## v1.0.36 更新
 
