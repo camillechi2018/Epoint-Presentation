@@ -119,6 +119,18 @@ sh ./install.sh
 
 安装后使用 `python3 scripts/run.py --doctor --goal assemble --out doctor.json` 检查所选后端，再运行 `python3 scripts/run.py --request request.json --out report.json --execute-out candidate.pptx`。Windows 可使用 `python`。macOS/Linux 不再需要 `--native-experimental`，旧参数仍兼容；可用 `--assembly-backend auto|native|powerpoint` 指定后端。[查看平台差异及验收步骤](references/cross-platform-assembly.md)。
 
+### v1.0.36 跨平台复验
+
+测试组合为技能 **v1.0.36** 和知识库 **v1.0.4**。
+
+| 测试环境 | 已验证的结果 |
+| --- | --- |
+| Windows | PowerPoint 打开并逐页导出蓝色、红色、科技风样稿，共 28 页。 |
+| Linux · Ubuntu 22.04.5（WSL2） | 全新安装、自检和原生出稿通过。LibreOffice 打开 4 份样稿并导出全部 37 页 PDF。 |
+| macOS 15.8.2 · Apple Silicon | 全新安装、自检和原生出稿通过。完整知识库样稿 8 页文字均可读取，第 4 页改字、另存并重读成功。Mac PowerPoint 打开与导出待验证。[验证记录](https://github.com/camillechi2018/Epoint-Presentation/actions/runs/45092023413) |
+
+本轮逐页视觉审阅待进行。
+
 ## PowerPoint 验证与生成状态
 
 正式流程原本就使用 PowerPoint 打开和导出成稿；当前版本加强了后端识别、超时处理和验证证据检查。**交付只要求 PowerPoint 验证，不增加 WPS 验证步骤。** PowerPoint 打开、逐页导出通过后，仍须检查实际画面的文字、图形和排版。
