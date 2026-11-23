@@ -2,11 +2,18 @@
 
 把材料整理成符合新点品牌风格、可继续编辑的企业演示文稿。先选 **蓝色系、红色系或科技风格**，再由 Agent 梳理内容与信息关系，优先试用知识库组件；正文不适配时使用技能内的排版规则，仍保持同一套色彩、字体和 Logo。
 
-**当前版本：1.0.35。** [查看技能入口](SKILL.md) · [查看 v1.0.35 发布版](https://github.com/camillechi2018/Epoint-Presentation/releases/tag/v1.0.35) · [查看完整模板知识库](https://github.com/camillechi2018/Epoint-Presentation-KnowledgeBase)
+**当前版本 v1.0.36** · **配套知识库 v1.0.4**
 
-**配套知识库：v1.0.3。** [下载固定知识库快照](https://github.com/camillechi2018/Epoint-Presentation-KnowledgeBase/releases/tag/v1.0.3)。默认配置仍从知识库 `main` 获取更新；需要复现本次配套版本或离线部署时，使用该标签或发布页 ZIP，并通过本地知识库目录参数指定。技能安装包与完整知识库分开分发，普通用户不需要访问私有维护仓库。
+[下载技能安装包](https://github.com/camillechi2018/Epoint-Presentation/releases/tag/v1.0.36) · [下载配套知识库快照](https://github.com/camillechi2018/Epoint-Presentation-KnowledgeBase/releases/tag/v1.0.4) · [查看技能入口](SKILL.md)
 
-统一入口默认按系统选择组装方式：Windows 使用 PowerPoint，macOS/Linux 使用 Python 原生组装。来源与内容审计保持一致，生成、预览和 PowerPoint 验收分别记录。v1.0.33 完成技能与私有维护工具拆分；Mac 三色各 20 页完整材料生成及内容保真实测通过，后续应用、逐页视觉与 DSL 项目由项目负责人接受为本次发布豁免，未作为已实测结果。该发布决定不改变每份成稿的验收规则。
+## v1.0.36 更新
+
+- **选封面。** 确认风格后，可以查看带编号的封面缩略图，按编号选择或沿用自动选版。[出稿前选封面](references/cover-selection.md)。
+- **从原文检索版式。** Word 出稿先按原文的信息关系、项数和字段容量检索模板，再起草逐页文案，并检查相邻正文页是否重复使用同一版式。[材料结构化流程](references/content-structuring.md)。
+- **可编辑正文。** 内置 24 个技能自带正文组件，与知识库的原模板组件一起匹配。纯正文保留适用的原生图形、表格和图表，公共页眉由技能在组装时添加。
+- **组装与体积。** Windows PowerPoint 从临时空白演示文稿初始化。组装后合并等价母版，并从分发包移除仅供 GitHub README 使用的正文拼图。
+
+默认在线读取知识库 `main`。要固定版本或离线使用，请解压 v1.0.4 知识库 ZIP，在出稿时用 `--library <知识库目录>` 指向包含 `knowledge-manifest.json` 的目录。技能和知识库各有独立的下载包。
 
 ## 先看三种风格
 
@@ -59,7 +66,7 @@
 
 需要 Python 3.10 或更高版本。Windows 默认 PowerPoint 后端需要安装并通过检查的 **Microsoft PowerPoint**；macOS/Linux 默认使用 Python 原生组装，无需 Windows Office。Windows 也可显式选择原生组装。安装技能和 Python 依赖不会自动安装 Office。
 
-将本仓库完整克隆到所用 Agent 的技能目录，确保 `SKILL.md`、`assets/`、`references/` 和 `scripts/` 都在同一目录。以 Codex 的用户技能目录为例：
+从发布页下载技能 ZIP，将其中的 `epoint-presentation/` 解压到 Agent 的技能目录，再执行对应的安装命令。开发者也可以克隆本仓库。安装目录应确保 `SKILL.md`、`assets/`、`references/` 和 `scripts/` 都在同一目录。以 Codex 的用户技能目录为例：
 
 ```powershell
 git clone https://github.com/camillechi2018/Epoint-Presentation.git "$HOME/.codex/skills/epoint-presentation"
@@ -182,6 +189,7 @@ Epoint-Presentation/
 │   ├── brand/               Logo、颜色与字体变量
 │   ├── style-kits/          蓝、红、科技三套风格资料
 │   ├── style-previews/      风格和正文组件预览
+│   ├── body-components/     技能自带的可编辑正文组件
 │   ├── layouts/             正文托底排版规则
 │   └── minimal-template-pack/  离线结构页最小包
 ├── references/              按任务读取的细则
@@ -189,7 +197,7 @@ Epoint-Presentation/
 └── install.ps1 / install.sh 跨系统运行环境安装入口
 ```
 
-完整原稿、原模板组件目录和专项验收记录位于[独立知识库仓库](https://github.com/camillechi2018/Epoint-Presentation-KnowledgeBase)。技能编排试点新增的正文组件随本包的 assets/body-components 分发，包含独立目录、检查清单、可编辑纯正文和兼容整页。匹配时与原模板候选一起比较，成稿来源记录区分技能内置组件和知识库模板。历史本地备份 `assets/minimal-template-pack.previous/` 不进入 Git 仓库。
+完整原稿、原模板组件目录和专项验收记录位于[独立知识库仓库](https://github.com/camillechi2018/Epoint-Presentation-KnowledgeBase)。24 个技能自带的正文组件随本包的 `assets/body-components/` 分发，包含独立目录、检查清单、可编辑纯正文和兼容整页。匹配时与原模板候选一起比较，成稿来源记录区分技能内置组件和知识库模板。历史本地备份 `assets/minimal-template-pack.previous/` 不进入 Git 仓库。
 
 ## 授权状态
 
@@ -200,6 +208,3 @@ Epoint-Presentation/
 本仓库保留出稿、安装、诊断和审计工具。知识库建设、批次整理、历史修复和发布资源制作已迁入私有维护仓库 `camillechi2018/Epoint-Presentation-Maintenance`，普通用户无需访问该仓库。现有 `scripts/run.py`、独立审计入口、Office worker 和本地最小包继续保留。
 
 `distribution-files.json` 是安装压缩包的明确文件清单。维护发布器从固定 Git 提交读取文件，不打包开发测试、维护工具和本地缓存；最终包附 `skill-package-manifest.json`，记录来源提交及逐文件 SHA-256。回归测试、原稿颜色盘点与清单重建工具由维护仓库管理。
-
-
-本轮工具分离不修改正文适配行为；macOS 实机、真实 PowerPoint 整稿和人工视觉验收仍需按目标环境完成，候选安装包不等于正式版本签收。
