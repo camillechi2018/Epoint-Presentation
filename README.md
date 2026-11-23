@@ -145,7 +145,7 @@ py -3 scripts/run.py --doctor --out environment-check.json
 py -3 scripts/run.py --doctor --goal assemble --office-smoke --out powerpoint-check.json
 ```
 
-Windows PowerPoint 后端执行前自动进行上述 Office 操作测试。仅检测到程序时标记为未验证；操作失败则阻断该后端，不自动切换原生组装。macOS/Linux 默认走原生后端，不执行 Windows Office 冒烟。组装和最终打开／逐页导出分别默认限时 300 秒，失败保留诊断记录；只对确认属于本次任务的 Office 进程尝试清理。
+Windows 完整出稿在临时单页填充后、组装前自动进行上述 Office 操作测试，并复用同一 PowerPoint 会话组装、重开最终文件和导出。仅检测到程序时标记为未验证；操作失败则阻断该后端，不自动切换原生组装。macOS/Linux 默认走原生后端，不执行 Windows Office 冒烟。组装和最终打开／逐页导出分别默认限时 300 秒，失败保留诊断记录；只对确认属于本次任务的 Office 进程尝试清理。
 
 生成结果按以下状态读取：
 

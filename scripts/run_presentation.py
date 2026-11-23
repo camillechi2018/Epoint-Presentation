@@ -240,10 +240,6 @@ def execute_plan(request, plan, report, output: Path, *, catalog=None):
     office_timeout = request.get('office_timeout_seconds', 300)
     if type(office_timeout) is not int or not 1 <= office_timeout <= 3600:
         raise ValueError('OFFICE_TIMEOUT_INVALID')
-    if report.get('assembly_backend') not in ('native', 'native_experimental'):
-        report['office_smoke_test'] = probe_office(smoke=True, directory=work / 'office-smoke')
-        if report['office_smoke_test']['status'] != 'available':
-            raise RuntimeError(report['office_smoke_test']['error_code'] + ': Office smoke test failed')
     used_guided_variants = {}
     actual_layouts = []
     locked_section_layout_id = None
@@ -445,8 +441,11 @@ def execute_plan(request, plan, report, output: Path, *, catalog=None):
         finished = native['finished']
         native_render = native['render']
     else:
+        report['office_smoke_test'] = {}
         native_render = assemble_office(manifest_path, output, render_dir, sys.executable,
-                                        report['font_profile']['profile']['id'], timeout=office_timeout)
+                                        report['font_profile']['profile']['id'], timeout=office_timeout,
+                                        smoke_directory=work / 'office-smoke',
+                                        smoke_result=report['office_smoke_test'])
         finished = check_finished(output, assembly, prefilled)
     (work / 'final-gate.json').write_text(
         json.dumps(finished, ensure_ascii=False, indent=2), encoding='utf-8')

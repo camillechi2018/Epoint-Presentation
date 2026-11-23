@@ -14,6 +14,7 @@ from period_schedule import schedule_intervals, place_period_bars
 from progress_rings import apply_progress_rings
 
 import argparse,json,math,re,subprocess
+import tempfile
 from pptx import Presentation
 from pptx.chart.data import CategoryChartData, XyChartData
 from pptx.enum.chart import XL_CHART_TYPE
@@ -1827,11 +1828,19 @@ def fill(lib,layout,content,out,allow_draft=False,internal=False,logo_config=Non
                              replace_existing=replace_source_logo,theme=theme)
     if source_stamp:
         s._element.cSld.set('name',source_stamp)
-    out.parent.mkdir(parents=True,exist_ok=True);p.save(out);font_normalization=normalize(out,out)
-    font_result=apply_tech_font_roles(out,binding_data) if m.get('style_family')=='deep-blue-tech' else None
-    if m.get('style_family')=='deep-blue-tech':
-        font_result.update(apply_tech_size_overrides(out,rules))
-    color_result=materialize_component_colors(out,out,out.with_suffix('.colors.json'),source,source_page)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    # Publish the final file after processing, avoiding repeated overwrites of the same PPTX.
+    with tempfile.TemporaryDirectory(prefix='.fill-', dir=out.parent) as folder:
+        original = Path(folder) / 'initial.pptx'
+        normalized = Path(folder) / 'normalized.pptx'
+        p.save(original)
+        font_normalization = normalize(original, normalized)
+        font_result = None
+        if m.get('style_family') == 'deep-blue-tech':
+            font_result = apply_tech_font_roles(normalized, binding_data)
+            font_result.update(apply_tech_size_overrides(normalized, rules))
+        color_result = materialize_component_colors(
+            normalized, out, out.with_suffix('.colors.json'), source, source_page)
     if theme=='red' and logo_enabled:
         from audit_logo import audit as audit_logo
         logo_audit=audit_logo(out,require_every_slide=True,theme='red')

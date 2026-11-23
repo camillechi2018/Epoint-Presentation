@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parent
@@ -29,7 +30,24 @@ def _cleanup_owned(shell, owner):
         return 'cleanup_failed'
 
 
-def run_worker(script, args, report_dir, *, timeout=180):
+def _communicate_phases(process, report_dir, timeout, phase_timeouts):
+    deadline = time.monotonic() + timeout
+    for name, budget in phase_timeouts:
+        marker = report_dir / f'{name}.started'
+        while not marker.is_file():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise subprocess.TimeoutExpired(process.args, timeout)
+            try:
+                return process.communicate(timeout=min(remaining, 0.2))
+            except subprocess.TimeoutExpired:
+                pass
+        timeout = budget
+        deadline = time.monotonic() + timeout
+    return process.communicate(timeout=max(0.001, deadline - time.monotonic()))
+
+
+def run_worker(script, args, report_dir, *, timeout=180, phase_timeouts=()):
     if not 1 <= timeout <= 3600:
         raise ValueError('OFFICE_TIMEOUT_INVALID')
     shell = shutil.which('pwsh') or shutil.which('powershell')
@@ -43,14 +61,20 @@ def run_worker(script, args, report_dir, *, timeout=180):
     command = [shell, '-NoProfile', '-File', str(script), *map(str, args), '-OwnerFile', str(owner)]
     result = {}
     try:
-        completed = subprocess.run(command, capture_output=True, timeout=timeout,
-                                   creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0) if os.name == 'nt' else 0)
-        result = {'returncode': completed.returncode,
-                  'stdout': completed.stdout.decode('utf-8', errors='replace'),
-                  'stderr': completed.stderr.decode('utf-8', errors='replace'), 'timeout_seconds': timeout}
-    except subprocess.TimeoutExpired:
+        flags = getattr(subprocess, 'CREATE_NO_WINDOW', 0) if os.name == 'nt' else 0
+        with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=flags) as worker:
+            try:
+                stdout, stderr = _communicate_phases(worker, report_dir, timeout, phase_timeouts)
+            except subprocess.TimeoutExpired:
+                worker.kill()
+                raise
+        result = {'returncode': worker.returncode, 'stdout': stdout.decode('utf-8', errors='replace'),
+                  'stderr': stderr.decode('utf-8', errors='replace'), 'timeout_seconds': timeout}
+        if phase_timeouts:
+            result['phase_timeouts'] = dict(phase_timeouts)
+    except subprocess.TimeoutExpired as exc:
         result = {'returncode': None, 'error_code': 'OFFICE_OPERATION_TIMEOUT',
-                  'timeout_seconds': timeout, 'cleanup': _cleanup_owned(shell, owner)}
+                  'timeout_seconds': exc.timeout, 'cleanup': _cleanup_owned(shell, owner)}
     finally:
         (report_dir / 'office-process.json').write_text(json.dumps(result, indent=2), encoding='utf-8')
     if result.get('error_code'):
@@ -70,6 +94,16 @@ def _empty_presentation(folder):
     return seed
 
 
+def _check_smoke(folder):
+    saved = folder / 'smoke.pptx'
+    data = json.loads((folder / 'backend.json').read_text(encoding='utf-8-sig'))
+    if (data.get('status') != 'passed' or not data.get('opened') or data.get('slide_count') != 1
+            or data.get('output_sha256') != hashlib.sha256(saved.read_bytes()).hexdigest()):
+        raise RuntimeError('OFFICE_SMOKE_TEST_FAILED')
+    verify_images(folder / 'smoke-render', 1)
+    return {**data, 'status': 'available'}
+
+
 def probe(*, smoke=False, directory=None):
     if os.name != 'nt':
         return {'status': 'unavailable', 'error_code': 'OFFICE_BACKEND_UNAVAILABLE'}
@@ -81,15 +115,7 @@ def probe(*, smoke=False, directory=None):
         if smoke:
             args.extend(['-SeedPresentation', _empty_presentation(folder)])
         run_worker(SCRIPTS / 'office_probe.ps1', args, folder, timeout=45 if smoke else 15)
-        data = json.loads(report.read_text(encoding='utf-8-sig'))
-        if smoke:
-            saved = folder / 'smoke.pptx'
-            if (data.get('status') != 'passed' or not data.get('opened') or data.get('slide_count') != 1
-                    or data.get('output_sha256') != hashlib.sha256(saved.read_bytes()).hexdigest()):
-                raise RuntimeError('OFFICE_SMOKE_TEST_FAILED')
-            verify_images(folder / 'smoke-render', 1)
-            data['status'] = 'available'
-        return data
+        return _check_smoke(folder) if smoke else json.loads(report.read_text(encoding='utf-8-sig'))
     except (OSError, ValueError, RuntimeError, ImportError) as exc:
         data = json.loads(report.read_text(encoding='utf-8-sig')) if report.is_file() else {}
         code = str(exc).split(':', 1)[0]
@@ -107,27 +133,60 @@ def verify_images(directory, count):
             image.verify()
 
 
-def render(source, directory, *, timeout=180):
-    source, directory = Path(source), Path(directory)
-    # Fresh directory prevents stale images or previous success reports passing a failed run.
-    directory.mkdir(parents=True, exist_ok=False)
-    evidence = directory / 'powerpoint-validation.json'
-    run_worker(SCRIPTS / 'office_probe.ps1', ['-Mode', 'render', '-Report', evidence,
-               '-InputPath', source, '-RenderDirectory', directory], directory, timeout=timeout)
-    data = json.loads(evidence.read_text(encoding='utf-8-sig'))
+def _check_render(source, directory):
+    data = json.loads((directory / 'powerpoint-validation.json').read_text(encoding='utf-8-sig'))
     if data.get('status') != 'passed' or not data.get('opened') or data.get('output_sha256') != hashlib.sha256(source.read_bytes()).hexdigest():
         raise ValueError('POWERPOINT_EVIDENCE_INVALID')
     verify_images(directory, data['slide_count'])
     return data
 
 
-def assemble(manifest, output, render_directory, python_exe, font_profile, *, timeout=300):
-    Path(output).resolve().parent.mkdir(parents=True, exist_ok=True)
-    work = Path(tempfile.mkdtemp(prefix='office-assembly-', dir=Path(output).resolve().parent))
-    run_worker(SCRIPTS / 'assemble_deck_worker.ps1', ['-Manifest', manifest, '-OutputPath', output,
-               '-PythonExe', python_exe, '-FontProfile', font_profile,
-               '-SeedPresentation', _empty_presentation(work)], work, timeout=timeout)
-    evidence = render(output, render_directory, timeout=timeout) if render_directory else None
+def render(source, directory, *, timeout=180):
+    source, directory = Path(source), Path(directory)
+    # Fresh directory prevents stale images or previous success reports passing a failed run.
+    directory.mkdir(parents=True, exist_ok=False)
+    run_worker(SCRIPTS / 'office_probe.ps1', ['-Mode', 'render',
+               '-Report', directory / 'powerpoint-validation.json',
+               '-InputPath', source, '-RenderDirectory', directory], directory, timeout=timeout)
+    return _check_render(source, directory)
+
+
+def assemble(manifest, output, render_directory, python_exe, font_profile, *, timeout=300,
+             smoke_directory=None, smoke_result=None):
+    if not 1 <= timeout <= 3600:
+        raise ValueError('OFFICE_TIMEOUT_INVALID')
+    output = Path(output).resolve()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    work = Path(tempfile.mkdtemp(prefix='office-assembly-', dir=output.parent))
+    args = ['-Manifest', manifest, '-OutputPath', output, '-PythonExe', python_exe,
+            '-FontProfile', font_profile, '-SeedPresentation', _empty_presentation(work)]
+    phases = []
+    if smoke_directory is not None:
+        smoke_directory = Path(smoke_directory)
+        smoke_directory.mkdir(parents=True, exist_ok=False)
+        args.extend(['-SmokeDirectory', smoke_directory])
+        phases.append(('assembly', timeout))
+    if render_directory:
+        render_directory = Path(render_directory)
+        render_directory.mkdir(parents=True, exist_ok=False)
+        args.extend(['-RenderDirectory', render_directory])
+        phases.append(('render', timeout))
+    smoke = None
+    try:
+        run_worker(SCRIPTS / 'assemble_deck_worker.ps1', args, work,
+                   timeout=45 if smoke_directory is not None else timeout, phase_timeouts=phases)
+    finally:
+        if smoke_directory is not None:
+            try:
+                smoke = _check_smoke(smoke_directory)
+            except (OSError, ValueError, RuntimeError) as exc:
+                smoke = {'status': 'unavailable', 'error_code': 'OFFICE_SMOKE_TEST_FAILED',
+                         'detail': str(exc), 'report_directory': str(smoke_directory)}
+            if smoke_result is not None:
+                smoke_result.update(smoke)
+    if smoke is not None and smoke['status'] != 'available':
+        raise RuntimeError('OFFICE_SMOKE_TEST_FAILED: ' + smoke['detail'])
+    evidence = _check_render(output, render_directory) if render_directory else None
     from delivery_status import assess
     plan = json.loads(Path(manifest).read_text(encoding='utf-8-sig'))
     status = assess(output, render_directory or work, len(plan['slides']), evidence)
