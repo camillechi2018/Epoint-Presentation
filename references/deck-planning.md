@@ -75,9 +75,11 @@
 | `single_focus` | `single-focus` | `bullets` 含三段原文。用 `thesis_index` 指定原文中承担论点的段落，索引从零开始。其余两段作为依据，保留两段之间的原顺序。 |
 | `parallel_cards` | `parallel-points` | `bullets` 的每段对应一个有来源的 `item_titles` 短标题。按原顺序映射为 `cards`，逐条保留正文原句。知识库可按蓝红和科技风所登记的固定项数及容量选择长文版。 |
 | `text_hierarchy` | `hierarchy` | `bullets` 的五段原文按 `groups:[{heading,indices}]` 分为三组，段数为 2、2、1。索引从零开始，完整覆盖并保持原顺序。版式用三层信息分组呈现背景、方法、目标等内容。 |
-| `report_table` | `data-table` | `bullets` 的五段原始摘要对应五项 `row_labels`，`columns` 提供两个列名。原生表格用表头加五行呈现项目与原文，保留数值、公式表现及口径说明。数据仍使用原材料的来源和业务状态。 |
+| `report_table` | `data-table` | `bullets` 的原始摘要与 `row_labels` 一一对应，`columns` 提供两个列名。知识库组件按自身字段契约试填。技能可绘制 1–8 行原生表格，按实际换行调整行高，保留原文、数值与口径。 |
 
-也可在有对应知识库组件的请求中直接提供同名 `content.type`。图库的 `items` 各项为 `image_path`、`caption`，指标说明、单论点、层级和表格沿用 `items` 原段及各自标注字段。并列正文的直接输入沿用 `cards`；也可继续用 `--structure-content` 把原列表与 `content.item_titles` 整理为卡片。
+也可直接提供同名 `content.type`。图库的 `items` 各项为 `image_path`、`caption`，指标说明、单论点、层级和表格沿用 `items` 原段及各自标注字段。并列正文沿用 `cards`，也可继续用 `--structure-content` 把原列表与 `content.item_titles` 整理为卡片。技能绘制的卡片支持 1–6 项。长文网格按每行最宽的文字安排标题和正文高度，超出可读空间时报告原因并试用能完整保留事实的其他排法。
+
+旧请求中的内置卡片或条目表格编号仍可用于相同主题和项数的正文。若当前固定快照中确有该原稿，则继续使用该原稿。否则，以可还原的条目和字段现场绘制，逐页计划通过 `migrated_from_layout_id` 记录原编号。
 
 登记 `matching_contract.body_wrap_width_units` 的卡片在试填时按实测行宽加入换行，复核符号、数值与单位的相邻关系，避免常用闭合标点单独断到下一行。换行保留所有原字符，仍执行对应绑定的单段字数和行数上限。
 

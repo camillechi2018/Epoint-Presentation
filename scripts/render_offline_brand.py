@@ -28,12 +28,13 @@ from audit_logo import audit as audit_logo
 from materialize_component_colors import freeze_uniform_deck
 from normalize_fonts import normalize
 from font_profile import resolve as resolve_font_profile
-from fallback_rules import MINIMAL_BODY_TYPES, fallback_type, fallback_catalog, uses_minimal_body_layout
-from minimal_body_layouts import compose as compose_minimal_body, verify_header_title
+from fallback_rules import MINIMAL_BODY_TYPES, fallback_type, fallback_catalog, report_table_layout, uses_minimal_body_layout
+from minimal_body_layouts import compose as compose_minimal_body, draw_editable_table, report_table_spec, verify_header_title
 from relation_match import STRUCTURAL_ROLE_ORDER
 from free_composition import render_free_page
 from tech_background import apply_tech_background, uses_shared_tech_background
 from body_background import blue_red_background_issue
+from text_width import visual_width_units
 
 
 SKILL = Path(__file__).resolve().parents[1]
@@ -160,11 +161,15 @@ def resolved_variant(page: dict, kind: str) -> str:
             return "hero"
         return "lead_support" if "featured_index" in page else "grid"
     if kind == "cards":
-        allowed = {"auto", "grid", "columns", "stat_rows"}
+        allowed = {"auto", "grid", "columns", "stat_rows", "longcopy"}
         if variant not in allowed:
             raise ValueError(f"cards variant 不支持：{variant}")
         if variant != "auto":
             return variant
+        if any(isinstance(item, dict) and (
+                display_units(str(item.get("title", ""))) > 20
+                or display_units(str(item.get("body", ""))) > 70) for item in page.get("items", [])):
+            return "longcopy"
         return "columns" if len(page.get("items", [])) in (2, 3) else "grid"
     if kind == "process":
         allowed = {"auto", "cards", "rail"}
@@ -193,6 +198,8 @@ def resolved_variant(page: dict, kind: str) -> str:
         return "vertical" if len(page.get("milestones", [])) >= 5 else "horizontal"
     if kind in {"comparison", "data_table", "image_case"}:
         selected = page.get("variant", "standard")
+        if kind == "data_table" and selected == "report":
+            return selected
         if selected not in set(rules[kind]["allowed"]):
             raise ValueError(f"{kind} variant 不支持：{selected}")
         return selected
@@ -288,6 +295,11 @@ def validate_fallback(page: dict, kind: str, n: int):
             or display_units(str(metric["source"])) > 85):
             raise ValueError(f"第 {n} 页关键数字需要数值、说明和来源")
     elif kind == "data_table":
+        if page.get("variant") == "report":
+            report_table_spec(page)
+            if display_units(str(page.get("data_source", ""))) > 85:
+                raise ValueError(f"第 {n} 页表格数据来源过长")
+            return
         if page.get("variant") not in (None, "standard", "action_tracker"):
             raise ValueError(f"第 {n} 页表格变体不受支持")
         if page.get("variant") == "action_tracker":
@@ -457,6 +469,7 @@ def validate_page(page: dict, n: int):
         cap = {"bullets": 6, "cards": 6, "process": 5, "metrics": 4}[kind]
         if len(items) > cap:
             raise ValueError(f"第 {n} 页最多支持 {cap} 项；请由模型拆页或重新编排")
+        longcopy = kind == "cards" and resolved_variant(page, kind) == "longcopy"
         for j, item in enumerate(items, 1):
             if kind == "bullets":
                 content = item if isinstance(item, str) else str(item.get("text") or item.get("title") or "") if isinstance(item, dict) else ""
@@ -467,13 +480,16 @@ def validate_page(page: dict, n: int):
                     raise ValueError(f"第 {n} 页第 {j} 项需要 title")
                 title_cap = 20 if kind == "cards" else 14
                 body_cap = 70 if kind == "cards" else 38
-                if display_units(str(item["title"])) > title_cap or display_units(str(item.get("body", ""))) > body_cap:
+                if not longcopy and (display_units(str(item["title"])) > title_cap
+                                     or display_units(str(item.get("body", ""))) > body_cap):
                     raise ValueError(f"第 {n} 页第 {j} 项超出离线安全容量；请精简或拆页")
             else:
                 if not isinstance(item, dict) or not str(item.get("label", "")).strip() or "value" not in item:
                     raise ValueError(f"第 {n} 页第 {j} 项需要 label 和 value")
                 if display_units(str(item["label"])) > 18 or display_units(str(item["value"])) > 16:
                     raise ValueError(f"第 {n} 页第 {j} 项指标超出离线安全容量")
+        if longcopy:
+            longcopy_card_rows(items)
         if kind in {"bullets", "metrics"}:
             variant = resolved_variant(page, kind)
             featured = page.get("featured_index")
@@ -853,6 +869,12 @@ def render_longform_metric(pres, page, index, profile, layout, theme):
 def render_data_table(pres, page, index, profile, layout, theme):
     slide = base_slide(pres, profile, layout, theme, index, header=page["title"])
     head, body = profile["typography"]["heading"], profile["typography"]["body"]
+    if page.get("variant") == "report":
+        draw_editable_table(slide, report_table_spec(page), profile["typography"], theme)
+        source = str(page.get("data_source", "")).strip()
+        if source:
+            text_box(slide, "资料来源：" + source, 0.74, 6.95, 11.45, 0.25, 10, theme["muted"], body)
+        return slide
     tracker = page.get("variant") == "action_tracker"
     columns = ["问题 / 风险", "对应措施", "责任人", "完成期限", "当前状态"] if tracker else page["columns"]
     rows = [[item[key] for key in ("issue", "action", "owner", "due", "status")]
@@ -1209,6 +1231,37 @@ def render_metrics(pres, page, index, profile, layout, theme):
     return slide
 
 
+def longcopy_card_rows(items):
+    rules = read_json(COMPOSITION_RULES)
+    groups = rules["card_grid"].get(str(len(items)), [len(items)])
+    geometry = rules["geometry_inches"]
+    row_gap, column_gap = geometry["row_gap"], geometry["column_gap"]
+    left, right = geometry["left"], geometry["right"]
+
+    def height(value, width, points):
+        capacity = int(width * 72 / (points * .60))
+        return sum(max(1, math.ceil(visual_width_units(line) / capacity))
+                   for line in str(value).split("\n")) * points * 1.18 / 72
+
+    for heading_size, body_size in ((19, 17), (18, 16), (17, 15), (17, 14)):
+        rows, start = [], 0
+        for count in groups:
+            width = (right - left - (count - 1) * column_gap) / count
+            group = items[start:start + count]
+            heading_height = max(height(item["title"], width - .55, heading_size) for item in group)
+            body_height = max(height(item.get("body", ""), width - .55, body_size) for item in group)
+            row_height = max(1.40, heading_height + body_height + .58)
+            rows.append((group, width, heading_height, row_height))
+            start += count
+        y_start = geometry["content_top"]
+        available = 6.65 - y_start
+        total = sum(row[-1] for row in rows) + row_gap * (len(rows) - 1)
+        if total <= available:
+            return (rows, left, y_start + (available - total) / 2, row_gap,
+                    column_gap, heading_size, body_size)
+    raise ValueError("长文卡片超出可读高度，请拆页或调整文案")
+
+
 def render_page(pres, page, index, profile, layout, theme):
     kind = validate_page(page, index)
     head = profile["typography"]["heading"]
@@ -1289,6 +1342,22 @@ def render_page(pres, page, index, profile, layout, theme):
         slide = base_slide(pres, profile, layout, theme, index, header=page["title"])
         items = page["items"]
         variant = resolved_variant(page, "cards")
+        if variant == "longcopy":
+            rows, left, y, row_gap, gap, heading_size, body_size = longcopy_card_rows(items)
+            for group, width, title_height, height in rows:
+                for column, item in enumerate(group):
+                    x = left + column * (width + gap)
+                    rectangle(slide, x, y, width, height, theme["surface"], theme["border"])
+                    rectangle(slide, x, y + .19, .055, .38, theme["primary"])
+                    text_box(slide, str(item["title"]), x + .30, y + .18, width - .55,
+                             title_height + .05, heading_size, theme["primary"], head,
+                             bold=True, valign=MSO_ANCHOR.TOP)
+                    text_top = title_height + .30
+                    text_box(slide, str(item.get("body", "")), x + .30, y + text_top,
+                             width - .55, height - text_top - .15, body_size, theme["text"],
+                             body, valign=MSO_ANCHOR.TOP)
+                y += height + row_gap
+            return slide
         if variant == "columns":
             # Two or three equal ideas share one baseline without empty card backings.
             gap = 0.31
@@ -1445,6 +1514,7 @@ def render(plan: dict, output: Path):
         raise ValueError("完整演示稿的封面、目录、章节页和封底必须来自知识库；离线出稿仅支持 complete_deck:false 的内容页")
     if any(not isinstance(page, dict) or page.get("type") in STRUCTURAL_ROLE_ORDER for page in pages):
         raise ValueError("离线出稿仅支持内容页；封面、目录、章节页和封底必须来自知识库")
+    pages = [report_table_layout(page) for page in pages]
     pres = Presentation()
     pres.slide_width = Inches(layout["canvas"]["width_inches"])
     pres.slide_height = Inches(layout["canvas"]["height_inches"])

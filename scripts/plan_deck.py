@@ -8,7 +8,7 @@ from pathlib import Path
 from library_location import asset_root, binding_path_key, get_library, load_catalog as load, selection_label
 from relation_match import (STRUCTURAL_ROLE_ORDER, canonical, load_taxonomy,
                             match_relation, match_role, supports_input_structure)
-from fallback_rules import fallback_type, fallback_catalog, uses_minimal_body_layout
+from fallback_rules import DRAWN_BODY_LAYOUTS, fallback_type, fallback_catalog, migrated_body_content, uses_minimal_body_layout
 from content_adapters import (BODY_RELATIONS, BODY_INPUT_RELATIONS,
                               adapt_body_input, adapt_for_layout, matching_content)
 from capacity_preflight import LayoutMetadata, missing_binding_paths, preflight, required_input_fields
@@ -436,6 +436,7 @@ def resolve(library,request,*,catalog=None,candidate_summary_limit=12):
     pages=request.get('pages')
     if not isinstance(pages,list) or not pages:raise ValueError('pages必须是非空数组')
     atomic_variants={e['id']:e['atomic_variant'] for e in catalog['layouts'] if e.get('atomic_variant')}
+    catalog_ids = {e['id'] for e in catalog['layouts']}
     rng=random.Random(seed);chosen=[];family_usage=Counter();layout_usage=Counter();section_layout_id=None
     for index,p in enumerate(pages,1):
         if not isinstance(p,dict) or not str(p.get('purpose','')).strip():raise ValueError(f'第{index}页缺少purpose')
@@ -444,6 +445,24 @@ def resolve(library,request,*,catalog=None,candidate_summary_limit=12):
         if p.get('layout_locked') and not p.get('layout_id'):
             raise ValueError(f'第{index}页锁定版式时须提供组件编号')
         content=p.get('content') if isinstance(p.get('content'),dict) else {}
+        requested_id = p.get('layout_id')
+        migrated = DRAWN_BODY_LAYOUTS.get(requested_id) if requested_id not in catalog_ids else None
+        if migrated and p.get('role') not in STRUCTURAL_ROLE_ORDER:
+            kind, count, themes = migrated
+            mapped = migrated_body_content(content, requested_id)
+            items = mapped.get('items')
+            if (mapped.get('type') != kind or not isinstance(items, list) or len(items) != count
+                    or need.get('item_count', count) != count
+                    or p.get('theme', request.get('theme')) not in themes):
+                raise ValueError(f'第{index}页迁移组件 {requested_id} 需要 {count} 项 {kind} 内容及对应主题')
+            chosen.append({'page': index, 'purpose': p['purpose'], 'evidence': p.get('evidence'),
+                           'selection_mode': 'guided_composition', 'selection_label': '技能排版',
+                           'layout_id': None, 'fallback_layout_id': 'data_table' if kind == 'report_table' else kind,
+                           'candidate_ids': [], 'trial_results': [], 'source_stamp': None,
+                           'reason_code': 'MIGRATED_BUILTIN_LAYOUT', 'candidate_count': 0,
+                           'migrated_from_layout_id': requested_id, 'request_normalization': normalization,
+                           'manual_review_required': True})
+            continue
         explicit_atomic=p.get('layout_id') in atomic_variants
         requested_atomic=atomic_body.requested(p,content,atomic_variants.values(),taxonomy)
         atomic_items=requested_atomic or (explicit_atomic and 'items' in content)
@@ -483,7 +502,13 @@ def resolve(library,request,*,catalog=None,candidate_summary_limit=12):
             if p.get('role') in STRUCTURAL_ROLE_ORDER:
                 raise ValueError(f'第{index}页结构页没有合格版式；排除原因：{dict(rejected)}。')
             content = fallback_content if isinstance(fallback_content, dict) else {}
-            inferred = 'bullets' if atomic_items else fallback_type(content) if content else None
+            matching_type = p.get('content', {}).get('type')
+            if matching_type == 'report_table':
+                inferred = 'data_table'
+            elif 'body_match:parallel_cards' in normalization:
+                inferred = 'cards'
+            else:
+                inferred = 'bullets' if atomic_items else fallback_type(content) if content else None
             fallback_id = inferred if inferred in fallback_catalog() else inferred if inferred in ('bullets','cards','process','comparison','metrics') else None
             assessment=content.get('layout_assessment') if isinstance(content.get('layout_assessment'),dict) else {}
             wants_free=assessment.get('skill_suitable') is False and isinstance(content.get('free_layout'),dict)

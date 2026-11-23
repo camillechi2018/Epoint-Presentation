@@ -23,6 +23,7 @@ from assembly_backend import BACKENDS, select_backend
 from relation_match import STRUCTURAL_ROLE_ORDER as STRUCTURAL
 from body_header import body_components_enabled
 from content_adapters import matching_content, unmapped_title_body_fields
+from fallback_rules import migrated_body_content, report_table_layout
 import atomic_body
 from layout_trials import layout_key, retains_text, text_fields, trial_alternative
 
@@ -358,20 +359,33 @@ def execute_plan(request, plan, report, output: Path, *, catalog=None):
         if choice['selection_mode'] == 'guided_composition':
             if page_out.exists():
                 raise RuntimeError('试填失败后遗留单页文件，拒绝覆盖')
+            required_guided_text = list(text_fields(content)) if inferred else None
             try:
                 guided = (atomic_body.fallback_content(content, page.get('title'))
                           if choice.get('atomic_input') else dict(content))
+                interpreted, interpretation = matching_content(page)
+                if migrated_id := choice.get('migrated_from_layout_id'):
+                    interpreted = migrated_body_content(interpreted, migrated_id)
+                    guided = dict(interpreted)
+                if content.get('type') == 'report_table':
+                    guided = dict(content)
+                elif interpretation in ('body_match:report_table', 'body_match:parallel_cards'):
+                    guided = dict(interpreted)
+                if guided.get('type') == 'report_table':
+                    guided = report_table_layout(guided)
+                    required_guided_text = list(text_fields([guided['columns'], guided['rows']]))
                 if not guided.get('title'):
                     guided['title'] = page.get('title') or page['purpose']
                 guided['type'] = fallback_type(guided)
                 guided['_deck_page_number'] = index
                 if guided['type'] in STRUCTURAL:
                     raise ValueError('结构页不得由离线正文绘制器替代')
-                if guided['type'] == 'cards' and guided.get('variant', 'auto') == 'auto':
-                    count = len(guided.get('items', []))
-                    if count == 3:
-                        guided['variant'] = 'columns'
-                    elif count == 6:
+                if guided['type'] == 'cards':
+                    required_guided_text = list(text_fields(guided.get('items', [])))
+                    if guided.get('variant', 'auto') == 'auto' and choice.get('migrated_from_layout_id'):
+                        guided['variant'] = 'longcopy'
+                    elif (guided.get('variant', 'auto') == 'auto' and len(guided.get('items', [])) == 6
+                          and resolved_variant(guided, 'cards') == 'grid'):
                         guided['variant'] = 'stat_rows' if not used_guided_variants.get(('cards', 'stat_rows')) else 'grid'
                 if guided['type'] == content.get('type') == 'cards':
                     unused = unmapped_title_body_fields(content)
@@ -392,9 +406,10 @@ def execute_plan(request, plan, report, output: Path, *, catalog=None):
                 render_guided_page({'theme': report['theme'], 'complete_deck': False,
                                     'pages': [guided]}, page_out)
                 stamp = None
-                if inferred:
-                    if not retains_text(page_out, text_fields(content)):
+                if required_guided_text is not None:
+                    if not retains_text(page_out, required_guided_text):
                         raise ValueError('关系排版未保留完整原文')
+                if inferred:
                     choice['reason_code'] = 'INFERRED_RELATION_FIT'
                 choice['fallback_layout_id'] = guided['type']
                 choice['variant'] = resolved_variant(guided, guided['type']) or None

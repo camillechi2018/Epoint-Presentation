@@ -33,7 +33,7 @@ metadata:
 
 ## 从候选稿到交付
 
-蓝红通用页眉的分割线须显式关闭主题阴影。蓝红新绘正文和已登记组件共用可编辑画布和两层柔边弥散背景。登记的组件包括长文卡片（二、三、五、六项）、并列指标（两组、四组）、「单一论点与两条依据」、「背景、方法与目标」、「指标与原文证据」、四图与五图图集，以及「报告条目与原文依据」。整稿保存后按页核对分割线和背景图层，异常时阻止出稿。见[正文页眉与背景验收](references/source-and-qa.md#正文页眉与背景验收)。
+蓝红通用页眉的分割线须显式关闭主题阴影。蓝红新绘正文和已登记组件共用可编辑画布和两层柔边弥散背景。知识库候选试填后，技能可按项数和文字容量绘制并列卡片，也可用自适应行高的原生表格呈现报告条目与原文依据。其余内置组件覆盖并列指标、单一论点与两条依据、层级分组、指标与原文证据及四图、五图图集。整稿保存后按页核对分割线和背景图层，异常时阻止出稿。见[正文页眉与背景验收](references/source-and-qa.md#正文页眉与背景验收)。
 
 1. 每页 `content` 齐备、完整稿预检为 `ready` 时，使用正式请求和同一知识库执行 `scripts/run.py --request <正式请求.json> --library <知识库路径> --out <出稿报告.json> --plan-out <选版.json> --execute-out <成稿.pptx>`。Windows 默认核实微软 PowerPoint 并做限时保存、重开、导出检查；失败时报告阻断。macOS/Linux 默认用原生后端生成候选。安装、升级或解释器问题见[运行环境与自检](references/cross-platform-runtime.md)，显式选择后端见[跨平台组装](references/cross-platform-assembly.md)。
 2. 将结构页的 `layout_id`、`library_commit` 和 `source_stamp` 对应到最终页，核对组装关系、字体、Logo 可见尺寸和组件颜色。最终保存后执行 `scripts/audit_component_color_independence.py --input <成稿.pptx> --report <报告.json>`。逐页来源和质量检查见[来源与验收](references/source-and-qa.md)。

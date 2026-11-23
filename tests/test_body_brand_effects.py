@@ -14,18 +14,16 @@ from audit_deck import audit
 from body_background import uses_component_atmosphere
 from body_header import frame
 from fill_layout import fill
-from render_offline_brand import PROFILE, add_body_background, add_content_title, read_json
+from render_offline_brand import PROFILE, add_body_background, add_content_title, read_json, render
 
 
 class BodyBrandEffectsTests(unittest.TestCase):
     def test_filled_body_components_require_the_shared_background_and_shadowless_rule(self):
         library = Path(__file__).resolve().parents[1] / 'assets' / 'minimal-template-pack'
-        layouts = ('content-body-cards-two-longcopy', 'content-body-cards-three-longcopy',
-                   'content-body-cards-five-longcopy', 'content-blue-six-longcopy',
-                   'content-body-parallel-metrics-two', 'content-body-parallel-metrics-four',
+        layouts = ('content-body-parallel-metrics-two', 'content-body-parallel-metrics-four',
                    'content-body-single-focus', 'content-body-text-hierarchy',
                    'content-body-gallery-four', 'content-body-gallery-five',
-                   'content-body-metric-evidence', 'content-body-report-table')
+                   'content-body-metric-evidence')
         for layout in layouts:
             for theme in ('blue', 'red'):
                 with self.subTest(layout=layout, theme=theme), tempfile.TemporaryDirectory() as directory:
@@ -46,11 +44,6 @@ class BodyBrandEffectsTests(unittest.TestCase):
                         Image.new('RGB', (60, 40), (35 * index, 100, 180)).save(path)
                         images.append({'shape_name': slot['shape_name'], 'path': str(path), 'source': '测试生成'})
                     data['images'] = images
-                    table_rows = [['核对条目', '原文依据'], ['测试样本', '按记录逐项核对。'],
-                                  ['汇总结果', '按检查表登记。']]
-                    if layout == 'content-body-report-table':
-                        table_binding, = bindings['objects']['tables']
-                        data['tables'] = [{'shape_id': table_binding['shape_id'], 'rows': table_rows}]
                     request.write_text(json.dumps(data), encoding='utf-8')
                     fill(library, layout, request, deck, allow_draft=True, body_header_title='任务安排')
                     page = {'role': 'body', 'selection_mode': 'source_template', 'layout_id': layout,
@@ -67,9 +60,6 @@ class BodyBrandEffectsTests(unittest.TestCase):
                                      if shape.shape_type == MSO_SHAPE_TYPE.PICTURE]
                     for image in images:
                         self.assertIn(Path(image['path']).read_bytes(), picture_blobs)
-                    if layout == 'content-body-report-table':
-                        table, = [shape.table for shape in shapes if shape.has_table]
-                        self.assertEqual([[cell.text for cell in row.cells] for row in table.rows], table_rows)
                     layers = list(shapes)[:3]
                     self.assertEqual([shape.name for shape in layers],
                                      ['brand:canvas', 'brand:atmosphere:1', 'brand:atmosphere:2'])
@@ -89,6 +79,33 @@ class BodyBrandEffectsTests(unittest.TestCase):
                     inherited_shadow = audit(plan, damaged_deck)
                     self.assertFalse(inherited_shadow['p0_passed'])
                     self.assertEqual({issue['code'] for issue in inherited_shadow['issues']}, {'body_rule_shadow'})
+
+    def test_drawn_long_cards_and_report_tables_keep_editable_evidence(self):
+        evidence = '仅纳入统计期内有效记录，按编号去重后汇总。'
+        long_evidence = evidence * 3
+        items = [{'title': f'指标{i}统计口径与来源说明', 'body': long_evidence} for i in range(5)]
+        labels = ['完整口径', '来源', '时间', '检查', '说明']
+        entries = [long_evidence, '月度记录', '第一季度', '核对编号', '保留有效记录']
+        for theme in ('blue', 'red', 'deep-blue-tech'):
+            with self.subTest(theme=theme), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                deck, plan = root / 'slides.pptx', root / 'audit.json'
+                pages = [{'type': 'cards', 'title': '长文卡片', 'items': items},
+                         {'type': 'report_table', 'title': '条目与依据',
+                          'columns': ['条目', '原文依据'], 'row_labels': labels, 'items': entries}]
+                render({'theme': theme, 'complete_deck': False, 'pages': pages}, deck)
+                slides = Presentation(deck).slides
+                text = [shape.text for shape in slides[0].shapes if shape.has_text_frame]
+                self.assertEqual(text.count(long_evidence), len(items))
+                self.assertTrue(all(item['title'] in text for item in items))
+                table, = [shape.table for shape in slides[1].shapes if shape.has_table]
+                self.assertEqual([[cell.text for cell in row.cells] for row in table.rows],
+                                 [pages[1]['columns'], *map(list, zip(labels, entries, strict=True))])
+                self.assertGreater(table.rows[1].height, table.rows[2].height)
+                plan.write_text(json.dumps({'theme': theme, 'pages': [
+                    {'role': 'body', 'selection_mode': 'guided_composition'} for page in pages]}),
+                    encoding='utf-8')
+                self.assertTrue(audit(plan, deck)['p0_passed'])
 
     def test_atmosphere_stays_scoped_to_registered_themes_and_components(self):
         spec = frame()
