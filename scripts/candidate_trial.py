@@ -15,7 +15,7 @@ from library_location import asset_root
 
 
 def try_candidate(library, entry, data, page, content_path, trial_path, output,
-                  *, allow_draft, body_header_pilot, diagnostics=False):
+                  *, allow_draft, body_header_pilot, diagnostics=False, metadata=None):
     layout_id = entry["id"]
     title = page.get("title")
     theme = data["theme"]
@@ -46,13 +46,14 @@ def try_candidate(library, entry, data, page, content_path, trial_path, output,
                     partial, _, _ = adapt_structural_fields(entry, data, title, diagnostics=True)
                     if isinstance(partial.get("texts"), dict) and partial["texts"]:
                         capacity = preflight(library, entry, partial, title, theme,
-                                             body_header_pilot=body_header_pilot)
+                                             body_header_pilot=body_header_pilot, metadata=metadata)
                         record["partial_capacity_hard_issues"] = capacity["hard_issues"]
             else:
                 record["reason"] = "结构字段未完成真实内容映射"
             return None, record
 
-    capacity = preflight(library, entry, data, title, theme, body_header_pilot=body_header_pilot)
+    capacity = preflight(library, entry, data, title, theme, body_header_pilot=body_header_pilot,
+                         metadata=metadata)
     record["capacity_preflight"] = capacity
     hard_issues = capacity["hard_issues"]
     if hard_issues:

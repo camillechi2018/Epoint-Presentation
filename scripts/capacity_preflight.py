@@ -4,7 +4,6 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from functools import lru_cache
 from pathlib import Path
 
 from library_location import asset_root, text_binding_path
@@ -16,28 +15,41 @@ from period_schedule import schedule_intervals
 from progress_rings import progress_percentage
 
 
-@lru_cache(maxsize=8)
-def _review(root: str):
-    library = Path(root)
+class LayoutMetadata:
+    """Read-only rules, bindings and review evidence for one planning or fill pass."""
+
+    def __init__(self):
+        self._documents = {}
+        self._reviews = {}
+
+    def document(self, path, encoding='utf-8-sig'):
+        key = (path, encoding)
+        if key not in self._documents:
+            raw = path.read_bytes()
+            self._documents[key] = (json.loads(raw.decode(encoding)), hashlib.sha256(raw).hexdigest())
+        return self._documents[key]
+
+    def read_json(self, path, encoding='utf-8'):
+        return self.document(path, encoding)[0]
+
+    def review(self, library):
+        if library not in self._reviews:
+            self._reviews[library] = _read_review(library, self)
+        return self._reviews[library]
+
+
+def _read_review(library, metadata):
     capacity_path = library / 'review' / 'body-longcopy-capacity.json'
     policy_path = library / 'review' / 'body-capacity-preflight-policy.json'
     if not capacity_path.is_file():
         return {}, {}, None, None
-    capacity = json.loads(capacity_path.read_text(encoding='utf-8-sig'))
-    policy = (json.loads(policy_path.read_text(encoding='utf-8-sig'))
-              if policy_path.is_file() else {'near_hard_limit_ratio': .85,
-                                             'near_recommended_limit_ratio': .9})
+    capacity, capacity_sha = metadata.document(capacity_path)
+    policy, policy_sha = (metadata.document(policy_path) if policy_path.is_file()
+                          else ({'near_hard_limit_ratio': .85, 'near_recommended_limit_ratio': .9}, None))
     by_layout = {item['layout_id']: {field['semantic_path']: field
                                     for field in item.get('fields', [])}
                  for item in capacity.get('layouts', [])}
-    return (by_layout, policy, hashlib.sha256(capacity_path.read_bytes()).hexdigest(),
-            hashlib.sha256(policy_path.read_bytes()).hexdigest() if policy_path.is_file() else None)
-
-
-@lru_cache(maxsize=2048)
-def _bindings(path: str):
-    file = Path(path)
-    return json.loads(file.read_text(encoding='utf-8-sig'))['fields'], hashlib.sha256(file.read_bytes()).hexdigest()
+    return by_layout, policy, capacity_sha, policy_sha
 
 
 def required_input_fields(fields):
@@ -129,7 +141,7 @@ def wrap_card_body(value, width, max_lines):
 
 
 def preflight(library: Path, entry: dict, content: dict, page_title: str | None,
-              theme: str, *, body_header_pilot=False) -> dict:
+              theme: str, *, body_header_pilot=False, metadata=None) -> dict:
     """Return hard binding failures, advisory long-copy pressure and wrap options."""
     library = asset_root(Path(library).resolve(), entry)
     mapped, adapter = adapt_for_layout(entry['id'], content, page_title, entry=entry)
@@ -138,8 +150,11 @@ def preflight(library: Path, entry: dict, content: dict, page_title: str | None,
     item_count = mapped.get('item_count')
     selected_body_binding = binding_for_count(contract, item_count) if contract else None
     binding_rel = selected_body_binding[0] if selected_body_binding else text_binding_path(entry, theme, item_count)
-    bindings, binding_sha = _bindings(str(library / binding_rel))
-    longcopy, policy, longcopy_sha, policy_sha = _review(str(library))
+    if metadata is None:
+        metadata = LayoutMetadata()
+    binding_data, binding_sha = metadata.document(library / binding_rel)
+    bindings = binding_data['fields']
+    longcopy, policy, longcopy_sha, policy_sha = metadata.review(library)
     reviewed_fields = longcopy.get(entry['id'], {})
     hard, advisory, wrap_suggestions, details = [], [], {}, []
     header = {}
@@ -233,8 +248,7 @@ def preflight(library: Path, entry: dict, content: dict, page_title: str | None,
                         'reviewed_recommended_cjk_chars': recommended})
     rules_rel = entry.get('layout_rules')
     rules_file = library / rules_rel if rules_rel else None
-    rules = json.loads(rules_file.read_text(encoding='utf-8-sig')) if rules_file and rules_file.is_file() else {}
-    rules_sha = hashlib.sha256(rules_file.read_bytes()).hexdigest() if rules_file and rules_file.is_file() else None
+    rules, rules_sha = metadata.document(rules_file) if rules_file and rules_file.is_file() else ({}, None)
     if schedule := rules.get('month_axis_schedule'):
         try:
             month_ranges(schedule, content.get('items'))

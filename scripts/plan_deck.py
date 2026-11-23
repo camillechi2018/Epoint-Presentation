@@ -11,7 +11,7 @@ from relation_match import (STRUCTURAL_ROLE_ORDER, canonical, load_taxonomy,
 from fallback_rules import fallback_type, fallback_catalog, uses_minimal_body_layout
 from content_adapters import (BODY_RELATIONS, BODY_INPUT_RELATIONS,
                               adapt_body_input, adapt_for_layout, matching_content)
-from capacity_preflight import missing_binding_paths, preflight, required_input_fields
+from capacity_preflight import LayoutMetadata, missing_binding_paths, preflight, required_input_fields
 from content_adapters import normalize_binding_path_aliases, structural_required_paths
 from library_location import text_binding_path
 from body_header import body_components_enabled, contract_for, title_path
@@ -68,10 +68,14 @@ def normalize_body_request(page):
     return page, notes
 
 
-def count_profile(entry, root):
+def _read_json(path, encoding='utf-8'):
+    return json.loads(path.read_text(encoding=encoding))
+
+
+def count_profile(entry, root, *, read_json=_read_json):
     """Use recorded fixed-count evidence when old layouts lack verified_counts."""
     root=asset_root(root,entry)
-    rules=json.loads((root/entry['layout_rules']).read_text(encoding='utf-8'))
+    rules=read_json(root/entry['layout_rules'])
     verified=rules.get('verified_counts')
     if isinstance(verified,list):
         return verified,rules.get('source_count')
@@ -81,14 +85,14 @@ def count_profile(entry, root):
             and supported==[source_count] and type(source_count) is int:
         return supported,source_count
     if entry.get('classification_status')=='verified' and entry.get('semantic_review'):
-        review=json.loads((root/entry['semantic_review']).read_text(encoding='utf-8'))
+        review=read_json(root/entry['semantic_review'])
         count=review.get('source_item_count')
         if review.get('normal_use_status')=='static_pptx_verified_draft' and type(count) is int and count>0:
             return [count],count
     return [],source_count
 
 
-def binding_gap(entry, page, root, theme, *, binding_rel=None):
+def binding_gap(entry, page, root, theme, *, binding_rel=None, read_json=_read_json):
     """Count fields not yet mapped by an explicitly prepared template payload."""
     content = page.get('content') if isinstance(page.get('content'), dict) else {}
     contract = entry.get('matching_contract') or {}
@@ -96,7 +100,7 @@ def binding_gap(entry, page, root, theme, *, binding_rel=None):
         content = dict(content, item_count=(page.get('needs') or {}).get('item_count'))
     content, _ = adapt_for_layout(entry['id'], content, page.get('title'), entry=entry)
     binding_rel = binding_rel or text_binding_path(entry, theme, content.get('item_count'))
-    fields = json.loads((asset_root(root, entry) / binding_rel).read_text(encoding='utf-8-sig'))['fields']
+    fields = read_json(asset_root(root, entry) / binding_rel, 'utf-8-sig')['fields']
     if contract.get('required_binding_paths_by_count'):
         inactive = set(contract['required_binding_paths']) - set(
             structural_required_paths(contract, content.get('item_count')))
@@ -210,7 +214,7 @@ def matches_structural_contract(entry, page, taxonomy):
     return True
 
 
-def matches_structural_discovery(entry, page, taxonomy, root=None):
+def matches_structural_discovery(entry, page, taxonomy, root=None, *, read_json=_read_json):
     """Find a reviewed layout by geometry before checking template-specific fields."""
     contract = entry.get('matching_contract') or {}
     if contract.get('policy') != 'structural':
@@ -235,7 +239,7 @@ def matches_structural_discovery(entry, page, taxonomy, root=None):
         if adapter is None:
             return False
     if root is not None and isinstance(content.get('items'), list):
-        counts, _ = count_profile(entry, root)
+        counts, _ = count_profile(entry, root, read_json=read_json)
         if len(content['items']) not in counts:
             return False
     if matches_structural_contract(entry, page, taxonomy):
@@ -254,7 +258,7 @@ def matches_structural_discovery(entry, page, taxonomy, root=None):
     if type(actual_count) is not int or actual_count < 1:
         return False
     if root is not None:
-        counts, _ = count_profile(entry, root)
+        counts, _ = count_profile(entry, root, read_json=read_json)
         if actual_count not in counts:
             return False
     return True
@@ -292,7 +296,7 @@ def matches_structural_relation(entry, page, taxonomy):
         requested = canonical(CONTENT_RELATIONS.get(content.get('type')), taxonomy)
     return bool(requested and requested == entry.get('canonical_relation'))
 
-def eligible(e, p, request, taxonomy, *, atomic_requested=False):
+def eligible(e, p, request, taxonomy, *, atomic_requested=False, read_json=_read_json):
     reasons=[]
     requested_style=p.get('style_family',request.get('style_family'))
     if requested_style:
@@ -318,7 +322,7 @@ def eligible(e, p, request, taxonomy, *, atomic_requested=False):
         requested_count = (p.get('needs') or {}).get('item_count')
         if count is not None and (type(count) is not int or (requested_count is not None and count != requested_count)):
             reasons.append('invalid_item_count')
-        if count is not None and (type(count) is not int or count not in count_profile(e,request['_root'])[0]):
+        if count is not None and (type(count) is not int or count not in count_profile(e,request['_root'],read_json=read_json)[0]):
             reasons.append('item_count_unverified')
         if count is None and requested_count is not None:
             content = dict(content, item_count=requested_count)
@@ -338,7 +342,7 @@ def eligible(e, p, request, taxonomy, *, atomic_requested=False):
             path = title_path(replaces_title)
             if path not in texts:
                 matching_page = dict(p, content=dict(normalized, texts=dict(texts, **{path: p['title']})))
-        structural_match = matches_structural_discovery(e, matching_page, taxonomy, request['_root'])
+        structural_match = matches_structural_discovery(e, matching_page, taxonomy, request['_root'], read_json=read_json)
         structural_relation_match = matches_structural_relation(e, matching_page, taxonomy)
         contract = e.get('matching_contract') or {}
         if e.get('matching_policy') == 'data_contract':
@@ -364,11 +368,11 @@ def eligible(e, p, request, taxonomy, *, atomic_requested=False):
     if title_chars is not None:
         if type(title_chars) is not int or title_chars<1:reasons.append('invalid_title_length')
         elif not atomic and e.get('title_pressure_status')=='tested_short_copy_only' and not replaces_title:
-            rules=json.loads((asset_root(request['_root'],e)/e['layout_rules']).read_text(encoding='utf-8'))
+            rules=read_json(asset_root(request['_root'],e)/e['layout_rules'])
             if title_chars>rules.get('title_pressure_test',{}).get('safe_title_chars',0):reasons.append('title_over_capacity')
         if isinstance(p.get('title'),str) and e.get('role') in STRUCTURAL_ROLE_ORDER:
             binding_rel = e.get(binding_path_key(e, theme))
-            fields=json.loads((request['_root']/binding_rel).read_text(encoding='utf-8'))['fields']
+            fields=read_json(request['_root']/binding_rel)['fields']
             aliases={'cover':('cover.title',),'closing':('closing.title',),
                      'section':('chapter.title','section.title'),
                      'directory':('page.title',)}.get(e.get('role'),())
@@ -382,7 +386,7 @@ def eligible(e, p, request, taxonomy, *, atomic_requested=False):
         rules_path=e.get('layout_rules')
         if not rules_path:reasons.append('count_rules_missing')
         else:
-            available_counts,native_count=count_profile(e,request['_root'])
+            available_counts,native_count=count_profile(e,request['_root'],read_json=read_json)
             requested_count=need.get('item_count')
             if atomic and (available_counts != [atomic['count']] or native_count != atomic['count']):
                 reasons.append('atomic_count_contract')
@@ -390,12 +394,12 @@ def eligible(e, p, request, taxonomy, *, atomic_requested=False):
                 reasons.append('item_count_unverified')
     if e.get('role')=='directory' and isinstance(p.get('items'),list):
         items=p['items']
-        rules=json.loads((request['_root']/e['layout_rules']).read_text(encoding='utf-8'))
+        rules=read_json(request['_root']/e['layout_rules'])
         if len(items) not in rules.get('verified_counts',[]) or (need.get('item_count') is not None and need['item_count']!=len(items)):
             reasons.append('item_count_unverified')
         elif rules.get('directory_item_fields'):
             binding_rel = e[binding_path_key(e, theme)]
-            bindings=json.loads((request['_root']/binding_rel).read_text(encoding='utf-8'))['fields']
+            bindings=read_json(request['_root']/binding_rel)['fields']
             field_limits={field['field']:field for field in bindings}
             for index,item in enumerate(items):
                 fields=rules['directory_item_fields'][min(index,len(rules['directory_item_fields'])-1)]
@@ -422,6 +426,8 @@ def summarize_selection(pages):
 
 def resolve(library,request,*,catalog=None,candidate_summary_limit=12):
     root=Path(library).resolve()
+    metadata = LayoutMetadata()
+    read_json = metadata.read_json
     if catalog is None:
         catalog=load(root)
     taxonomy=load_taxonomy(root,catalog);request=dict(request);request['_root']=root
@@ -462,7 +468,7 @@ def resolve(library,request,*,catalog=None,candidate_summary_limit=12):
                              and not p.get('layout_id')
                              and uses_minimal_body_layout(content.get('type'), content.get('variant')))
         for e in ([] if minimal_requested else catalog['layouts']):
-            reasons=eligible(e,p,request,taxonomy,atomic_requested=requested_atomic)
+            reasons=eligible(e,p,request,taxonomy,atomic_requested=requested_atomic,read_json=read_json)
             if reasons: rejected.update(reasons)
             else:candidates.append(e)
         if p.get('role')=='section' and section_layout_id is not None:
@@ -508,15 +514,15 @@ def resolve(library,request,*,catalog=None,candidate_summary_limit=12):
             exact_relation=0 if ordinary or not relation or relation==e.get('information_relation') or relation in e.get('relation_aliases',[]) else 1
             fit=0 if ordinary else semantic_fit(p,e)
             requested_count=need.get('item_count')
-            _,native_count=count_profile(e,root) if requested_count is not None else ([],None)
+            _,native_count=count_profile(e,root,read_json=read_json) if requested_count is not None else ([],None)
             count_fit=1 if requested_count is not None and requested_count==native_count else 0
             capacity_content = content
             if e.get('bindings_by_count') and content.get('item_count') is None:
                 capacity_content = dict(content, item_count=requested_count)
             capacity_check=preflight(root,e,capacity_content,p.get('title'),p.get('theme',request.get('theme')),
-                                     body_header_pilot=body_components_enabled(request))
+                                     body_header_pilot=body_components_enabled(request), metadata=metadata)
             gap=binding_gap(e,p,root,p.get('theme',request.get('theme')),
-                            binding_rel=capacity_check['binding_path'])
+                            binding_rel=capacity_check['binding_path'], read_json=read_json)
             hard_count=len(capacity_check['hard_issues'])
             warning_count=len(capacity_check['advisory'])
             margin=capacity_check['capacity_margin'] if capacity_check['capacity_margin'] is not None else -1
@@ -529,11 +535,11 @@ def resolve(library,request,*,catalog=None,candidate_summary_limit=12):
             candidate=row[12]
             binding_rel = row[13]['binding_path']
             candidate_root=asset_root(root,candidate)
-            binding_fields=json.loads((candidate_root/binding_rel).read_text(encoding='utf-8-sig'))['fields']
+            binding_fields=read_json(candidate_root/binding_rel, 'utf-8-sig')['fields']
             candidate_summaries.append({
                 'layout_id':candidate['id'],
                 'structure_type':(candidate.get('matching_contract') or {}).get('structure_type'),
-                'verified_counts':count_profile(candidate,root)[0],
+                'verified_counts':list(count_profile(candidate,root,read_json=read_json)[0]),
                 'field_roles':sorted({field.get('semantic_role') for field in binding_fields
                                       if field.get('semantic_role') and field.get('semantic_role')
                                       not in ('brand_locked','decoration_locked')}),
