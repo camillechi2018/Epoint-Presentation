@@ -2,7 +2,7 @@
 
 组装与应用验证分别记录，默认后端详见[跨平台组装与验证](cross-platform-assembly.md)。Windows 默认 PowerPoint 组装仅接受经核实的 Microsoft PowerPoint。检查 COM 注册对应的可执行文件、厂商信息以及实际启动应用的名称和路径。WPS 的兼容注册不能当作微软 PowerPoint；不自动切换原生后端。
 
-Windows PowerPoint 后端执行前自动进行保存、关闭、重新打开、导出一页的真实冒烟检查。macOS/Linux 默认原生组装不执行 Windows Office 操作。手动诊断可运行 `scripts/run.py --doctor --goal assemble --office-smoke --out <诊断.json>`。普通 doctor 不启动 Office，只把已识别应用标为未验证。
+Windows 完整出稿先识别 PowerPoint 并填充临时单页，再在组装前自动进行保存、关闭、重新打开、导出一页的实际操作测试。完整出稿在同一 PowerPoint 会话内完成测试、组装和最终验证。完成全部文件修整后，从磁盘重开最终成稿并逐页导出。macOS/Linux 默认原生组装不执行 Windows Office 操作。手动诊断可运行 `scripts/run.py --doctor --goal assemble --office-smoke --out <诊断.json>`。普通 doctor 不启动 Office，只把已识别应用标为未验证。
 
 Office 检测限时 15 秒，冒烟限时 45 秒；正式组装和最终打开/逐页导出分别默认限时 300 秒。请求可用整数 `office_timeout_seconds` 调整为 1–3600 秒。独立 `assemble_deck.ps1` 支持 `-TimeoutSeconds`。失败记录保留在任务目录；超时返回 `OFFICE_OPERATION_TIMEOUT`。仅对登记为本次新建、且 PID、启动时间、路径仍吻合的 Office 进程尝试清理，不按进程名关闭 Office，不关闭已存在的用户会话。若 COM 启动阶段就阻塞、尚未取得进程归属，则保留未确认的进程并报告该限制。
 

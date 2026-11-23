@@ -5,6 +5,7 @@
  [string]$PythonExe='python',
  [string]$FontProfile='windows',
  [string]$OwnerFile,
+ [string]$SmokeDirectory='',
  [Parameter(Mandatory=$true)][string]$SeedPresentation
 )
 $ErrorActionPreference='Stop'
@@ -16,8 +17,25 @@ $inputs=@();foreach($item in $items){$fp=[string]$item.path;if(-not [IO.Path]::I
 New-Item -ItemType Directory -Force -Path (Split-Path $dest -Parent)|Out-Null
 if($RenderDirectory){$RenderDirectory=[IO.Path]::GetFullPath($RenderDirectory);New-Item -ItemType Directory -Force -Path $RenderDirectory|Out-Null}
 . (Join-Path $PSScriptRoot 'office_guard.ps1')
+function Start-EpointWorkerPhase([string]$Name){
+ if($OwnerFile){[IO.File]::WriteAllText((Join-Path (Split-Path $OwnerFile -Parent) "$Name.started"),'')}
+}
 $officeSession=Start-EpointPowerPoint $OwnerFile
 $app=$officeSession.app;$result=$null;$records=@()
+try{
+if($SmokeDirectory){
+ $smokeReport=Join-Path $SmokeDirectory 'backend.json'
+ try{
+  $smoke=Test-EpointPowerPointSession $app $SeedPresentation $SmokeDirectory
+  if($smoke.slide_count -ne 1){throw 'OFFICE_SMOKE_TEST_FAILED'}
+  $smoke | ConvertTo-Json | Set-Content -LiteralPath $smokeReport -Encoding UTF8
+ }catch{
+  @{status='failed';error_code='OFFICE_SMOKE_TEST_FAILED';detail=$_.Exception.Message} |
+   ConvertTo-Json | Set-Content -LiteralPath $smokeReport -Encoding UTF8
+  throw
+ }
+ Start-EpointWorkerPhase 'assembly'
+}
 try{
  $result=Open-EpointEmptyPresentation $app $SeedPresentation
  foreach($item in $inputs){
@@ -116,7 +134,7 @@ try{
   }finally{if($src){$src.Close()}}
  }
  $result.SaveAs($dest,24)
-}finally{if($result){$result.Close()};Stop-EpointPowerPoint $officeSession}
+}finally{if($result){$result.Close()}}
 & $PythonExe (Join-Path $PSScriptRoot 'restore_recovered_geometry.py') --input $dest --manifest $mf
 if($LASTEXITCODE -ne 0){throw '合并后占位框文字位置恢复失败'}
 & $PythonExe (Join-Path $PSScriptRoot 'normalize_fonts.py') --input $dest --out $dest --profile $FontProfile
@@ -141,8 +159,14 @@ if($LASTEXITCODE -ne 0){throw "成稿字体不符合任务字体配置 $FontProf
 $logoReport=[IO.Path]::ChangeExtension($dest,'logo.json')
 & $PythonExe (Join-Path $PSScriptRoot 'audit_logo.py') --input $dest --theme $plan.theme --require-every-slide --report $logoReport
 if($LASTEXITCODE -ne 0){throw "成稿 Logo 数量或所选风格外观不合格；详见 $logoReport"}
-# Final reopening and export run in a separate bounded worker after all mutations.
+# Reopen from disk after all file mutations, using the same PowerPoint session.
+if($RenderDirectory){
+ Start-EpointWorkerPhase 'render'
+ Export-EpointPresentation $app $dest $RenderDirectory 'render' |
+  ConvertTo-Json | Set-Content -LiteralPath (Join-Path $RenderDirectory 'powerpoint-validation.json') -Encoding UTF8
+}
 $report=@{manifest=$mf;output=$dest;slides=$records;slide_count=$records.Count;editable_pptx=$true;rendered=[bool]$RenderDirectory;font_profile=$FontProfile;theme_integrity_report=$themeReport;theme_source_consistent=$themeSourceConsistent;color_independence_report=$colorReport;media_fallback_report=$mediaReport;font_report=$fontReport;logo_report=$logoReport;restored_image_references=$media.restored;visual_qa='not_run';collision_qa='not_run';limitations=@('合并不代表内容与排版验收通过；还需检查文字、关系、数据和配图')}
 $report['master_optimization_report']=$masterReport
 $report|ConvertTo-Json -Depth 8|Set-Content -LiteralPath ([IO.Path]::ChangeExtension($dest,'assembly.json')) -Encoding utf8
 Write-Output ('Assembled '+$records.Count+' editable slides')
+}finally{Stop-EpointPowerPoint $officeSession}

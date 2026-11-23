@@ -63,3 +63,28 @@ function Open-EpointEmptyPresentation($app, [string]$SeedPresentation){
  }
  return $deck
 }
+
+function Export-EpointPresentation($app, [string]$InputPath, [string]$RenderDirectory, [string]$Mode){
+ $path=[IO.Path]::GetFullPath($InputPath)
+ $hash=(Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLower()
+ New-Item -ItemType Directory -Path $RenderDirectory -Force | Out-Null
+ $deck=$app.Presentations.Open($path,-1,0,0)
+ try{
+  $count=$deck.Slides.Count
+  foreach($slide in $deck.Slides){
+   $slide.Export((Join-Path $RenderDirectory ('P{0:D3}.png' -f $slide.SlideIndex)),'PNG',1280,720)
+  }
+  return @{status='passed';application='Microsoft PowerPoint';version=$app.Version;slide_count=$count;opened=$true;output_sha256=$hash;validation=$Mode}
+ }finally{$deck.Close()}
+}
+
+function Test-EpointPowerPointSession($app, [string]$SeedPresentation, [string]$Folder){
+ $path=Join-Path $Folder 'smoke.pptx'
+ $deck=Open-EpointEmptyPresentation $app $SeedPresentation
+ try{
+  $slide=$deck.Slides.Add(1,12)
+  $slide.Shapes.AddTextbox(1,20,20,300,80).TextFrame.TextRange.Text='Epoint Office smoke test'
+  $deck.SaveAs($path,24)
+ }finally{$deck.Close()}
+ return Export-EpointPresentation $app $path (Join-Path $Folder 'smoke-render') 'smoke'
+}
