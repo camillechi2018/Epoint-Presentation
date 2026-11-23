@@ -250,6 +250,76 @@ def _ordered_groups(groups, count):
     return order == list(range(count))
 
 
+def candidate_content(entry, page, original):
+    """Apply a caller's source-backed copy to this candidate only."""
+    proposals = page.get('component_copy') or {}
+    proposal = proposals.get(entry['id'])
+    if entry.get('asset_origin') == 'skill' or page.get('role') in STRUCTURAL_ROLES:
+        return original
+    if proposal is None:
+        contract = entry.get('matching_contract') or {}
+        required = contract.get('required_binding_paths') or []
+        if (original.get('type') == 'cards' and 'overview.heading' in required
+                and page.get('title') and not original.get('overview')
+                and not original.get('texts')):
+            return dict(original, overview={'heading': page['title']})
+        return original
+    if (not isinstance(proposal, dict) or original.get('type') != 'cards'
+            or set(proposal) - {'overview', 'items', 'common_prefix'}):
+        raise ValueError('component_copy requires cards with overview or item slots')
+    items = original.get('items', [])
+    sources = page.get('item_sources', [])
+    changes = proposal.get('items', [{} for item in items])
+    if (not isinstance(changes, list) or not isinstance(sources, list)
+            or len(items) != len(changes) or len(items) != len(sources)):
+        raise ValueError('component_copy item count differs from source records')
+    result = dict(original)
+    prepared = []
+    prefix = proposal.get('common_prefix')
+    if prefix is not None and (not isinstance(prefix, str) or not prefix.strip() or len(items) < 2):
+        raise ValueError('a common prefix requires multiple items and nonempty text')
+    for item, change, source in zip(items, changes, sources):
+        if not isinstance(item, dict) or not isinstance(source, dict) or not source.get('ref'):
+            raise ValueError('component_copy needs an ordered source reference for each item')
+        if not isinstance(change, dict) or set(change) - {'short_title', 'note', 'body_note'}:
+            raise ValueError('unsupported component_copy item field')
+        copy = dict(item)
+        if prefix:
+            if not isinstance(copy.get('body'), str) or not copy['body'].startswith(prefix):
+                raise ValueError('shared wording must apply to every item')
+            copy['body'] = copy['body'][len(prefix):].strip()
+        if change:
+            if not source.get('ref') or not isinstance(source.get('excerpt'), str):
+                raise ValueError('component_copy needs an item source reference and excerpt')
+            suffix = change.get('body_note')
+            if suffix is not None:
+                if (not isinstance(suffix, str) or not suffix.strip() or 'note' in change
+                        or not copy.get('body', '').endswith(suffix)):
+                    raise ValueError('body_note must be the same item’s exact trailing clause')
+                copy['body'] = copy['body'][:-len(suffix)].strip()
+                copy['note'] = suffix
+            short = change.get('short_title')
+            if short is not None:
+                if not isinstance(short, str) or not short or short not in item.get('title', ''):
+                    raise ValueError('short_title must be copied from the same item title')
+                copy.update(title=short, body=item['title'] + '｜' + copy.get('body', ''))
+            note = change.get('note')
+            if note is not None:
+                if not isinstance(note, str) or not note or note not in source['excerpt']:
+                    raise ValueError('component note is absent from its source item')
+                copy['note'] = note
+        prepared.append(copy)
+    result['items'] = prepared
+    if 'overview' in proposal:
+        heading = proposal['overview']
+        if not isinstance(heading, str) or not heading or heading not in page.get('title', ''):
+            raise ValueError('overview must be grounded in the page title')
+        result['overview'] = {'heading': heading}
+    if prefix:
+        result['overview'] = dict(result.get('overview', {}), body=prefix)
+    return result
+
+
 def matching_content(page):
     """Add a source-proven matching interpretation while keeping fallback content intact."""
     original = page.get('content') or {}

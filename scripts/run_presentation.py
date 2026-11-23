@@ -279,7 +279,8 @@ def execute_plan(request, plan, report, output: Path, *, catalog=None):
             repeat_search = (previous_id and candidate_ids and previous_id == candidate_ids[0]
                              and not page.get('layout_id') and page.get('role') not in STRUCTURAL)
             if repeat_search:
-                candidate_ids = sorted(candidate_ids, key=lambda ident: ident == previous_id)
+                candidate_ids = sorted(candidate_ids, key=lambda ident: (
+                    entries[ident].get('asset_origin') == 'skill', ident == previous_id))
             for candidate_id in candidate_ids:
                 trial_path = work / f'P{index:03d}-{candidate_id}-content.json'
                 filled, trial = try_candidate(
@@ -307,12 +308,23 @@ def execute_plan(request, plan, report, output: Path, *, catalog=None):
                         choice['body_header'] = filled['body_header']
                     choice['layout_id'] = candidate_id
                     choice['selection_label'] = selection_label(entries[candidate_id])
+                    choice['family_id'] = entries[candidate_id].get('family_id', candidate_id)
+                    choice['source_mapping'] = entries[candidate_id].get('source_mapping')
                     choice.pop('atomic_variant', None)
                     choice.update(atomic_body.trace(entries[candidate_id]))
                     if page.get('role') == 'section' and locked_section_layout_id is None:
                         locked_section_layout_id = candidate_id
                     break
+            if choice.get('eligible_by_origin'):
+                original_trials = [t for t in choice['trial_results'] if t.get('asset_origin') != 'skill']
+                if not any(t['status'] == 'filled' for t in original_trials):
+                    eligible = choice['eligible_by_origin']['knowledge']
+                    choice['knowledge_fallback_reason'] = (
+                        'NO_ELIGIBLE_ORIGINAL' if not eligible else
+                        'ORIGINAL_TRIAL_BUDGET' if eligible > len(original_trials) else 'ORIGINAL_TRIALS_REJECTED')
             if filled is None:
+                if page.get('layout_locked'):
+                    raise ValueError(f"第 {index} 页锁定组件试填失败：{choice['trial_results']}")
                 if page.get('role') in STRUCTURAL:
                     raise ValueError(f'第 {index} 页结构模板试填均失败：{choice["trial_results"]}')
                 assessment = content.get('layout_assessment') if isinstance(content.get('layout_assessment'), dict) else {}
@@ -394,7 +406,9 @@ def execute_plan(request, plan, report, output: Path, *, catalog=None):
         current = layout_key(choice) if page.get('role') not in STRUCTURAL else None
         if current and actual_layouts and actual_layouts[-1] == current:
             choice['repeated_layout_review'] = True
-            if trial_alternative(page, choice, current, page_out, report['theme'], repeat=True):
+            if choice['selection_label'] == '知识库模板' or page.get('layout_locked'):
+                choice['repeat_retained_reason'] = '复用可完整承载内容的原稿或用户锁定组件'
+            elif trial_alternative(page, choice, current, page_out, report['theme'], repeat=True):
                 stamp = None
             else:
                 if page.get('material_excerpt') or (not page.get('layout_id') and content.get('variant', 'auto') == 'auto'):
@@ -404,13 +418,17 @@ def execute_plan(request, plan, report, output: Path, *, catalog=None):
             final_variant = (choice['fallback_layout_id'], choice.get('variant'))
             used_guided_variants[final_variant] = used_guided_variants.get(final_variant, 0) + 1
         actual_layouts.append(layout_key(choice) if page.get('role') not in STRUCTURAL else None)
-        if page.get('material_excerpt'):
+        if page.get('material_excerpt') or page.get('notes'):
             from pptx import Presentation
             source_page = Presentation(page_out)
             notes = source_page.slides[0].notes_slide.notes_text_frame
             if notes is not None:
-                notes.text = 'Word 原文｜' + '／'.join(page.get('source_refs', [])) + '\n' + page['material_excerpt']
-                source_page.save(page_out)
+                note_text = page.get('notes', '')
+                if page.get('material_excerpt'):
+                    note_text = 'Word 原文｜' + '／'.join(page.get('source_refs', [])) + '\n' + page['material_excerpt']
+                if notes.text != note_text:
+                    notes.text = note_text
+                    source_page.save(page_out)
         slides.append({'path': str(page_out), 'role': page.get('role', 'body'),
                        'layout_id': choice.get('layout_id'), 'source_stamp': stamp})
         free_images = [element['source_path'] for element in content.get('free_layout', {}).get('elements', [])
@@ -457,6 +475,8 @@ def execute_plan(request, plan, report, output: Path, *, catalog=None):
     if not audit['p0_passed']:
         raise RuntimeError('成稿来源或内容验收失败：' + str(audit['issues'][:5]))
     plan['selection_summary'] = summarize_selection(plan['pages'])
+    plan['body_selection_summary'] = summarize_selection([
+        choice for page, choice in zip(pages, plan['pages']) if page.get('role') not in STRUCTURAL])
     delivery = assess_delivery(output, render_dir, len(slides), native_render)
     return {'output': str(output.resolve()), 'slides': len(slides),
             'library_used': plan['selection_summary']['知识库模板'] > 0,

@@ -99,7 +99,7 @@ def audit(library: Path, request_path: Path, work: Path, trial: bool) -> dict:
                 'bundled_body_filled_pages': counters['bundled_body_filled_pages'] if trial else None,
                 'trial_pass_rate': counters['trial_filled_pages'] / counters['eligible_pages']
                                    if trial and counters['eligible_pages'] else None,
-                'body_source_template_rate': counters['trial_filled_pages'] / total if trial and total else None,
+                'body_source_template_rate': (counters['trial_filled_pages'] - counters['bundled_body_filled_pages']) / total if trial and total else None,
                 'trial_rejection_reasons': {key: value for key, value in counters.items()
                                             if key in ('MISSING_REQUIRED_FIELD', 'TEXT_OVER_CAPACITY',
                                                        'IMAGE_SLOT_MISMATCH', 'ITEM_COUNT_MISMATCH',

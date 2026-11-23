@@ -12,7 +12,7 @@ from fallback_rules import fallback_type, fallback_catalog, uses_minimal_body_la
 from content_adapters import (BODY_RELATIONS, BODY_INPUT_RELATIONS,
                               adapt_body_input, adapt_for_layout, matching_content)
 from capacity_preflight import LayoutMetadata, missing_binding_paths, preflight, required_input_fields
-from content_adapters import normalize_binding_path_aliases, structural_required_paths
+from content_adapters import candidate_content, normalize_binding_path_aliases, structural_required_paths
 from library_location import text_binding_path
 from body_header import body_components_enabled, contract_for, title_path
 import atomic_body
@@ -441,6 +441,8 @@ def resolve(library,request,*,catalog=None,candidate_summary_limit=12):
         if not isinstance(p,dict) or not str(p.get('purpose','')).strip():raise ValueError(f'第{index}页缺少purpose')
         fallback_content = p.get('content')
         p,normalization=normalize_body_request(p);need=dict(p.get('needs') or {})
+        if p.get('layout_locked') and not p.get('layout_id'):
+            raise ValueError(f'第{index}页锁定版式时须提供组件编号')
         content=p.get('content') if isinstance(p.get('content'),dict) else {}
         explicit_atomic=p.get('layout_id') in atomic_variants
         requested_atomic=atomic_body.requested(p,content,atomic_variants.values(),taxonomy)
@@ -476,6 +478,8 @@ def resolve(library,request,*,catalog=None,candidate_summary_limit=12):
             if not candidates:
                 raise ValueError(f'第{index}页无法沿用整稿章节版式 {section_layout_id}；请调整章节文案或为全部章节重选同一版式。')
         if not candidates:
+            if p.get('layout_locked'):
+                raise ValueError(f"第{index}页锁定组件 {p['layout_id']} 不符合主题、结构或字段要求：{dict(rejected)}")
             if p.get('role') in STRUCTURAL_ROLE_ORDER:
                 raise ValueError(f'第{index}页结构页没有合格版式；排除原因：{dict(rejected)}。')
             content = fallback_content if isinstance(fallback_content, dict) else {}
@@ -516,12 +520,16 @@ def resolve(library,request,*,catalog=None,candidate_summary_limit=12):
             requested_count=need.get('item_count')
             _,native_count=count_profile(e,root,read_json=read_json) if requested_count is not None else ([],None)
             count_fit=1 if requested_count is not None and requested_count==native_count else 0
-            capacity_content = content
+            try:
+                capacity_content = candidate_content(e, p, content)
+            except ValueError:
+                # Retain the candidate so execution can report its rejected mapping.
+                capacity_content = content
             if e.get('bindings_by_count') and content.get('item_count') is None:
-                capacity_content = dict(content, item_count=requested_count)
+                capacity_content = dict(capacity_content, item_count=requested_count)
             capacity_check=preflight(root,e,capacity_content,p.get('title'),p.get('theme',request.get('theme')),
                                      body_header_pilot=body_components_enabled(request), metadata=metadata)
-            gap=binding_gap(e,p,root,p.get('theme',request.get('theme')),
+            gap=binding_gap(e,dict(p,content=capacity_content),root,p.get('theme',request.get('theme')),
                             binding_rel=capacity_check['binding_path'], read_json=read_json)
             hard_count=len(capacity_check['hard_issues'])
             warning_count=len(capacity_check['advisory'])
@@ -529,7 +537,20 @@ def resolve(library,request,*,catalog=None,candidate_summary_limit=12):
             viable=0 if gap==0 and hard_count==0 else 1
             scored.append((viable,gap,hard_count,warning_count,-margin,exact_relation,exact_role,
                            penalty-fit*2-count_fit,-impact,rng.random(),fit,count_fit,e,capacity_check))
-        scored.sort(key=lambda row:row[:10]);best=scored[0];e=best[12];fam=e.get('family_id',e['id'])
+        scored.sort(key=lambda row:row[:10])
+        trial_limit=request.get('max_template_trials',6)
+        if type(trial_limit) is not int or not 1<=trial_limit<=8:
+            raise ValueError('max_template_trials须为1至8的整数')
+        origin_counts = {}
+        if p.get('role') not in STRUCTURAL_ROLE_ORDER and not p.get('layout_id'):
+            originals = [row for row in scored if row[12].get('asset_origin') != 'skill']
+            bundled = [row for row in scored if row[12].get('asset_origin') == 'skill']
+            origin_counts = {'knowledge': len(originals), 'bundled': len(bundled)}
+            trials = originals[:trial_limit] + bundled[:trial_limit]
+            scored = trials + originals[trial_limit:] + bundled[trial_limit:]
+        else:
+            trials = scored[:1] if p.get('role') == 'section' else scored[:trial_limit]
+        best=scored[0];e=best[12];fam=e.get('family_id',e['id'])
         candidate_summaries=[]
         for row in scored[:candidate_summary_limit]:
             candidate=row[12]
@@ -544,6 +565,9 @@ def resolve(library,request,*,catalog=None,candidate_summary_limit=12):
                                       if field.get('semantic_role') and field.get('semantic_role')
                                       not in ('brand_locked','decoration_locked')}),
                 'required_field_count':len(required_input_fields(binding_fields)),
+                'required_slots':[{'path':field.get('semantic_path') or field['field'],
+                                   'max_chars':field.get('max_chars')}
+                                  for field in required_input_fields(binding_fields)],
                 'meaning_policy':(candidate.get('matching_contract') or {}).get('policy',candidate.get('matching_policy')),
                 'capacity':candidate.get('capacity'),
                 'media_status':candidate.get('media_status'),
@@ -558,11 +582,9 @@ def resolve(library,request,*,catalog=None,candidate_summary_limit=12):
         layout_usage[e['id']]+=1;family_usage[fam]+=1
         if p.get('role')=='section' and section_layout_id is None:
             section_layout_id=e['id']
-        trial_limit=request.get('max_template_trials',6)
-        if type(trial_limit) is not int or not 1<=trial_limit<=8:
-            raise ValueError('max_template_trials须为1至8的整数')
         chosen.append({'page':index,'purpose':p['purpose'],'evidence':p.get('evidence'),
-                        'selection_mode':'source_template','selection_label':selection_label(e),'candidate_ids':[e['id']] if p.get('role')=='section' else [row[12]['id'] for row in scored[:trial_limit]],
+                       'selection_mode':'source_template','selection_label':selection_label(e),'candidate_ids':[row[12]['id'] for row in trials],
+                       **({'eligible_by_origin':origin_counts} if origin_counts else {}),
                        'candidate_summaries':candidate_summaries,
                        'field_ready_candidate_count':sum(row[1]==0 for row in scored),
                        'trial_results':[],'reason_code':None,'source_stamp':None,
