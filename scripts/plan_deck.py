@@ -537,7 +537,13 @@ def resolve(library,request,*,catalog=None,candidate_summary_limit=12):
             viable=0 if gap==0 and hard_count==0 else 1
             scored.append((viable,gap,hard_count,warning_count,-margin,exact_relation,exact_role,
                            penalty-fit*2-count_fit,-impact,rng.random(),fit,count_fit,e,capacity_check))
-        scored.sort(key=lambda row:row[:10])
+        if p.get('role') not in STRUCTURAL_ROLE_ORDER and not p.get('layout_id'):
+            # Compare reuse before spare capacity once the required facts fit.
+            # Rejected candidates and structural pages keep the diagnostic order.
+            scored.sort(key=lambda row: (
+                (*row[:3], *row[5:7], row[7], row[3], row[4], *row[8:10]) if row[0] == 0 else row[:10]))
+        else:
+            scored.sort(key=lambda row:row[:10])
         trial_limit=request.get('max_template_trials',6)
         if type(trial_limit) is not int or not 1<=trial_limit<=8:
             raise ValueError('max_template_trials须为1至8的整数')
@@ -559,6 +565,7 @@ def resolve(library,request,*,catalog=None,candidate_summary_limit=12):
             binding_fields=read_json(candidate_root/binding_rel, 'utf-8-sig')['fields']
             candidate_summaries.append({
                 'layout_id':candidate['id'],
+                'family_id':candidate.get('family_id', candidate['id']),
                 'structure_type':(candidate.get('matching_contract') or {}).get('structure_type'),
                 'verified_counts':list(count_profile(candidate,root,read_json=read_json)[0]),
                 'field_roles':sorted({field.get('semantic_role') for field in binding_fields

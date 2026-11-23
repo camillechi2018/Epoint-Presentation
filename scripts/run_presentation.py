@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections import Counter
 from pathlib import Path
 
 from library_location import SKILL, load_catalog, resolve_library, selection_label
@@ -243,6 +244,7 @@ def execute_plan(request, plan, report, output: Path, *, catalog=None):
         raise ValueError('OFFICE_TIMEOUT_INVALID')
     used_guided_variants = {}
     actual_layouts = []
+    body_families = Counter()
     locked_section_layout_id = None
     entries = {entry['id']: entry for entry in catalog['layouts']} if catalog is not None else None
     body_enabled = body_components_enabled(request)
@@ -274,13 +276,23 @@ def execute_plan(request, plan, report, output: Path, *, catalog=None):
             if page.get('role') == 'section' and locked_section_layout_id:
                 candidate_ids = [locked_section_layout_id]
                 choice['candidate_ids'] = candidate_ids
-            # Prefer a different verified template before trying a drawn layout.
             previous_id = actual_layouts[-1] if actual_layouts else None
-            repeat_search = (previous_id and candidate_ids and previous_id == candidate_ids[0]
-                             and not page.get('layout_id') and page.get('role') not in STRUCTURAL)
-            if repeat_search:
-                candidate_ids = sorted(candidate_ids, key=lambda ident: (
-                    entries[ident].get('asset_origin') == 'skill', ident == previous_id))
+            auto_body = not page.get('layout_id') and page.get('role') not in STRUCTURAL
+            if auto_body and body_families:
+                summaries = {item['layout_id']: item for item in choice.get('candidate_summaries', [])}
+
+                def trial_order(ident):
+                    entry = entries[ident]
+                    summary = summaries.get(ident, {})
+                    preflight = summary.get('capacity_preflight', {})
+                    ready = summary.get('field_status') == 'ready' and not preflight.get('hard_issues')
+                    family = entry.get('family_id', ident)
+                    return (entry.get('asset_origin') == 'skill', not ready,
+                            ident == previous_id, body_families[family] if ready else 0,
+                            len(preflight.get('advisory', [])) if ready else 0)
+
+                candidate_ids = sorted(candidate_ids, key=trial_order)
+            reranked = auto_body and candidate_ids != choice.get('candidate_ids')
             for candidate_id in candidate_ids:
                 trial_path = work / f'P{index:03d}-{candidate_id}-content.json'
                 filled, trial = try_candidate(
@@ -291,11 +303,13 @@ def execute_plan(request, plan, report, output: Path, *, catalog=None):
                     for partial in (page_out, page_out.with_suffix('.qa.json'), page_out.with_suffix('.colors.json')):
                         partial.unlink(missing_ok=True)
                 material_view = page.get('material_matching_content')
-                verify_copy = inferred or material_view or (repeat_search and candidate_id != previous_id)
+                verify_copy = inferred or material_view or reranked
                 if filled is not None and verify_copy:
                     copy = material_view or content
                     required = {k:v for k,v in copy.items() if k not in ('item_count','source_refs')}
-                    if not retains_text(page_out, text_fields(required)):
+                    # The candidate adapter independently checks source-backed
+                    # copy, including text distributed across several slots.
+                    if not trial.get('candidate_copy') and not retains_text(page_out, text_fields(required)):
                         trial.update(status='rejected', reason_code='SOURCE_TEXT_INCOMPLETE')
                         for partial in (page_out, page_out.with_suffix('.qa.json'), page_out.with_suffix('.colors.json')):
                             partial.unlink(missing_ok=True)
@@ -418,6 +432,8 @@ def execute_plan(request, plan, report, output: Path, *, catalog=None):
             final_variant = (choice['fallback_layout_id'], choice.get('variant'))
             used_guided_variants[final_variant] = used_guided_variants.get(final_variant, 0) + 1
         actual_layouts.append(layout_key(choice) if page.get('role') not in STRUCTURAL else None)
+        if page.get('role') not in STRUCTURAL and choice['selection_mode'] == 'source_template':
+            body_families[choice['family_id']] += 1
         if page.get('material_excerpt') or page.get('notes'):
             from pptx import Presentation
             source_page = Presentation(page_out)
@@ -507,6 +523,7 @@ def main():
     output_stage = ap.add_mutually_exclusive_group()
     output_stage.add_argument('--execute-out', type=Path, help='所有页面均有 content 时填充并组装完整 PPTX')
     output_stage.add_argument('--cover-gallery-out', type=Path, help='输出出稿前的带编号封面候选缩略图 PNG')
+    output_stage.add_argument('--body-gallery-out', type=Path, help='输出出稿前的带页码正文候选缩略图 PNG')
     ap.add_argument('--library', type=Path, help='测试或固定版本时指定已下载知识库')
     ap.add_argument('--offline', action='store_true')
     ap.add_argument('--assembly-backend', choices=BACKENDS, default='auto',
@@ -518,7 +535,7 @@ def main():
         select_backend(args.assembly_backend, legacy_native=args.native_experimental)
     except ValueError as exc:
         ap.error(str(exc))
-    outputs = [path for path in (args.out, args.plan_out, args.execute_out, args.cover_gallery_out)
+    outputs = [path for path in (args.out, args.plan_out, args.execute_out, args.cover_gallery_out, args.body_gallery_out)
                if path is not None]
     if any(path.exists() for path in outputs):
         ap.error('输出文件已存在')
@@ -526,6 +543,8 @@ def main():
         ap.error('各输出须使用不同文件')
     if args.cover_gallery_out and args.cover_gallery_out.suffix.lower() != '.png':
         ap.error('封面缩略图输出须为 PNG 文件')
+    if args.body_gallery_out and args.body_gallery_out.suffix.lower() != '.png':
+        ap.error('正文缩略图输出须为 PNG 文件')
     if args.theme and args.request:
         ap.error('逐页请求使用文件中声明的主题')
     request = ({'theme': args.theme or 'blue'} if args.material
@@ -571,7 +590,7 @@ def main():
         report['can_make_complete_deck'] = False
         report['delivery_status'] = 'blocked'
         report['warnings'].append('任务字体缺失：' + ', '.join(font_check['missing']))
-    needs_plan = bool((args.plan_out or args.execute_out) and request.get('pages'))
+    needs_plan = bool((args.plan_out or args.execute_out or args.body_gallery_out) and request.get('pages'))
     if report['status'] == 'ready' and (needs_plan or args.cover_gallery_out):
         stage = 'planning'
         try:
@@ -590,6 +609,10 @@ def main():
                 plan['library_commit'] = report['library_commit']
                 plan['library_source'] = report['library_source']
                 plan['complete_deck'] = request.get('complete_deck', True)
+                if args.body_gallery_out:
+                    from cover_gallery import build_body_gallery
+                    report['body_gallery'] = build_body_gallery(
+                        library, request['pages'], plan['pages'], args.body_gallery_out)
             if needs_plan and args.execute_out:
                 stage = 'execution'
                 previous_profile = os.environ.get('EPOINT_FONT_PROFILE')
