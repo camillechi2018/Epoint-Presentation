@@ -93,7 +93,7 @@ class MaterialIndex:
         self.theme = theme
         for e in catalog['layouts']:
             c = e.get('matching_contract') or {}
-            if (e.get('asset_origin') or e['classification_status'] != 'verified'
+            if (e['classification_status'] != 'verified'
                     or theme not in e['themes'] or c.get('policy') != 'structural'
                     or str(e.get('pptx_support', '')).startswith('blocked_')
                     or e.get('media_status') == 'missing-source-image'):

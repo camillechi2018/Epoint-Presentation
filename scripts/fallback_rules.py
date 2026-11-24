@@ -16,6 +16,21 @@ MINIMAL_BODY_VARIANTS = {
     "comparison_chart": {"range_scale"},
 }
 
+def report_table_layout(content):
+    if content.get("type") != "report_table":
+        return content
+    if set(content) - {"type", "title", "items", "row_labels", "columns", "theme", "library_commit",
+                       "unit_claims", "source_refs", "data_source", "logo", "_deck_page_number"}:
+        raise ValueError("条目表格含未映射字段，请将原文依据填入对应条目")
+    items, labels, columns = (content.get(key) for key in ("items", "row_labels", "columns"))
+    if (not all(isinstance(values, list) for values in (items, labels, columns))
+            or not 1 <= len(items) <= 8 or len(items) != len(labels) or len(columns) != 2
+            or not all(isinstance(value, str) and value.strip()
+                       for value in [*items, *labels, *columns])):
+        raise ValueError("条目表格需要两个表头，以及一一对应的条目名称和原文依据")
+    return dict(content, type="data_table", variant="report",
+                rows=[list(row) for row in zip(labels, items, strict=True)])
+
 
 def uses_minimal_body_layout(kind, variant):
     return isinstance(kind, str) and (kind in MINIMAL_BODY_TYPES or (

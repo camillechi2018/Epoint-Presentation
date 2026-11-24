@@ -5,6 +5,7 @@ import atomic_body
 from capacity_preflight import missing_binding_paths, preflight
 from content_adapters import (
     adapt_for_layout,
+    candidate_content,
     adapt_structural_fields,
     classify_trial_failure,
     field_source_evidence,
@@ -19,6 +20,13 @@ def try_candidate(library, entry, data, page, content_path, trial_path, output,
     layout_id = entry["id"]
     title = page.get("title")
     theme = data["theme"]
+    try:
+        prepared = candidate_content(entry, page, data)
+    except ValueError as exc:
+        return None, {'layout_id': layout_id, 'status': 'rejected',
+                      'reason_code': 'INVALID_COMPONENT_COPY', 'reason': str(exc)}
+    tailored = prepared is not data
+    data = prepared
     count = (page.get("needs") or {}).get("item_count")
     propagate_count = ((entry.get("matching_contract") or {}).get("required_binding_paths_by_count")
                        and count is not None and data.get("item_count") is None)
@@ -27,9 +35,6 @@ def try_candidate(library, entry, data, page, content_path, trial_path, output,
     candidate, adapter = adapt_for_layout(layout_id, data, title, entry=entry)
     record = {"layout_id": layout_id, "status": "rejected", "content_adapter": adapter,
               **atomic_body.trace(entry)}
-    if entry.get('asset_origin') == 'skill':
-        record['asset_origin'] = 'skill'
-
     atomic = entry.get('atomic_variant')
     if atomic and not adapter and not atomic_body.prepared_texts(atomic, data):
         record.update(reason_code='ATOMIC_FIELDS_INCOMPLETE',
@@ -66,7 +71,7 @@ def try_candidate(library, entry, data, page, content_path, trial_path, output,
     wrap = capacity["wrap_suggestions"]
     if wrap and isinstance(candidate.get("texts"), dict):
         candidate = dict(candidate, texts=dict(candidate["texts"], **wrap))
-    if adapter or wrap or propagate_count:
+    if adapter or wrap or propagate_count or tailored:
         trial_path.write_text(json.dumps(candidate, ensure_ascii=False, indent=None if diagnostics else 2),
                               encoding="utf-8")
         content_path = trial_path
@@ -88,9 +93,19 @@ def try_candidate(library, entry, data, page, content_path, trial_path, output,
             record["unmapped_semantic_paths"] = sorted(set(missing_binding_paths(fields, candidate)))
         return None, record
 
+    if tailored:
+        from layout_trials import retains_text, text_fields
+        required = set(text_fields(data.get('items', []))) | set(text_fields(data.get('overview', {})))
+        if not retains_text(output, required):
+            output.unlink(missing_ok=True)
+            record.update(reason_code='SOURCE_TEXT_INCOMPLETE', reason='候选填充后缺少对应的可编辑事实')
+            return None, record
     record.update(status="filled", visual_qa="not_run", wrap_applied=wrap,
                   field_source_evidence=field_source_evidence(
                       dict(data, source_refs=page.get("source_refs", [])), candidate) if adapter else {})
+    if tailored:
+        record['copy_source_refs'] = [source['ref'] for source in page.get('item_sources', []) if source.get('ref')]
+        record['candidate_copy'] = True
     if atomic:
         record['source_stamp'] = filled.get('source_stamp')
     if diagnostics and filled.get("body_header"):

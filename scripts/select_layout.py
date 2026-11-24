@@ -2,7 +2,7 @@
 from __future__ import annotations
 import argparse,json
 from pathlib import Path
-from library_location import asset_root, get_library, load_catalog
+from library_location import get_library, load_catalog
 from relation_match import BODY_ROLES, load_taxonomy, match_relation, match_role
 from plan_deck import count_profile, semantic_fit
 from atomic_body import matches_relation as match_atomic_relation
@@ -50,12 +50,11 @@ def main():
                              -semantic_fit({'purpose':a.purpose or ''},e),
                              -int(a.item_count is not None and a.item_count==count_profile(e,root)[1]),
                              e['id']))
-    rows=[dict(e, preview_root=str(asset_root(root,e))) if e.get('asset_origin') == 'skill' else e for e in rows]
     if a.brief:
         fields = ('id','role','style_family','information_relation','canonical_relation','search_label',
                   'classification_status','family_id','source_page','themes','style','visual_impact','preview','status')
         rows = [dict({k: e.get(k) for k in fields}, style_family=e.get('style_family') or 'legacy-blue-red',
-                     **{k: e[k] for k in ('asset_origin','preview_root','atomic_variant') if k in e}) for e in rows]
+                     **({'atomic_variant': e['atomic_variant']} if 'atomic_variant' in e else {}) for e in rows]
     print(json.dumps({'version':catalog['version'],'total_matches':len(rows),'shown_matches':min(len(rows),a.limit),
                       'matches':rows[:a.limit]},ensure_ascii=False,indent=2))
     return 0 if rows else 2

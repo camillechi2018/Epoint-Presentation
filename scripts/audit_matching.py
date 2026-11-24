@@ -79,8 +79,6 @@ def audit(library: Path, request_path: Path, work: Path, trial: bool) -> dict:
                 if filled is not None:
                     row['source_template_used'] = True
                     counters['trial_filled_pages'] += 1
-                    if record.get('asset_origin') == 'skill':
-                        counters['bundled_body_filled_pages'] += 1
                     break
                 counters[record['reason_code']] += 1
             if not row['source_template_used']:
@@ -96,7 +94,6 @@ def audit(library: Path, request_path: Path, work: Path, trial: bool) -> dict:
                 'eligible_candidate_pages': counters['eligible_pages'],
                 'eligible_candidate_rate': counters['eligible_pages'] / total if total else 0,
                 'trial_filled_pages': counters['trial_filled_pages'] if trial else None,
-                'bundled_body_filled_pages': counters['bundled_body_filled_pages'] if trial else None,
                 'trial_pass_rate': counters['trial_filled_pages'] / counters['eligible_pages']
                                    if trial and counters['eligible_pages'] else None,
                 'body_source_template_rate': counters['trial_filled_pages'] / total if trial and total else None,

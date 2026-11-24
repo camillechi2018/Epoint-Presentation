@@ -1,9 +1,11 @@
-"""Build a numbered contact sheet from the planned cover candidates."""
+"""Build numbered contact sheets from verified template previews."""
 
 from io import BytesIO
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
+
+from relation_match import STRUCTURAL_ROLES
 
 
 THUMBNAIL_SIZE = (320, 180)
@@ -19,7 +21,7 @@ def _library_file(root: Path, relative: str | None) -> Path | None:
         return None
 
 
-def _contact_sheet(candidates: list[dict], thumbnails: list[Image.Image]) -> Image.Image:
+def _contact_sheet(candidates: list[dict], thumbnails: list[Image.Image], *, label_size=18) -> Image.Image:
     columns = min(3, len(candidates))
     rows = (len(candidates) + columns - 1) // columns
     thumbnail_width, thumbnail_height = THUMBNAIL_SIZE
@@ -31,7 +33,7 @@ def _contact_sheet(candidates: list[dict], thumbnails: list[Image.Image]) -> Ima
     height = 2 * margin + rows * card_height + (rows - 1) * gap
     sheet = Image.new("RGB", (width, height), "#EBF0F7")
     draw = ImageDraw.Draw(sheet)
-    label_font = ImageFont.load_default(size=18)
+    label_font = ImageFont.load_default(size=label_size)
     number_font = ImageFont.load_default(size=16)
 
     for index, (candidate, thumbnail) in enumerate(zip(candidates, thumbnails, strict=True)):
@@ -70,6 +72,56 @@ def _contact_sheet(candidates: list[dict], thumbnails: list[Image.Image]) -> Ima
     return sheet
 
 
+def _thumbnail(preview: Path) -> Image.Image:
+    with Image.open(preview) as image:
+        return ImageOps.pad(image.convert("RGB"), THUMBNAIL_SIZE,
+                            method=Image.Resampling.LANCZOS, color="#182E4E")
+
+
+def build_body_gallery(library: Path, pages: list[dict], choices: list[dict], output: Path) -> dict:
+    """Show the first fill-ready suggestion for each body page before execution."""
+    from fallback_rules import fallback_type
+
+    previews, thumbnails = [], []
+    for page, choice in zip(pages, choices, strict=True):
+        if page.get("role") in STRUCTURAL_ROLES:
+            continue
+        candidates = choice.get("candidate_summaries", [])
+        preferred = next((candidate for candidate in candidates
+                          if candidate.get("field_status") == "ready"
+                          and not candidate["capacity_preflight"]["hard_issues"]), None)
+        number = choice["page"]
+        candidate_id = preferred["layout_id"] if preferred else None
+        preview = None
+        if preferred:
+            root = Path(preferred.get("source_preview_root", library)).resolve()
+            preview = _library_file(root, preferred.get("source_preview"))
+        try:
+            thumbnail = _thumbnail(preview) if preview is not None else None
+        except (Image.DecompressionBombError, OSError, ValueError):
+            thumbnail = None
+        fallback = choice.get("fallback_layout_id") or fallback_type(page.get("content") or {})
+        if candidate_id and thumbnail is not None:
+            state, label = "template_preview", candidate_id
+        else:
+            state = "preview_missing" if candidate_id else "awaiting_fit"
+            label = candidate_id or fallback
+            thumbnail = Image.new("RGB", THUMBNAIL_SIZE, "#F3F6FB")
+            draw = ImageDraw.Draw(thumbnail)
+            draw.text((160, 90), "Preview unavailable" if candidate_id else "Layout to be tested",
+                      fill="#244A80", font=ImageFont.load_default(size=16), anchor="mm")
+        previews.append({"number": number, "layout_id": label, "template_id": candidate_id,
+                         "purpose": page["purpose"], "information_relation": page.get("information_relation"),
+                         "status": state})
+        thumbnails.append(thumbnail)
+    if not previews:
+        return {"status": "unavailable", "pages": []}
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with output.open("xb") as stream:
+        _contact_sheet(previews, thumbnails, label_size=13).save(stream, format="PNG")
+    return {"status": "ready", "image_path": str(output.resolve()), "pages": previews}
+
+
 def build_cover_gallery(library: Path, cover_choice: dict, output: Path) -> dict:
     """Render available previews without changing the plan or its source assets."""
     library = library.resolve()
@@ -89,11 +141,7 @@ def build_cover_gallery(library: Path, cover_choice: dict, output: Path) -> dict
             warnings.append(f"{layout_id} 缺少库内字段绑定文件")
             continue
         try:
-            with Image.open(preview) as image:
-                thumbnail = ImageOps.pad(
-                    image.convert("RGB"), THUMBNAIL_SIZE,
-                    method=Image.Resampling.LANCZOS, color="#182E4E",
-                )
+            thumbnail = _thumbnail(preview)
         except (Image.DecompressionBombError, OSError, ValueError):
             warnings.append(f"{layout_id} 的缩略图无法读取")
             continue

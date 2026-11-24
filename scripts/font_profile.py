@@ -138,6 +138,29 @@ def probe(name: str | None = None) -> dict:
             'missing': missing}
 
 
+def apply_tech_text_role(shape, role, profile):
+    from pptx.oxml.ns import qn
+    from pptx.oxml.xmlchemy import OxmlElement
+
+    if not shape.has_text_frame or role not in {
+            'chinese_display', 'chinese_heading', 'chinese_body', 'latin_numeric'}:
+        return 0
+    name = profile['latin'] if role == 'latin_numeric' else profile['east_asian']
+    count = 0
+    for paragraph in shape.text_frame.paragraphs:
+        for run in paragraph.runs:
+            run.font.name = name
+            props = run._r.get_or_add_rPr()
+            for tag in ('a:latin', 'a:ea', 'a:cs'):
+                child = props.find(qn(tag))
+                if child is None:
+                    child = OxmlElement(tag)
+                    props.append(child)
+                child.set('typeface', name)
+            count += 1
+    return count
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--profile', choices=tuple(PROFILES))

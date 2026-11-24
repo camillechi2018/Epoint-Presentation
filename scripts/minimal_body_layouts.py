@@ -62,7 +62,7 @@ class Body:
             text_box(slide, value, *geometry, size, ink,
                      typography["heading" if bold else "body"], bold=bold, valign=MSO_ANCHOR.TOP)
         if self.table:
-            _draw_table(slide, self.table, typography, theme)
+            draw_editable_table(slide, self.table, typography, theme)
 
 
 def _set_opacity(shape, opacity):
@@ -328,17 +328,43 @@ def _noted_table(page, body):
         body.text(source, LEFT, top + row_height * len(cells) + .08, width, .42, 11, "muted")
 
 
-def _draw_table(slide, spec, typography, theme):
-    top, widths, row_height, cells = spec
+def report_table_spec(page):
+    columns, rows = page.get("columns"), page.get("rows")
+    if (not isinstance(columns, list) or len(columns) != 2
+            or not isinstance(rows, list) or not 1 <= len(rows) <= 8
+            or any(not isinstance(row, list) or len(row) != 2 for row in rows)):
+        raise ValueError("条目表格需要两列和 1–8 条依据")
+    widths = (2.90, RIGHT - LEFT - 2.90)
+    cells = [columns, *rows]
+    row_heights = []
+    for row in cells:
+        required = []
+        for value, width in zip(row, widths, strict=True):
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError("条目表格的表头、条目和依据必须为非空文本")
+            units = int((width - .22) * 72 / (14 * .60))
+            lines = sum(max(1, math.ceil(visual_width_units(line) / units))
+                        for line in value.split("\n"))
+            required.append(lines * 14 * 1.16 / 72 + .18)
+        row_heights.append(max(.48, *required))
+    if sum(row_heights) > BOTTOM - TOP:
+        raise ValueError("条目表格依据超出可读高度，请拆页")
+    return TOP, widths, row_heights, cells
+
+
+def draw_editable_table(slide, spec, typography, theme):
+    top, widths, heights, cells = spec
+    if isinstance(heights, (int, float)):
+        heights = [heights] * len(cells)
     graphic = slide.shapes.add_table(len(cells), len(widths), Inches(LEFT), Inches(top),
-                                     Inches(sum(widths)), Inches(len(cells) * row_height))
+                                     Inches(sum(widths)), Inches(sum(heights)))
     graphic.name = "body:editable-table"
     table = graphic.table
     table.first_row = table.horz_banding = False
     for column, width in zip(table.columns, widths):
         column.width = Inches(width)
     for row_index, values in enumerate(cells):
-        table.rows[row_index].height = Inches(row_height)
+        table.rows[row_index].height = Inches(heights[row_index])
         for column_index, value in enumerate(values):
             cell = table.cell(row_index, column_index)
             cell.fill.solid()

@@ -93,16 +93,10 @@ def verify_asset(path, expected_sha):
         raise ValueError('BODY_HEADER_ASSET_HASH_MISMATCH')
 
 
-def attach_header(presentation, slide, contract, theme, title, logo_enabled):
-    from pptx.util import Inches
+def draw_header(slide, contract, theme, title, logo_enabled):
     from render_offline_brand import PROFILE, add_content_title, add_logo, add_tech_content_header, read_json
 
     layout, _ = frame_spec(contract)
-    canvas = layout['canvas']
-    dimensions = (presentation.slide_width, presentation.slide_height)
-    expected = (Inches(canvas['width_inches']), Inches(canvas['height_inches']))
-    if any(abs(a - b) > 2 for a, b in zip(dimensions, expected)):
-        raise ValueError('BODY_HEADER_CANVAS_MISMATCH')
     tech = contract.get('tech')
     if contract.get('background') == 'skill_tech':
         from tech_background import apply_tech_background
@@ -115,6 +109,18 @@ def attach_header(presentation, slide, contract, theme, title, logo_enabled):
     add_content_title(slide, title, profile, layout, palette, tech_header=bool(tech))
     if logo_enabled:
         add_logo(slide, layout, palette, content_header=True, tech_header=bool(tech))
+
+
+def attach_header(presentation, slide, contract, theme, title, logo_enabled):
+    from pptx.util import Inches
+
+    canvas = frame()['canvas']
+    dimensions = (presentation.slide_width, presentation.slide_height)
+    expected = (Inches(canvas['width_inches']), Inches(canvas['height_inches']))
+    if any(abs(a - b) > 2 for a, b in zip(dimensions, expected)):
+        raise ValueError('BODY_HEADER_CANVAS_MISMATCH')
+    draw_header(slide, contract, theme, title, logo_enabled)
+    tech = contract.get('tech')
     report = {'frame_id': 'deep-blue-tech-content-header' if tech else 'legacy-blue-red-content-header',
               'version': 2, 'asset': contract['asset'], 'asset_page': contract.get('asset_page', 1),
               'asset_sha256': contract['sha256'],

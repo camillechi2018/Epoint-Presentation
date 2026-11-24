@@ -17,7 +17,7 @@ metadata:
 
 ## 选稿与试填
 
-正文候选同时读取原模板知识库与技能内置组件。相邻正文第二次使用同一版式前，先试不同模板，再实填同主题的技能排版，核对可编辑原文。自动出稿在无法安全替换时报告冲突页码。结构页沿用已确认的整套风格。
+在拟定正文文案前，每页用 `purpose` 写明读者需要看懂什么，并用 `information_relation` 表达原材料支持的关系，如比较、分组、流程或清单。保留事实和来源，按真实关系组织输入。先用 `--plan-out` 和 `--body-gallery-out` 查看整稿初选和带页码的原稿缩略图，再按适合的候选槽位调整文案。自动选版先试同主题知识库原稿。原稿试填未通过时，按内容关系、主题和容量选择技能排版规则。合格候选优先尝试整份正文里较少使用的版式家族；准确表达同类内容时可复用。用户要换一页时，展示该页的少量原稿预览与容量，选定后设置 `layout_id` 和 `layout_locked:true`，并核对其余页。详见[正文选版](references/deck-planning.md)。
 
 运行 `scripts/run.py --request <逐页请求.json> --out <预检报告.json> --plan-out <逐页计划.json>`。记录知识库来源、提交号和失败原因，后续入口使用同一 `--library`。显式离线加 `--offline`。依次使用已校验的远端快照、完整缓存和内置最小包；使用最小包时说明正文候选覆盖。完整性异常保留文件、来源和哈希证据，只使用验证通过的来源，无合格来源时阻断完整稿。[知识库数据契约](references/library-contract.md)
 
@@ -33,7 +33,7 @@ metadata:
 
 ## 从候选稿到交付
 
-蓝红通用页眉的分割线须显式关闭主题阴影。蓝红新绘正文和已登记组件共用可编辑画布和两层柔边弥散背景。登记的组件包括长文卡片（二、三、五、六项）、并列指标（两组、四组）、「单一论点与两条依据」、「背景、方法与目标」、「指标与原文证据」、四图与五图图集，以及「报告条目与原文依据」。整稿保存后按页核对分割线和背景图层，异常时阻止出稿。见[正文页眉与背景验收](references/source-and-qa.md#正文页眉与背景验收)。
+蓝红通用页眉的分割线须显式关闭主题阴影。蓝红新绘正文和已登记组件共用可编辑画布和两层柔边弥散背景。技能排版规则覆盖并列卡片、条目与原文依据表格、并列指标、单一论点与两条依据、层级分组、指标与原文证据及四图、五图图集。对应变体沿用已确认的几何、样式与容量。整稿保存后按页核对分割线和背景图层，异常时阻止出稿。见[正文页眉与背景验收](references/source-and-qa.md#正文页眉与背景验收)。
 
 1. 每页 `content` 齐备、完整稿预检为 `ready` 时，使用正式请求和同一知识库执行 `scripts/run.py --request <正式请求.json> --library <知识库路径> --out <出稿报告.json> --plan-out <选版.json> --execute-out <成稿.pptx>`。Windows 默认核实微软 PowerPoint 并做限时保存、重开、导出检查；失败时报告阻断。macOS/Linux 默认用原生后端生成候选。安装、升级或解释器问题见[运行环境与自检](references/cross-platform-runtime.md)，显式选择后端见[跨平台组装](references/cross-platform-assembly.md)。
 2. 将结构页的 `layout_id`、`library_commit` 和 `source_stamp` 对应到最终页，核对组装关系、字体、Logo 可见尺寸和组件颜色。最终保存后执行 `scripts/audit_component_color_independence.py --input <成稿.pptx> --report <报告.json>`。逐页来源和质量检查见[来源与验收](references/source-and-qa.md)。
